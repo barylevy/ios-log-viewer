@@ -7,8 +7,8 @@ const parseLogLine = (line) => {
   const [_, date, time, module, pid, tid, tag, location, message] = match;
   const level =
     message.includes("ERROR") ? "error" :
-    message.includes("WARN") ? "warn" :
-    message.includes("INFO") ? "info" : "default";
+      message.includes("WARN") ? "warn" :
+        message.includes("INFO") ? "info" : "default";
   return { date, time, module, pid, tid, tag, location, message, level, raw: line };
 };
 
@@ -29,16 +29,16 @@ export function useLogsModel() {
     Number(localStorage.getItem("log_contextLines") || 2)
   );
 
-const extractTimePart = (datetimeStr) => {
-  if (!datetimeStr.includes("T")) return datetimeStr;
-  const [, time] = datetimeStr.split("T"); // e.g. "12:30:45.123"
+  const extractTimePart = (datetimeStr) => {
+    if (!datetimeStr.includes("T")) return datetimeStr;
+    const [, time] = datetimeStr.split("T"); // e.g. "12:30:45.123"
 
-  const [h, m, rest] = time.split(":");
-  const [s = "00", ms = "000"] = (rest || "00").split(".");
-  const paddedMs = ms.padEnd(3, "0").slice(0, 3);
+    const [h, m, rest] = time.split(":");
+    const [s = "00", ms = "000"] = (rest || "00").split(".");
+    const paddedMs = ms.padEnd(3, "0").slice(0, 3);
 
-  return `${h}:${m}:${s}:${paddedMs}`;
-};
+    return `${h}:${m}:${s}:${paddedMs}`;
+  };
 
   const [visibleLogs, setVisibleLogs] = useState([]);
 
@@ -58,85 +58,85 @@ const extractTimePart = (datetimeStr) => {
 
   }, [filterText, filterStart, filterEnd, removeDuplicates, contextLines]);
 
-useEffect(() => {
-  const getLogsWithContext = (logs, matchIndices, context) => {
-    const flags = new Array(logs.length).fill(null);
+  useEffect(() => {
+    const getLogsWithContext = (logs, matchIndices, context) => {
+      const flags = new Array(logs.length).fill(null);
 
-    matchIndices.forEach(index => {
-      const start = Math.max(0, index - context);
-      const end = Math.min(logs.length, index + context + 1);
-      for (let i = start; i < end; i++) {
-        if (!flags[i]) flags[i] = { context: false, isMatch: false };
-        if (i === index) flags[i].isMatch = true;
-        else flags[i].context = true;
-      }
-    });
+      matchIndices.forEach(index => {
+        const start = Math.max(0, index - context);
+        const end = Math.min(logs.length, index + context + 1);
+        for (let i = start; i < end; i++) {
+          if (!flags[i]) flags[i] = { context: false, isMatch: false };
+          if (i === index) flags[i].isMatch = true;
+          else flags[i].context = true;
+        }
+      });
 
-    return flags
-      .map((flag, i) => flag ? { ...logs[i], ...flag } : null)
-      .filter(Boolean);
-  };
+      return flags
+        .map((flag, i) => flag ? { ...logs[i], ...flag } : null)
+        .filter(Boolean);
+    };
 
-  if (!filterText.trim()) {
-    const filtered = parsedLogs.filter(log => {
-      if (filterStart && log.time < extractTimePart(filterStart)) return false;
-      if (filterEnd && log.time > extractTimePart(filterEnd)) return false;
-      return true;
-    });
+    if (!filterText.trim()) {
+      const filtered = parsedLogs.filter(log => {
+        if (filterStart && log.time < extractTimePart(filterStart)) return false;
+        if (filterEnd && log.time > extractTimePart(filterEnd)) return false;
+        return true;
+      });
+
+      const deduped = removeDuplicates
+        ? Array.from(new Map(filtered.map(item => [item.message + item.time, item])).values())
+        : filtered;
+
+      setVisibleLogs(deduped);
+      return;
+    }
+
+    const matchIndices = parsedLogs
+      .map((log, i) => ({ log, i }))
+      .filter(({ log }) => {
+        if (filterStart && log.time < extractTimePart(filterStart)) return false;
+        if (filterEnd && log.time > extractTimePart(filterEnd)) return false;
+
+        const raw = filterText.toLowerCase();
+        const isAnd = raw.includes("&&") || (!raw.includes("||") && raw.includes(" "));
+        const separators = isAnd ? /[\s]+/ : /\|\|/;
+        const words = raw.split(separators).map(w => w.trim()).filter(Boolean);
+        const logText = [
+          log.message,
+          log.location,
+          log.module,
+          log.tag,
+          log.pid
+        ].filter(Boolean).join(' ').toLowerCase();
+        const match = isAnd
+          ? words.every(word => logText.includes(word))
+          : words.some(word => logText.includes(word));
+        return match;
+      })
+      .map(({ i }) => i);
+
+    const filtered = getLogsWithContext(parsedLogs, matchIndices, contextLines);
 
     const deduped = removeDuplicates
       ? Array.from(new Map(filtered.map(item => [item.message + item.time, item])).values())
       : filtered;
 
     setVisibleLogs(deduped);
-    return;
-  }
-
-  const matchIndices = parsedLogs
-    .map((log, i) => ({ log, i }))
-    .filter(({ log }) => {
-      if (filterStart && log.time < extractTimePart(filterStart)) return false;
-      if (filterEnd && log.time > extractTimePart(filterEnd)) return false;
-
-      const raw = filterText.toLowerCase();
-      const isAnd = raw.includes("&&") || (!raw.includes("||") && raw.includes(" "));
-      const separators = isAnd ? /[\s]+/ : /\|\|/;
-      const words = raw.split(separators).map(w => w.trim()).filter(Boolean);
-      const logText = [
-        log.message,
-        log.location,
-        log.module,
-        log.tag,
-        log.pid
-      ].filter(Boolean).join(' ').toLowerCase();
-      const match = isAnd
-        ? words.every(word => logText.includes(word))
-        : words.some(word => logText.includes(word));
-      return match;
-    })
-    .map(({ i }) => i);
-
-  const filtered = getLogsWithContext(parsedLogs, matchIndices, contextLines);
-
-  const deduped = removeDuplicates
-    ? Array.from(new Map(filtered.map(item => [item.message + item.time, item])).values())
-    : filtered;
-
-  setVisibleLogs(deduped);
-}, [parsedLogs, filterText, filterStart, filterEnd, removeDuplicates, contextLines]);
+  }, [parsedLogs, filterText, filterStart, filterEnd, removeDuplicates, contextLines]);
 
 
   const getLogsWithContext = (logs, matchIndices, context) => {
-  const resultSet = new Set();
-  matchIndices.forEach(index => {
-    const start = Math.max(0, index - context);
-    const end = Math.min(logs.length, index + context + 1);
-    for (let i = start; i < end; i++) {
-      resultSet.add(i);
-    }
-  });
-  return Array.from(resultSet).sort((a, b) => a - b).map(i => logs[i]);
-};
+    const resultSet = new Set();
+    matchIndices.forEach(index => {
+      const start = Math.max(0, index - context);
+      const end = Math.min(logs.length, index + context + 1);
+      for (let i = start; i < end; i++) {
+        resultSet.add(i);
+      }
+    });
+    return Array.from(resultSet).sort((a, b) => a - b).map(i => logs[i]);
+  };
 
   const loadLogsFromFile = async (file) => {
     if (!file) return;
@@ -163,28 +163,40 @@ useEffect(() => {
       const newLogs = [];
 
       for (let i = startIndex; i < endIndex; i++) {
-        const entry = parseLogLine(lines[i]);
-        if (entry) newLogs.push(entry);
+        try {
+          const entry = parseLogLine(lines[i]);
+          if (entry)
+            newLogs.push(entry);
+        }
+        catch (err) {
+          console.error("Failed to parse log line:", line, err);
+          logs.push({
+            raw: "30",
+            message: lines[i],
+            level: "default",
+            isMalformed: true,
+          });
+        };
       }
 
       setParsedLogs((prev) => [...prev, ...newLogs]);
 
       if (endIndex < lines.length) {
         setTimeout(() => processBatch(endIndex), BATCH_DELAY);
-} else {
-  setParsedLogs((prev) => {
-    const allLogs = [...prev, ...newLogs];
+      } else {
+        setParsedLogs((prev) => {
+          const allLogs = [...prev, ...newLogs];
 
-    allLogs.sort((a, b) => {
-      const aKey = `${a.date} ${a.time}`.replace(/[:\-]/g, '');
-      const bKey = `${b.date} ${b.time}`.replace(/[:\-]/g, '');
-      return aKey.localeCompare(bKey);
-    });
+          allLogs.sort((a, b) => {
+            const aKey = `${a.date} ${a.time}`.replace(/[:\-]/g, '');
+            const bKey = `${b.date} ${b.time}`.replace(/[:\-]/g, '');
+            return aKey.localeCompare(bKey);
+          });
 
-    setCurrentDate(allLogs[0]?.date || "");
-    return allLogs;
-  });
-}
+          setCurrentDate(allLogs[0]?.date || "");
+          return allLogs;
+        });
+      }
 
     };
 
