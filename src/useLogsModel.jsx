@@ -78,7 +78,7 @@ const loadLogsFromFile = async (file) => {
 
       const line = lines[i];
       if (!line.trim() || headerLines.has(i)) continue;
-      
+
       try {
         const entry = parseLogLine(line);
         if (entry) {
@@ -174,13 +174,8 @@ const loadLogsFromFile = async (file) => {
         const isAnd = raw.includes("&&") || (!raw.includes("||") && raw.includes(" "));
         const separators = isAnd ? /[\s]+/ : /\|\|/;
         const words = raw.split(separators).map(w => w.trim()).filter(Boolean);
-        const logText = [
-          log.message,
-          log.location,
-          log.module,
-          log.tag,
-          log.pid
-        ].filter(Boolean).join(' ').toLowerCase();
+        const logText = (log.raw || "").toLowerCase();
+
         const match = isAnd
           ? words.every(word => logText.includes(word))
           : words.some(word => logText.includes(word));
