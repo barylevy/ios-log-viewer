@@ -14,7 +14,7 @@ export default function LogViewer() {
     contextLines, setContextLines,
     loadLogsFromFile,
     parsedLogs,
-    logMetadata    
+    logMetadata
   } = useLogsModel();
 
   const [aiSummary, setAiSummary] = useState("");
@@ -22,7 +22,7 @@ export default function LogViewer() {
   const scrollRef = useRef(null);
   const [visibleDate, setVisibleDate] = useState(currentDate);
   const [fileName, setFileName] = useState("");
-
+  const [fileHandle, setFileHandle] = useState(null);
 
   const summarizeWithAI = async () => {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -58,40 +58,68 @@ export default function LogViewer() {
     }
   };
 
-  const exportVisibleLogs = async () => {
-  if (!logs.length) return;
+  const handleImportLog = async () => {
+    const [handle] = await window.showOpenFilePicker({
+      types: [{ description: "Log Files", accept: { "text/plain": [".log", ".txt"] } }],
+    });
 
-  const headerLines = [];
+    const file = await handle.getFile();
+    loadLogsFromFile(file);
+    setFileName(file.name);
+    setFileHandle(handle);
+    localStorage.setItem("lastFileName", handle.name);
+  };
 
-  if (logMetadata.user) headerLines.push(`User: ${logMetadata.user}`);
-  if (logMetadata.account) headerLines.push(`Account: ${logMetadata.account}`);
-  if (logMetadata.clientVersion) headerLines.push(`Client version: ${logMetadata.clientVersion}`);
-  if (logMetadata.osVersion) headerLines.push(`OS version: ${logMetadata.osVersion}`);
 
-  const logLines = logs.map(log => log.raw);
-  const content = [...headerLines, "", ...logLines].join("\n");
+  const verifyAndLoadFile = async () => {
+    if (!fileHandle) return;
 
-  try {
-    const options = {
-      suggestedName: "filtered-logs.txt",
-      types: [
-        {
-          description: "Text Files",
-          accept: { "text/plain": [".txt"] },
-        },
-      ],
-    };
+    const permission = await fileHandle.queryPermission?.({ mode: "read" })
+      || await fileHandle.requestPermission?.({ mode: "read" });
 
-    const handle = await window.showSaveFilePicker(options);
-    const writable = await handle.createWritable();
-    await writable.write(content);
-    await writable.close();
-  } catch (err) {
-    if (err.name !== "AbortError") {
-      console.error("Export failed:", err);
+    if (permission === "granted") {
+      const file = await fileHandle.getFile();
+      loadLogsFromFile(file);
+      setFileName(file.name);
+    } else {
+      alert("No File Permission.");
     }
-  }
-};
+  };
+
+  const exportVisibleLogs = async () => {
+    if (!logs.length) return;
+
+    const headerLines = [];
+
+    if (logMetadata.user) headerLines.push(`User: ${logMetadata.user}`);
+    if (logMetadata.account) headerLines.push(`Account: ${logMetadata.account}`);
+    if (logMetadata.clientVersion) headerLines.push(`Client version: ${logMetadata.clientVersion}`);
+    if (logMetadata.osVersion) headerLines.push(`OS version: ${logMetadata.osVersion}`);
+
+    const logLines = logs.map(log => log.raw);
+    const content = [...headerLines, "", ...logLines].join("\n");
+
+    try {
+      const options = {
+        suggestedName: "filtered-logs.txt",
+        types: [
+          {
+            description: "Text Files",
+            accept: { "text/plain": [".txt"] },
+          },
+        ],
+      };
+
+      const handle = await window.showSaveFilePicker(options);
+      const writable = await handle.createWritable();
+      await writable.write(content);
+      await writable.close();
+    } catch (err) {
+      if (err.name !== "AbortError") {
+        console.error("Export failed:", err);
+      }
+    }
+  };
 
 
 
@@ -107,83 +135,74 @@ export default function LogViewer() {
   };
 
   useEffect(() => {
-  const handleKeyDown = (e) => {
-    if (e.key === "Escape") {
-      setSelectedLog(null);
-    }
-  };
-  window.addEventListener("keydown", handleKeyDown);
-  return () => {
-    window.removeEventListener("keydown", handleKeyDown);
-  };
-}, []);
+    verifyAndLoadFile();
+
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        setSelectedLog(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
 
   return (
     <div className="p-4 space-y-4">
       <div className="sticky top-0 bg-white dark:bg-gray-900 z-20 space-y-2 pb-1">
-       <div className="flex flex-wrap justify-between items-start gap-2">
+        <div className="flex flex-wrap justify-between items-start gap-2">
           <div className="flex justify-between items-start flex-wrap gap-x-4 gap-y-1">
             <div className="flex items-baseline flex-wrap gap-x-2 gap-y-1 text-gray-800 dark:text-white">
-            <span className="text-2xl font-bold whitespace-nowrap">iOS Log Viewer</span>
+              <span className="text-2xl font-bold whitespace-nowrap">iOS Log Viewer</span>
 
-            {fileName && (
-              <span className="text-sm font-normal text-gray-600 dark:text-gray-300 whitespace-nowrap">
-                • <strong>{fileName}</strong>
-              </span>
-            )}
+              {fileName && (
+                <span className="text-sm font-normal text-gray-600 dark:text-gray-300 whitespace-nowrap">
+                  • <strong>{fileName}</strong>
+                  {fileHandle && (
+                    <button
+                      className="ml-2 text-blue-500 underline text-xs"
+                      onClick={verifyAndLoadFile}
+                    >
+                      🔄
+                    </button>
+                  )}
+                </span>
+              )}
 
-            {logMetadata.user && (
-              <span className="text-xs font-normal text-gray-500 dark:text-gray-300 break-words">
-                · {logMetadata.user} · {logMetadata.account} · v{logMetadata.clientVersion} · OS {logMetadata.osVersion}
-              </span>
-            )}
+              {logMetadata.user && (
+                <span className="text-xs font-normal text-gray-500 dark:text-gray-300 break-words">
+                  · {logMetadata.user} · {logMetadata.account} · v{logMetadata.clientVersion} · OS {logMetadata.osVersion}
+                </span>
+              )}
+            </div>
           </div>
         </div>
-        </div>
         <div className="flex items-center gap-2">
-          <button onClick={summarizeWithAI}     className="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white px-4 py-2 rounded text-sm">🧠 Explain Logs</button>
-          <label className="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white px-4 py-2 rounded cursor-pointer text-sm">
-            📁 Import Log
-            <input
-              type="file"
-              accept=".txt,.log"
-              onChange={e => {
-                const file = e.target.files[0];
-                if (file) {
-                  loadLogsFromFile(file);
-                  setFileName(file.name);
-                }
-              }}
-              className="hidden"
-            />
-        </label>
-        <button
-          onClick={exportVisibleLogs}
-          className="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white px-4 py-2 rounded text-sm"
-          >
-          📤 Export Log
-        </button>
+          <button onClick={summarizeWithAI} className="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white px-4 py-2 rounded text-sm">🧠 Explain Logs</button>
+          <button onClick={handleImportLog} className="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white px-4 py-2 rounded cursor-pointer text-sm">📁 Import Log</button>
+          <button onClick={exportVisibleLogs} className="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white px-4 py-2 rounded text-sm"> 📤 Export Log </button>
         </div>
-        <div className="flex gap-2 flex-wrap items-center">          
+        <div className="flex gap-2 flex-wrap items-center">
           <div className="relative flex-1">
-        <input
-          className="w-full p-2 pr-8 border rounded text-sm"
-          placeholder="Filter logs"
-          value={filterTextInput}
-          onChange={(e) => setFilterTextInput(e.target.value)}
-        />
-        {filterTextInput && (
-          <button
-            onClick={() => setFilterTextInput("")}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black dark:hover:text-white"
-            aria-label="Clear filter"
-          >✕
-          </button>
-        )}
-      </div>
-         <input
+            <input
+              className="w-full p-2 pr-8 border rounded text-sm"
+              placeholder="Filter logs"
+              value={filterTextInput}
+              onChange={(e) => setFilterTextInput(e.target.value)}
+            />
+            {filterTextInput && (
+              <button
+                onClick={() => setFilterTextInput("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black dark:hover:text-white"
+                aria-label="Clear filter"
+              >✕
+              </button>
+            )}
+          </div>
+          <input
             type="datetime-local"
-            step="0.001"              
+            step="0.001"
             className="min-w p-2 border rounded text-sm"
             value={filterStart}
             title="Start time"
@@ -202,7 +221,7 @@ export default function LogViewer() {
           />
           <input
             type="datetime-local"
-             step="0.001"
+            step="0.001"
             className="min-w p-2 border rounded text-sm"
             title="End time"
             placeholder="End time"
@@ -237,40 +256,40 @@ export default function LogViewer() {
           <div className="text-sm text-gray-600 dark:text-gray-300">Showing: <strong>{logs.length}</strong> records</div>
         </div>
 
-        { aiSummary && (
+        {aiSummary && (
           <div className="bg-yellow-50 border border-yellow-300 p-4 rounded">
             <h2 className="font-semibold mb-1">AI Summary:</h2>
             <pre className="text-sm whitespace-pre-wrap">{aiSummary}</pre>
           </div>
         )}
-        
+
       </div>
-      
+
       <div ref={scrollRef} style={{ height: "75vh" }} className="border rounded">
         <div className="text-gray-500 dark:text-gray-300 font-semibold border-b border-gray-200 dark:border-gray-700 px-2 py-1 text-sm">Date: {visibleDate}</div>
         <AutoSizer>
           {({ height, width }) => (
             <List
               height={height}
-                    itemCount={logs.length}
-                    itemSize={28}
-                    width={width}
-                    onItemsRendered={({ visibleStartIndex }) => {
+              itemCount={logs.length}
+              itemSize={28}
+              width={width}
+              onItemsRendered={({ visibleStartIndex }) => {
                 const log = logs[visibleStartIndex];
                 if (log?.date) {
                   setVisibleDate(log.date);
                 }
               }}
-                  >
-                    {({ index, style }) => {
-                      const log = logs[index];
-                      return (
-                        <div
-                          key={index}
-                          
-                          onClick={() => setSelectedLog(log)}
-                          style={style}
-                          className={`
+            >
+              {({ index, style }) => {
+                const log = logs[index];
+                return (
+                  <div
+                    key={index}
+
+                    onClick={() => setSelectedLog(log)}
+                    style={style}
+                    className={`
                             border-b px-2 py-0.5 text-xs leading-tight cursor-pointer
                             ${getColorByLevel(log.level)}
                             ${log.isMalformed ? "bg-orange-100 text-red-700 italic" : ""}
@@ -279,25 +298,25 @@ export default function LogViewer() {
                             ${index % 2 === 1 ? "bg-gray-50 dark:bg-gray-800" : ""}
                             hover:bg-gray-100 dark:hover:bg-gray-700 transition
                           `}
-                        >
-              <div className="grid grid-cols-5 gap-1 items-start">
-                <div className="text-gray-500">{log.time}</div>
-                <div className="col-span-4 flex justify-between gap-4 text-gray-800 dark:text-gray-200 truncate">
-                  <span className="truncate">{log.message}</span>
-                  <span className="flex-shrink-0 text-[11px] text-gray-500 dark:text-gray-400 flex items-center gap-2">
-                    {log.location && (
-                      <span className="text-blue-600 dark:text-blue-400 font-medium">{log.location}</span>
-                    )}
-                    {log.module && (
-                      <span className="text-gray-500 dark:text-gray-400">[{log.module}]</span>
-                    )}
-                  </span>
-                </div>
-              </div>
-            </div>
-              );
-            }}
-          </List>
+                  >
+                    <div className="grid grid-cols-5 gap-1 items-start">
+                      <div className="text-gray-500">{log.time}</div>
+                      <div className="col-span-4 flex justify-between gap-4 text-gray-800 dark:text-gray-200 truncate">
+                        <span className="truncate">{log.message}</span>
+                        <span className="flex-shrink-0 text-[11px] text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                          {log.location && (
+                            <span className="text-blue-600 dark:text-blue-400 font-medium">{log.location}</span>
+                          )}
+                          {log.module && (
+                            <span className="text-gray-500 dark:text-gray-400">[{log.module}]</span>
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }}
+            </List>
 
           )}
         </AutoSizer>
