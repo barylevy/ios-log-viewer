@@ -273,8 +273,9 @@ export default function LogViewer() {
                           className={`
                             border-b px-2 py-0.5 text-xs leading-tight cursor-pointer
                             ${getColorByLevel(log.level)}
+                            ${log.isMalformed ? "bg-orange-100 text-red-700 italic" : ""}
                             ${log.isMatch ? "font-semibold bg-white dark:bg-gray-800" : ""}
-                            ${log.context && !log.isMatch ? "opacity-60 italic" : ""}
+                            ${log.context && !log.isMatch ? "opacity-60 italic" : ""}                            
                             ${index % 2 === 1 ? "bg-gray-50 dark:bg-gray-800" : ""}
                             hover:bg-gray-100 dark:hover:bg-gray-700 transition
                           `}
