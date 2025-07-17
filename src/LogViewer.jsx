@@ -292,7 +292,7 @@ export default function LogViewer() {
                     className={`
                             border-b px-2 py-0.5 text-xs leading-tight cursor-pointer
                             ${getColorByLevel(log.level)}
-                            ${log.isMalformed ? "bg-orange-100 text-red-700 italic" : ""}
+                            ${log.isMalformed ? "bg-orange-50 dark:bg-orange-900" : ""}
                             ${log.isMatch ? "font-semibold bg-white dark:bg-gray-800" : ""}
                             ${log.context && !log.isMatch ? "opacity-60 italic" : ""}                            
                             ${index % 2 === 1 ? "bg-gray-50 dark:bg-gray-800" : ""}
@@ -300,7 +300,9 @@ export default function LogViewer() {
                           `}
                   >
                     <div className="grid grid-cols-5 gap-1 items-start">
-                      <div className="text-gray-500">{log.time}</div>
+                      <div className="text-gray-500">
+                        {!log.isMalformed && log.time}
+                      </div>
                       <div className="col-span-4 flex justify-between gap-4 text-gray-800 dark:text-gray-200 truncate">
                         <span className="truncate">{log.message}</span>
                         <span className="flex-shrink-0 text-[11px] text-gray-500 dark:text-gray-400 flex items-center gap-2">

@@ -41,6 +41,78 @@ export function useLogsModel() {
   };
 
   const [visibleLogs, setVisibleLogs] = useState([]);
+const loadLogsFromFile = async (file) => {
+  if (!file) return;
+
+  const text = await file.text();
+  const lines = text.split("\n");
+
+  const metadata = {};
+  const metadataKeys = ["User:", "Account:", "Client version:", "OS version:"];
+  const headerLines = new Set();
+
+  for (let i = 0; i < Math.min(20, lines.length); i++) {
+    const line = lines[i];
+    for (const key of metadataKeys) {
+      if (line.startsWith(key)) {
+        metadata[key.replace(":", "").toLowerCase().replace(" ", "")] = line.replace(key, "").trim();
+        headerLines.add(i); // שמור מיקום כדי לדלג עליו
+      }
+    }
+  }
+
+  setLogMetadata(metadata);
+
+  const BATCH_SIZE = 1000;
+  const BATCH_DELAY = 50;
+  let allLogs = [];
+
+  let lastValidDate = "";
+  let lastValidTime = "";
+
+  const processBatch = (startIndex) => {
+    const endIndex = Math.min(startIndex + BATCH_SIZE, lines.length);
+
+    for (let i = startIndex; i < endIndex; i++) {
+      if (headerLines.has(i)) continue; // דלג על שורות metadata
+
+      const line = lines[i];
+      if (!line.trim() || headerLines.has(i)) continue;
+      
+      try {
+        const entry = parseLogLine(line);
+        if (entry) {
+          lastValidDate = entry.date;
+          lastValidTime = entry.time;
+          allLogs.push(entry);
+        } else {
+          allLogs.push({raw: line, message: line, level: "default", isMalformed: true, date: lastValidDate, time: lastValidTime,});
+        }
+      } catch (err) {
+        console.error("Failed to parse log line:", line, err);
+        allLogs.push({raw: line, message: line, level: "default", isMalformed: true, date: lastValidDate, time: lastValidTime, });
+      }
+    }
+
+    if (endIndex < lines.length) {
+      setTimeout(() => processBatch(endIndex), BATCH_DELAY);
+    } else {
+      // רק בסיום כל הבאצ׳ים:
+      allLogs.sort((a, b) => {
+        const aKey = `${a.date || ""} ${a.time || ""}`.replace(/[:\-]/g, "");
+        const bKey = `${b.date || ""} ${b.time || ""}`.replace(/[:\-]/g, "");
+        return aKey.localeCompare(bKey);
+      });
+
+      setParsedLogs(allLogs);
+      setCurrentDate(allLogs[0]?.date || "");
+    }
+  };
+
+  setParsedLogs([]);
+  processBatch(0);
+};
+
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -124,70 +196,6 @@ export function useLogsModel() {
 
     setVisibleLogs(deduped);
   }, [parsedLogs, filterText, filterStart, filterEnd, removeDuplicates, contextLines]);
-
-  const loadLogsFromFile = async (file) => {
-    if (!file) return;
-    const text = await file.text();
-    const lines = text.split("\n");    
-    setParsedLogs([]);
-
-    const metadata = {};
-    for (let i = 0; i < Math.min(20, lines.length); i++) {
-      const line = lines[i];
-      if (line.startsWith("User:")) metadata.user = line.replace("User:", "").trim();
-      if (line.startsWith("Account:")) metadata.account = line.replace("Account:", "").trim();
-      if (line.startsWith("Client version:")) metadata.clientVersion = line.replace("Client version:", "").trim();
-      if (line.startsWith("OS version:")) metadata.osVersion = line.replace("OS version:", "").trim();
-    }
-    setLogMetadata(metadata);
-
-    const BATCH_SIZE = 1000;
-    const BATCH_DELAY = 50;
-
-    const processBatch = (startIndex) => {
-      const endIndex = Math.min(startIndex + BATCH_SIZE, lines.length);
-      const newLogs = [];
-
-      for (let i = startIndex; i < endIndex; i++) {
-        try {
-          const entry = parseLogLine(lines[i]);
-          if (entry)
-            newLogs.push(entry);
-        }
-        catch (err) {
-          console.error("Failed to parse log line:", line, err);
-          newLogs.push({
-            raw: "30",
-            message: lines[i],
-            level: "default",
-            isMalformed: true,
-          });
-        };
-      }
-
-      setParsedLogs((prev) => [...prev, ...newLogs]);
-
-      if (endIndex < lines.length) {
-        setTimeout(() => processBatch(endIndex), BATCH_DELAY);
-      } else {
-        setParsedLogs((prev) => {
-          const allLogs = [...prev, ...newLogs];
-
-          allLogs.sort((a, b) => {
-            const aKey = `${a.date} ${a.time}`.replace(/[:\-]/g, '');
-            const bKey = `${b.date} ${b.time}`.replace(/[:\-]/g, '');
-            return aKey.localeCompare(bKey);
-          });
-
-          setCurrentDate(allLogs[0]?.date || "");
-          return allLogs;
-        });
-      }
-
-    };
-
-    processBatch(0);
-  };
 
   return {
     logs: visibleLogs,
