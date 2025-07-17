@@ -13,7 +13,7 @@ const parseLogLine = (line) => {
 };
 
 export function useLogsModel() {
-  const [rawLines, setRawLines] = useState([]);
+  
   const [parsedLogs, setParsedLogs] = useState([]);
   const [currentDate, setCurrentDate] = useState("");
 
@@ -125,24 +125,10 @@ export function useLogsModel() {
     setVisibleLogs(deduped);
   }, [parsedLogs, filterText, filterStart, filterEnd, removeDuplicates, contextLines]);
 
-
-  const getLogsWithContext = (logs, matchIndices, context) => {
-    const resultSet = new Set();
-    matchIndices.forEach(index => {
-      const start = Math.max(0, index - context);
-      const end = Math.min(logs.length, index + context + 1);
-      for (let i = start; i < end; i++) {
-        resultSet.add(i);
-      }
-    });
-    return Array.from(resultSet).sort((a, b) => a - b).map(i => logs[i]);
-  };
-
   const loadLogsFromFile = async (file) => {
     if (!file) return;
     const text = await file.text();
-    const lines = text.split("\n");
-    setRawLines(lines);
+    const lines = text.split("\n");    
     setParsedLogs([]);
 
     const metadata = {};
@@ -170,7 +156,7 @@ export function useLogsModel() {
         }
         catch (err) {
           console.error("Failed to parse log line:", line, err);
-          logs.push({
+          newLogs.push({
             raw: "30",
             message: lines[i],
             level: "default",
