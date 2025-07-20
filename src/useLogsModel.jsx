@@ -56,7 +56,7 @@ const loadLogsFromFile = async (file) => {
     for (const key of metadataKeys) {
       if (line.startsWith(key)) {
         metadata[key.replace(":", "").toLowerCase().replace(" ", "")] = line.replace(key, "").trim();
-        headerLines.add(i); // שמור מיקום כדי לדלג עליו
+        headerLines.add(i);
       }
     }
   }
@@ -74,9 +74,8 @@ const loadLogsFromFile = async (file) => {
     const endIndex = Math.min(startIndex + BATCH_SIZE, lines.length);
 
     for (let i = startIndex; i < endIndex; i++) {
-      if (headerLines.has(i)) continue; // דלג על שורות metadata
-
       const line = lines[i];
+
       if (!line.trim() || headerLines.has(i)) continue;
 
       try {

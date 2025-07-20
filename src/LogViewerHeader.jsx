@@ -1,0 +1,31 @@
+import React from "react";
+
+export default function LogViewerHeader({ fileName, fileHandle, logMetadata, onImport, onExport, onReload, onSummarize }) {
+  return (
+    <div className="space-y-2">
+      <div className="flex justify-between items-start gap-2">
+        <div className="flex items-baseline gap-2 text-gray-800 dark:text-white">
+          <span className="text-2xl font-bold whitespace-nowrap">iOS Log Viewer</span>
+          {fileName && (
+            <span className="text-sm text-gray-600 dark:text-gray-300">
+              • <strong>{fileName}</strong>
+              {fileHandle && (
+                <button onClick={onReload} className="ml-2 text-blue-500 underline text-xs">🔄</button>
+              )}
+            </span>
+          )}
+        </div>
+      </div>
+      {logMetadata.user && (
+        <div className="text-xs text-gray-500 dark:text-gray-300">
+          · {logMetadata.user} · {logMetadata.account} · v{logMetadata.clientVersion} · OS {logMetadata.osVersion}
+        </div>
+      )}
+      <div className="flex items-center gap-2">
+        <button onClick={onSummarize} className="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white px-4 py-2 rounded text-sm">🧠 Explain Logs</button>
+        <button onClick={onImport} className="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white px-4 py-2 rounded text-sm">📁 Import Log</button>
+        <button onClick={onExport} className="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white px-4 py-2 rounded text-sm">📤 Export Log</button>
+      </div>
+    </div>
+  );
+}
