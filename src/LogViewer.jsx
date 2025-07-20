@@ -5,7 +5,17 @@ import LogListView from "./LogListView";
 import LogModal from "./LogModal";
 import { useLogsModel } from "./useLogsModel";
 
+
+
 export default function LogViewer() {
+
+  const [loadProgress, setLoadProgress] = useState(0); // 0–100 אחוז
+  const [isLoading, setIsLoading] = useState(false);
+  const [aiSummary, setAiSummary] = useState("");
+  const [selectedLog, setSelectedLog] = useState(null);
+  const [fileName, setFileName] = useState("");
+  const [fileHandle, setFileHandle] = useState(null);
+
   const {
     logs, currentDate,
     filterTextInput, setFilterTextInput,
@@ -16,12 +26,11 @@ export default function LogViewer() {
     loadLogsFromFile,
     parsedLogs,
     logMetadata
-  } = useLogsModel();
-
-  const [aiSummary, setAiSummary] = useState("");
-  const [selectedLog, setSelectedLog] = useState(null);
-  const [fileName, setFileName] = useState("");
-  const [fileHandle, setFileHandle] = useState(null);
+  } = useLogsModel({
+    setIsLoading,
+    setLoadProgress
+  });
+  
   const [visibleDate, setVisibleDate] = useState(currentDate);
 
   const summarizeWithAI = async () => {
@@ -150,6 +159,16 @@ export default function LogViewer() {
       />
 
       <LogModal selectedLog={selectedLog} onClose={() => setSelectedLog(null)} />
+    {isLoading && (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black bg-opacity-30">
+        <div className="bg-white dark:bg-gray-800 text-gray-800 dark:text-white px-6 py-4 rounded shadow-md text-sm mb-2">
+          ⏳ Log File Loading... {loadProgress}%
+        </div>
+        <progress className="w-64 h-2 rounded bg-gray-200" value={loadProgress} max="100" />
+      </div>
+    )}
+    
     </div>
+    
   );
 }

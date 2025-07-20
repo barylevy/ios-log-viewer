@@ -12,7 +12,7 @@ const parseLogLine = (line) => {
   return { date, time, module, pid, tid, tag, location, message, level, raw: line };
 };
 
-export function useLogsModel() {
+export function useLogsModel({ setIsLoading, setLoadProgress }) {
   
   const [parsedLogs, setParsedLogs] = useState([]);
   const [currentDate, setCurrentDate] = useState("");
@@ -44,6 +44,9 @@ export function useLogsModel() {
 const loadLogsFromFile = async (file) => {
   if (!file) return;
 
+  setIsLoading(true);
+  setLoadProgress(0);
+
   const text = await file.text();
   const lines = text.split("\n");
 
@@ -72,6 +75,9 @@ const loadLogsFromFile = async (file) => {
 
   const processBatch = (startIndex) => {
     const endIndex = Math.min(startIndex + BATCH_SIZE, lines.length);
+    
+    const progress = Math.round((endIndex / lines.length) * 100);
+    setLoadProgress(progress);
 
     for (let i = startIndex; i < endIndex; i++) {
       const line = lines[i];
@@ -105,6 +111,10 @@ const loadLogsFromFile = async (file) => {
 
       setParsedLogs(allLogs);
       setCurrentDate(allLogs[0]?.date || "");
+
+      setLoadProgress(100);
+      setIsLoading(false);
+
     }
   };
 
