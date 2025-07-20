@@ -15,6 +15,7 @@ export default function LogViewer() {
   const [selectedLog, setSelectedLog] = useState(null);
   const [fileName, setFileName] = useState("");
   const [fileHandle, setFileHandle] = useState(null);
+  const [fullPath, setFullPath] = useState("")
 
   const {
     logs, currentDate,
@@ -72,6 +73,7 @@ export default function LogViewer() {
       const file = await fileHandle.getFile();
       loadLogsFromFile(file);
       setFileName(file.name);
+      setFullPath(handle.name)
     } else {
       alert("No file permission");
     }
@@ -162,7 +164,7 @@ export default function LogViewer() {
     {isLoading && (
       <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black bg-opacity-30">
         <div className="bg-white dark:bg-gray-800 text-gray-800 dark:text-white px-6 py-4 rounded shadow-md text-sm mb-2">
-          ⏳ Log File Loading... {loadProgress}%
+          ⏳ Log File Loading...  {loadProgress}%
         </div>
         <progress className="w-64 h-2 rounded bg-gray-200" value={loadProgress} max="100" />
       </div>

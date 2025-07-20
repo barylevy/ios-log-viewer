@@ -86,16 +86,18 @@ const loadLogsFromFile = async (file) => {
 
       try {
         const entry = parseLogLine(line);
+        entry.lineNumber = i+1
+
         if (entry) {
           lastValidDate = entry.date;
           lastValidTime = entry.time;
           allLogs.push(entry);
         } else {
-          allLogs.push({raw: line, message: line, level: "default", isMalformed: true, date: lastValidDate, time: lastValidTime,});
+          allLogs.push({raw: line, message: line, level: "default", isMalformed: true, date: lastValidDate, time: lastValidTime,lineNumber: i+1});
         }
       } catch (err) {
         console.error("Failed to parse log line:", line, err);
-        allLogs.push({raw: line, message: line, level: "default", isMalformed: true, date: lastValidDate, time: lastValidTime, });
+        allLogs.push({raw: line, message: line, level: "default", isMalformed: true, date: lastValidDate, time: lastValidTime, lineNumber: i + 1});
       }
     }
 

@@ -29,16 +29,18 @@ export default function LogListView({ logs, selectedLog, setSelectedLog, visible
                   style={style}
                   className={`
                     border-b px-2 py-0.5 text-xs leading-tight cursor-pointer
-                    ${getColorByLevel(log.level)}
-                    ${log.isMalformed ? "bg-orange-50 dark:bg-orange-900" : ""}
                     ${log.isMatch ? "font-semibold bg-white dark:bg-gray-800" : ""}
                     ${log.context && !log.isMatch ? "opacity-60 italic" : ""}
+                    ${log.isMalformed ? "bg-orange-50 dark:bg-orange-900" : getColorByLevel(log.level)}
                     ${index % 2 === 1 ? "bg-gray-50 dark:bg-gray-800" : ""}
                     hover:bg-gray-100 dark:hover:bg-gray-700 transition
                   `}
                 >
                   <div className="grid grid-cols-5 gap-1 items-start">
-                    <div className="text-gray-500">{!log.isMalformed && log.time}</div>
+                    <div className="text-gray-500 flex items-center gap-2">
+                      {!log.isMalformed && log.time}
+                      <span className="text-[10px] text-gray-400">#{log.lineNumber}</span>
+                    </div>
                     <div className="col-span-4 flex justify-between gap-4 text-gray-800 dark:text-gray-200 truncate">
                       <span className="truncate">{log.message}</span>
                       <span className="flex-shrink-0 text-[11px] text-gray-500 dark:text-gray-400 flex items-center gap-2">
