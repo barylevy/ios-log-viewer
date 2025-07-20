@@ -127,14 +127,8 @@ const loadLogsFromFile = async (file) => {
     if (endIndex < lines.length) {
       setTimeout(() => processBatch(endIndex), BATCH_DELAY);
     } else {
-      // רק בסיום כל הבאצ׳ים:
-      allLogs.sort((a, b) => {
-        const aKey = `${a.date || ""} ${a.time || ""}`.replace(/[:\-]/g, "");
-        const bKey = `${b.date || ""} ${b.time || ""}`.replace(/[:\-]/g, "");
-        return aKey.localeCompare(bKey);
-      });
-
-      setParsedLogs(allLogs);
+    
+      // setParsedLogs(allLogs);
       setCurrentDate(allLogs[0]?.date || "");
       setLoadProgress(100);
       setIsLoading(false);
