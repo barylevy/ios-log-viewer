@@ -24,6 +24,7 @@ export function useLogsModel({ setIsLoading, setLoadProgress }) {
   const [removeDuplicates, setRemoveDuplicates] = useState(localStorage.getItem("log_removeDuplicates") === "true");
 
   const [logMetadata, setLogMetadata] = useState({});
+  const [renderedCount, setRenderedCount] = useState(0);
 
   const [contextLines, setContextLines] = useState(
     Number(localStorage.getItem("log_contextLines") || 2)
@@ -73,9 +74,10 @@ const loadLogsFromFile = async (file) => {
   let lastValidDate = "";
   let lastValidTime = "";
 
-  const processBatch = (startIndex) => {
+    const processBatch = (startIndex) => {
     const endIndex = Math.min(startIndex + BATCH_SIZE, lines.length);
-    
+    const batchLogs = [];
+
     const progress = Math.round((endIndex / lines.length) * 100);
     setLoadProgress(progress);
 
@@ -86,20 +88,41 @@ const loadLogsFromFile = async (file) => {
 
       try {
         const entry = parseLogLine(line);
-        entry.lineNumber = i+1
+
+        const logItem = {
+          ...(entry || {}),
+          lineNumber: i + 1,
+          raw: line,
+        };
 
         if (entry) {
           lastValidDate = entry.date;
           lastValidTime = entry.time;
-          allLogs.push(entry);
         } else {
-          allLogs.push({raw: line, message: line, level: "default", isMalformed: true, date: lastValidDate, time: lastValidTime,lineNumber: i+1});
+          logItem.message = line;
+          logItem.level = "default";
+          logItem.isMalformed = true;
+          logItem.date = lastValidDate;
+          logItem.time = lastValidTime;
         }
+
+        batchLogs.push(logItem);
       } catch (err) {
         console.error("Failed to parse log line:", line, err);
-        allLogs.push({raw: line, message: line, level: "default", isMalformed: true, date: lastValidDate, time: lastValidTime, lineNumber: i + 1});
+        batchLogs.push({
+          raw: line,
+          message: line,
+          level: "default",
+          isMalformed: true,
+          date: lastValidDate,
+          time: lastValidTime,
+          lineNumber: i + 1,
+        });
       }
     }
+
+    // ⬇️ הוספת batch חדש לרשימה הקיימת
+    setParsedLogs((prev) => [...prev, ...batchLogs]);
 
     if (endIndex < lines.length) {
       setTimeout(() => processBatch(endIndex), BATCH_DELAY);
@@ -113,10 +136,8 @@ const loadLogsFromFile = async (file) => {
 
       setParsedLogs(allLogs);
       setCurrentDate(allLogs[0]?.date || "");
-
       setLoadProgress(100);
       setIsLoading(false);
-
     }
   };
 
@@ -128,7 +149,7 @@ const loadLogsFromFile = async (file) => {
   useEffect(() => {
     const handler = setTimeout(() => {
       setFilterText(filterTextInput);
-    }, 1500);
+    }, 1000);
     return () => clearTimeout(handler);
   }, [filterTextInput]);
 

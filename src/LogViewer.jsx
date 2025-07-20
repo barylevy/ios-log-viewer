@@ -117,12 +117,22 @@ export default function LogViewer() {
         <LogViewerHeader
           fileName={fileName}
           fileHandle={fileHandle}
+          fullPath={fullPath}
           logMetadata={logMetadata}
           onImport={handleImportLog}
           onExport={exportVisibleLogs}
           onReload={verifyAndLoadFile}
           onSummarize={summarizeWithAI}
         />
+        {isLoading && (
+          <div className="w-full h-1 bg-gray-200 relative overflow-hidden rounded">
+            <div
+              className="h-full bg-blue-500 transition-all duration-100"
+              style={{ width: `${loadProgress}%` }}
+            />
+          </div>
+        )}
+
         <LogViewerFilters
           filterTextInput={filterTextInput}
           setFilterTextInput={setFilterTextInput}
@@ -143,7 +153,6 @@ export default function LogViewer() {
           </div>
         )}
       </div>
-
       <LogListView
         logs={logs}
         selectedLog={selectedLog}
@@ -161,14 +170,7 @@ export default function LogViewer() {
       />
 
       <LogModal selectedLog={selectedLog} onClose={() => setSelectedLog(null)} />
-    {isLoading && (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black bg-opacity-30">
-        <div className="bg-white dark:bg-gray-800 text-gray-800 dark:text-white px-6 py-4 rounded shadow-md text-sm mb-2">
-          ⏳ Log File Loading...  {loadProgress}%
-        </div>
-        <progress className="w-64 h-2 rounded bg-gray-200" value={loadProgress} max="100" />
-      </div>
-    )}
+  
     
     </div>
     
