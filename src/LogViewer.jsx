@@ -17,9 +17,9 @@ export default function LogViewer() {
   const [fileHandle, setFileHandle] = useState(null);
   const [fullPath, setFullPath] = useState("")
   const listRef = useRef(null);
-  const [scrollToIndex, setScrollToIndex] = useState(null);  
+  const [scrollToIndex, setScrollToIndex] = useState(null);
 
-  
+
   const {
     logs, currentDate,
     filterTextInput, setFilterTextInput,
@@ -34,7 +34,7 @@ export default function LogViewer() {
     setIsLoading,
     setLoadProgress
   });
-  
+
   const [visibleDate, setVisibleDate] = useState(currentDate);
 
   const handleItemsRendered = ({ visibleStartIndex }) => {
@@ -85,7 +85,7 @@ export default function LogViewer() {
       setFileName(file.name);
       setFullPath(handle.name)
       setScrollToIndex(indexBeforeReload); // restore position after reload
-      
+
     } else {
       alert("No file permission");
     }
@@ -157,14 +157,14 @@ export default function LogViewer() {
         )}
       </div>
       <div className="w-full h-0.5 bg-gray-200 relative overflow-hidden rounded">
-          {isLoading && (
+        {isLoading && (
           <div
             className="h-full bg-blue-500 transition-all duration-100"
             style={{ width: `${loadProgress}%` }}
           />
-          )}
+        )}
       </div>
-        
+
       <LogListView
         logs={logs}
         selectedLog={selectedLog}
@@ -182,12 +182,14 @@ export default function LogViewer() {
             default: return "bg-white border-gray-200";
           }
         }}
+        setFilterStart={setFilterStart}
+        setFilterEnd={setFilterEnd}
       />
 
       <LogModal selectedLog={selectedLog} onClose={() => setSelectedLog(null)} />
-  
-    
+
+
     </div>
-    
+
   );
 }

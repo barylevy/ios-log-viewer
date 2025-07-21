@@ -4,12 +4,10 @@ import { FixedSizeList as List } from "react-window";
 import AutoSizer from "react-virtualized-auto-sizer";
 
 
+export default function LogListView({ logs, selectedLog, setSelectedLog, visibleDate, setVisibleDate, listRef, scrollToIndex, onItemsRendered,
+  getColorByLevel, setFilterStart, setFilterEnd }) {
 
-export default function LogListView({ logs, selectedLog, setSelectedLog, visibleDate, setVisibleDate,listRef, scrollToIndex, onItemsRendered,
-  getColorByLevel }) {
-
-
-
+  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, log: null });
 
   return (
     <div style={{ height: "75vh" }} className="border rounded">
@@ -27,7 +25,6 @@ export default function LogListView({ logs, selectedLog, setSelectedLog, visible
             scrollToIndex={scrollToIndex ?? 0} // ← אם לא הוגדר, תחזור לראש
             scrollToAlignment="start"
             onItemsRendered={onItemsRendered}
-            
           >
             {({ index, style }) => {
               const log = logs[index];
@@ -35,6 +32,15 @@ export default function LogListView({ logs, selectedLog, setSelectedLog, visible
                 <div
                   key={index}
                   onClick={() => setSelectedLog(log)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setContextMenu({
+                      visible: true,
+                      x: e.clientX,
+                      y: e.clientY,
+                      log,
+                    });
+                  }}
                   style={style}
                   className={`
                     border-b px-2 py-0.5 text-xs leading-tight cursor-pointer
@@ -64,6 +70,40 @@ export default function LogListView({ logs, selectedLog, setSelectedLog, visible
           </List>
         )}
       </AutoSizer>
+      {contextMenu.visible && contextMenu.log && (
+        <div
+          className="absolute bg-white shadow-md border text-sm z-50 rounded"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-xs"
+            onClick={() => {
+              const { date, time } = contextMenu.log;
+              if (date && time) {
+                const normalized = `${date}T${time.replace(/:(?=[^:]*$)/, ".")}`; // hh:mm:ss:ms → hh:mm:ss.ms
+                setFilterStart(normalized);
+              }
+              setContextMenu({ visible: false });
+            }}
+          >
+            🗓️ set start date
+          </div>
+          <div
+            className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-xs"
+            onClick={() => {
+              const { date, time } = contextMenu.log;
+              if (date && time) {
+                const normalized = `${date}T${time.replace(/:(?=[^:]*$)/, ".")}`;
+                setFilterEnd(normalized);
+              }
+              setContextMenu({ visible: false });
+            }}
+          >
+            🗓️ set end date
+          </div>
+        </div>
+      )}
     </div>
   );
 }
