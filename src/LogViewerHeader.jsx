@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function LogViewerHeader({ fileName, fileHandle, fullPath, logMetadata, onImport, onExport, onReload, onSummarize }) {
+export default function LogViewerHeader({ fileName, fileHandle,   fullPath, logMetadata, onImport, onExport, onReload, onSummarize }) {
   return (
     <div className="space-y-2">
       <div className="flex justify-between items-start gap-2">
@@ -10,7 +10,7 @@ export default function LogViewerHeader({ fileName, fileHandle, fullPath, logMet
             <span className="text-sm text-gray-600 dark:text-gray-300">
               • <strong title={fullPath || fileName}>{fileName}</strong>
               {fileHandle && (
-                <button onClick={onReload} className="ml-2 text-blue-500 underline text-xs">🔄</button>
+                <button title="Reload Log file" onClick={onReload} className="ml-2 text-blue-500 underline text-xs">🔄</button>
               )}
             </span>
           )}

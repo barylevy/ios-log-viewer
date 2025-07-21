@@ -22,14 +22,13 @@ export default function LogViewerFilters({
             onClick={() => setFilterTextInput("")}
             className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black dark:hover:text-white"
             aria-label="Clear filter"
-          >
-            ✕
+          > ✖️
           </button>
         )}
       </div>
       <input type="datetime-local" step="0.001" className="min-w p-2 border rounded text-sm" value={filterStart} onChange={(e) => setFilterStart(e.target.value)} />
       <input type="datetime-local" step="0.001" className="min-w p-2 border rounded text-sm" value={filterEnd} onChange={(e) => setFilterEnd(e.target.value)} />
-      <input type="number" title="Context" min="0" className="w-16 p-2 border rounded text-sm" value={contextLines} onChange={(e) => setContextLines(Number(e.target.value))} />
+      <input type="number" title="Show lines above/below the filtered line." min="0" className="w-16 p-2 border rounded text-sm" value={contextLines} onChange={(e) => setContextLines(Number(e.target.value))} />
       <label className="flex items-center space-x-1 text-sm text-gray-700 dark:text-gray-300">
         <input type="checkbox" checked={removeDuplicates} onChange={(e) => setRemoveDuplicates(e.target.checked)} />
         <span>Remove duplicates</span>

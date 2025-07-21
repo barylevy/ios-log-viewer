@@ -1,8 +1,16 @@
-import React from "react";
+import React, { useState } from "react";
+
 import { FixedSizeList as List } from "react-window";
 import AutoSizer from "react-virtualized-auto-sizer";
 
-export default function LogListView({ logs, selectedLog, setSelectedLog, visibleDate, setVisibleDate, getColorByLevel }) {
+
+
+export default function LogListView({ logs, selectedLog, setSelectedLog, visibleDate, setVisibleDate,listRef, scrollToIndex, onItemsRendered,
+  getColorByLevel }) {
+
+
+
+
   return (
     <div style={{ height: "75vh" }} className="border rounded">
       <div className="text-gray-500 dark:text-gray-300 font-semibold border-b border-gray-200 dark:border-gray-700 px-2 py-1 text-sm">
@@ -11,14 +19,15 @@ export default function LogListView({ logs, selectedLog, setSelectedLog, visible
       <AutoSizer>
         {({ height, width }) => (
           <List
+            ref={listRef}
             height={height}
             itemCount={logs.length}
             itemSize={28}
             width={width}
-            onItemsRendered={({ visibleStartIndex }) => {
-              const log = logs[visibleStartIndex];
-              if (log?.date) setVisibleDate(log.date);
-            }}
+            scrollToIndex={scrollToIndex ?? 0} // ← אם לא הוגדר, תחזור לראש
+            scrollToAlignment="start"
+            onItemsRendered={onItemsRendered}
+            
           >
             {({ index, style }) => {
               const log = logs[index];

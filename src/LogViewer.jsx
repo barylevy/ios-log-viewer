@@ -16,7 +16,10 @@ export default function LogViewer() {
   const [fileName, setFileName] = useState("");
   const [fileHandle, setFileHandle] = useState(null);
   const [fullPath, setFullPath] = useState("")
+  const listRef = useRef(null);
+  const [scrollToIndex, setScrollToIndex] = useState(null);  
 
+  
   const {
     logs, currentDate,
     filterTextInput, setFilterTextInput,
@@ -33,6 +36,12 @@ export default function LogViewer() {
   });
   
   const [visibleDate, setVisibleDate] = useState(currentDate);
+
+  const handleItemsRendered = ({ visibleStartIndex }) => {
+    setScrollToIndex(visibleStartIndex);
+    const log = logs[visibleStartIndex];
+    if (log?.date) setVisibleDate(log.date);
+  };
 
   const summarizeWithAI = async () => {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -71,9 +80,12 @@ export default function LogViewer() {
       await fileHandle.requestPermission?.({ mode: "read" });
     if (permission === "granted") {
       const file = await fileHandle.getFile();
-      loadLogsFromFile(file);
+      const indexBeforeReload = scrollToIndex;
+      await loadLogsFromFile(file);
       setFileName(file.name);
       setFullPath(handle.name)
+      setScrollToIndex(indexBeforeReload); // restore position after reload
+      
     } else {
       alert("No file permission");
     }
@@ -112,7 +124,7 @@ export default function LogViewer() {
   }, []);
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 space-y-2">
       <div className="sticky top-0 bg-white dark:bg-gray-900 z-20 space-y-2 pb-1">
         <LogViewerHeader
           fileName={fileName}
@@ -124,15 +136,6 @@ export default function LogViewer() {
           onReload={verifyAndLoadFile}
           onSummarize={summarizeWithAI}
         />
-        {isLoading && (
-          <div className="w-full h-1 bg-gray-200 relative overflow-hidden rounded">
-            <div
-              className="h-full bg-blue-500 transition-all duration-100"
-              style={{ width: `${loadProgress}%` }}
-            />
-          </div>
-        )}
-
         <LogViewerFilters
           filterTextInput={filterTextInput}
           setFilterTextInput={setFilterTextInput}
@@ -147,18 +150,30 @@ export default function LogViewer() {
           logCount={logs.length}
         />
         {aiSummary && (
-          <div className="bg-yellow-50 border border-yellow-300 p-4 rounded">
+          <div className="bg-yellow-50 border border-yellow-300 p-2 rounded">
             <h2 className="font-semibold mb-1">AI Summary:</h2>
             <pre className="text-sm whitespace-pre-wrap">{aiSummary}</pre>
           </div>
         )}
       </div>
+      <div className="w-full h-0.5 bg-gray-200 relative overflow-hidden rounded">
+          {isLoading && (
+          <div
+            className="h-full bg-blue-500 transition-all duration-100"
+            style={{ width: `${loadProgress}%` }}
+          />
+          )}
+      </div>
+        
       <LogListView
         logs={logs}
         selectedLog={selectedLog}
         setSelectedLog={setSelectedLog}
         visibleDate={visibleDate}
         setVisibleDate={setVisibleDate}
+        listRef={listRef}
+        scrollToIndex={scrollToIndex}
+        onItemsRendered={handleItemsRendered}
         getColorByLevel={(level) => {
           switch (level) {
             case "error": return "bg-red-100 border-red-300";

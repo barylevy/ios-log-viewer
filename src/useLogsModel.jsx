@@ -13,7 +13,7 @@ const parseLogLine = (line) => {
 };
 
 export function useLogsModel({ setIsLoading, setLoadProgress }) {
-  
+
   const [parsedLogs, setParsedLogs] = useState([]);
   const [currentDate, setCurrentDate] = useState("");
 
@@ -42,102 +42,100 @@ export function useLogsModel({ setIsLoading, setLoadProgress }) {
   };
 
   const [visibleLogs, setVisibleLogs] = useState([]);
-const loadLogsFromFile = async (file) => {
-  if (!file) return;
+  const loadLogsFromFile = async (file) => {
+    if (!file) return;
 
-  setIsLoading(true);
-  setLoadProgress(0);
+    setIsLoading(true);
+    setLoadProgress(0);
 
-  const text = await file.text();
-  const lines = text.split("\n");
+    const text = await file.text();
+    const lines = text.split("\n");
 
-  const metadata = {};
-  const metadataKeys = ["User:", "Account:", "Client version:", "OS version:"];
-  const headerLines = new Set();
+    const metadata = {};
+    const metadataKeys = ["User:", "Account:", "Client version:", "OS version:"];
+    const headerLines = new Set();
 
-  for (let i = 0; i < Math.min(20, lines.length); i++) {
-    const line = lines[i];
-    for (const key of metadataKeys) {
-      if (line.startsWith(key)) {
-        metadata[key.replace(":", "").toLowerCase().replace(" ", "")] = line.replace(key, "").trim();
-        headerLines.add(i);
+    for (let i = 0; i < Math.min(20, lines.length); i++) {
+      const line = lines[i];
+      for (const key of metadataKeys) {
+        if (line.startsWith(key)) {
+          metadata[key.replace(":", "").toLowerCase().replace(" ", "")] = line.replace(key, "").trim();
+          headerLines.add(i);
+        }
       }
     }
-  }
 
-  setLogMetadata(metadata);
+    setLogMetadata(metadata);
 
-  const BATCH_SIZE = 1000;
-  const BATCH_DELAY = 50;
-  let allLogs = [];
+    const BATCH_SIZE = 2000;
+    const BATCH_DELAY = 30;
+    let allLogs = [];
 
-  let lastValidDate = "";
-  let lastValidTime = "";
+    let lastValidDate = "";
+    let lastValidTime = "";
 
     const processBatch = (startIndex) => {
-    const endIndex = Math.min(startIndex + BATCH_SIZE, lines.length);
-    const batchLogs = [];
+      const endIndex = Math.min(startIndex + BATCH_SIZE, lines.length);
+      const batchLogs = [];
 
-    const progress = Math.round((endIndex / lines.length) * 100);
-    setLoadProgress(progress);
+      const progress = Math.round((endIndex / lines.length) * 100);
+      setLoadProgress(progress);
 
-    for (let i = startIndex; i < endIndex; i++) {
-      const line = lines[i];
+      for (let i = startIndex; i < endIndex; i++) {
+        const line = lines[i];
 
-      if (!line.trim() || headerLines.has(i)) continue;
+        if (!line.trim() || headerLines.has(i)) continue;
 
-      try {
-        const entry = parseLogLine(line);
+        try {
+          const entry = parseLogLine(line);
 
-        const logItem = {
-          ...(entry || {}),
-          lineNumber: i + 1,
-          raw: line,
-        };
+          const logItem = {
+            ...(entry || {}),
+            lineNumber: i + 1,
+            raw: line,
+          };
 
-        if (entry) {
-          lastValidDate = entry.date;
-          lastValidTime = entry.time;
-        } else {
-          logItem.message = line;
-          logItem.level = "default";
-          logItem.isMalformed = true;
-          logItem.date = lastValidDate;
-          logItem.time = lastValidTime;
+          if (entry) {
+            lastValidDate = entry.date;
+            lastValidTime = entry.time;
+          } else {
+            logItem.message = line;
+            logItem.level = "default";
+            logItem.isMalformed = true;
+            logItem.date = lastValidDate;
+            logItem.time = lastValidTime;
+          }
+
+          batchLogs.push(logItem);
+        } catch (err) {
+          console.error("Failed to parse log line:", line, err);
+          batchLogs.push({
+            raw: line,
+            message: line,
+            level: "default",
+            isMalformed: true,
+            date: lastValidDate,
+            time: lastValidTime,
+            lineNumber: i + 1,
+          });
         }
-
-        batchLogs.push(logItem);
-      } catch (err) {
-        console.error("Failed to parse log line:", line, err);
-        batchLogs.push({
-          raw: line,
-          message: line,
-          level: "default",
-          isMalformed: true,
-          date: lastValidDate,
-          time: lastValidTime,
-          lineNumber: i + 1,
-        });
       }
-    }
 
-    // ⬇️ הוספת batch חדש לרשימה הקיימת
-    setParsedLogs((prev) => [...prev, ...batchLogs]);
+      // ⬇️ הוספת batch חדש לרשימה הקיימת
+      setParsedLogs((prev) => [...prev, ...batchLogs]);
 
-    if (endIndex < lines.length) {
-      setTimeout(() => processBatch(endIndex), BATCH_DELAY);
-    } else {
-    
-      // setParsedLogs(allLogs);
-      setCurrentDate(allLogs[0]?.date || "");
-      setLoadProgress(100);
-      setIsLoading(false);
-    }
+      if (endIndex < lines.length) {
+        setTimeout(() => processBatch(endIndex), BATCH_DELAY);
+      } else {
+        setCurrentDate(allLogs[0]?.date || "");
+        setLoadProgress(100);
+        setIsLoading(false);
+      }
+    };
+
+    setParsedLogs([]);
+    processBatch(0);
   };
-
-  setParsedLogs([]);
-  processBatch(0);
-};
 
 
   useEffect(() => {
@@ -183,7 +181,16 @@ const loadLogsFromFile = async (file) => {
       });
 
       const deduped = removeDuplicates
-        ? Array.from(new Map(filtered.map(item => [item.message + item.time, item])).values())
+        ? [
+          ...Array.from(
+            new Map(
+              filtered
+                .filter(item => item.isMalformed === false)
+                .map(item => [item.originalLine, item])
+            ).values()
+          ),
+          ...filtered.filter(item => item.isMalformed !== false)
+        ]
         : filtered;
 
       setVisibleLogs(deduped);
