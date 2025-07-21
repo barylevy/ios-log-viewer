@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 import { FixedSizeList as List } from "react-window";
 import AutoSizer from "react-virtualized-auto-sizer";
@@ -8,6 +8,28 @@ export default function LogListView({ logs, selectedLog, setSelectedLog, visible
   getColorByLevel, setFilterStart, setFilterEnd }) {
 
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, log: null });
+
+  // close the menu when click ouside to menu
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setContextMenu({ visible: false, x: 0, y: 0, log: null });
+    };
+
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        setContextMenu({ visible: false, x: 0, y: 0, log: null });
+      }
+    };
+
+    window.addEventListener("click", handleClickOutside);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("click", handleClickOutside);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+ 
 
   return (
     <div style={{ height: "75vh" }} className="border rounded">
@@ -101,6 +123,12 @@ export default function LogListView({ logs, selectedLog, setSelectedLog, visible
             }}
           >
             🗓️ set end date
+          </div>
+          <div className="border-t my-1"></div>
+          <div
+            className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-xs text-gray-500"
+            onClick={() => setContextMenu({ visible: false, x: 0, y: 0, log: null })}
+          > ✖ Cancel
           </div>
         </div>
       )}
