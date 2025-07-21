@@ -1,10 +1,11 @@
 import React from "react";
 
-export default function LogViewerHeader({ fileName, fileHandle,   fullPath, logMetadata, onImport, onExport, onReload, onSummarize }) {
+export default function LogViewerHeader({ fileName, fileHandle, fullPath, logMetadata, onImport, onExport, onReload, onSummarize }) {
   return (
     <div className="space-y-2">
       <div className="flex justify-between items-start gap-2">
-        <div className="flex items-baseline gap-2 text-gray-800 dark:text-white">
+        <div className="flex items-center gap-2 text-gray-800 dark:text-white">
+          <img src="/assets/cato-logo.svg" alt="Cato Networks" className="h-6" />
           <span className="text-2xl font-bold whitespace-nowrap">iOS Log Viewer</span>
           {fileName && (
             <span className="text-sm text-gray-600 dark:text-gray-300">
