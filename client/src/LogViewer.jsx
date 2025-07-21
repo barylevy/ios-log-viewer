@@ -18,7 +18,7 @@ export default function LogViewer() {
   const [fullPath, setFullPath] = useState("")
   const listRef = useRef(null);
   const [scrollToIndex, setScrollToIndex] = useState(null);
-
+  const [userId, setUserId] = useState(null);
 
   const {
     logs, currentDate,
@@ -32,7 +32,9 @@ export default function LogViewer() {
     logMetadata
   } = useLogsModel({
     setIsLoading,
-    setLoadProgress
+    setLoadProgress,
+    userId,
+    setUserId
   });
 
   const [visibleDate, setVisibleDate] = useState(currentDate);

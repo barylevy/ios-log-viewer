@@ -25,6 +25,7 @@ export function useLogsModel({ setIsLoading, setLoadProgress }) {
 
   const [logMetadata, setLogMetadata] = useState({});
   const [renderedCount, setRenderedCount] = useState(0);
+  const [userId, setUserId] = useState(null);
 
   const [contextLines, setContextLines] = useState(
     Number(localStorage.getItem("log_contextLines") || 2)
@@ -121,7 +122,7 @@ export function useLogsModel({ setIsLoading, setLoadProgress }) {
         }
       }
 
-      // ⬇️ הוספת batch חדש לרשימה הקיימת
+      // add batch to existing list
       setParsedLogs((prev) => [...prev, ...batchLogs]);
 
       if (endIndex < lines.length) {
