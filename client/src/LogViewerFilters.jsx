@@ -72,29 +72,6 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
           />
         </div>
 
-        {/* Options */}
-        <div className="flex items-center gap-4">
-          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={filters.showTimestamps}
-              onChange={(e) => handleFilterChange('showTimestamps', e.target.checked)}
-              className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:bg-gray-700"
-            />
-            Show Timestamps
-          </label>
-
-          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={filters.caseSensitive}
-              onChange={(e) => handleFilterChange('caseSensitive', e.target.checked)}
-              className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:bg-gray-700"
-            />
-            Case Sensitive
-          </label>
-        </div>
-
         {/* Clear Filters */}
         {(filters.searchText || filters.logLevel !== 'all' || filters.startTime || filters.endTime) && (
           <button

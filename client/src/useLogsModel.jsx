@@ -8,9 +8,7 @@ const useLogsModel = () => {
     searchText: '',
     logLevel: 'all',
     startTime: '',
-    endTime: '',
-    showTimestamps: true,
-    caseSensitive: false
+    endTime: ''
   });
 
   const loadLogs = useCallback((file) => {
@@ -73,47 +71,47 @@ const useLogsModel = () => {
     return threadMatch ? threadMatch[1] : '';
   };
 
+  // Pre-compile search terms and regexes for performance
+  const searchData = useMemo(() => {
+    if (!filters.searchText) return null;
+
+    const searchTerms = filters.searchText.split('||')
+      .map(term => term.trim())
+      .filter(term => term.length > 0);
+
+    const searchRegexes = searchTerms.map(term => {
+      try {
+        return new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+      } catch {
+        return null;
+      }
+    });
+
+    return { searchTerms, searchRegexes };
+  }, [filters.searchText]);
+
   const filteredLogs = useMemo(() => {
     if (!logs.length) return [];
 
-    let filtered = logs;
-
-    // Pre-compile search regex if using search
-    let searchRegexes = [];
-    if (filters.searchText) {
-      // Split by || to allow multiple search terms
-      const searchTerms = filters.searchText.split('||').map(term => term.trim()).filter(term => term.length > 0);
-      
-      searchRegexes = searchTerms.map(term => {
-        try {
-          const flags = filters.caseSensitive ? 'g' : 'gi';
-          return new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
-        } catch {
-          // If regex fails, return null for string fallback
-          return null;
-        }
-      });
-    }
-
     // Single pass filtering - much more efficient
-    filtered = logs.filter(log => {
+    return logs.filter(log => {
       // Search text filter - now supports multiple terms with ||
-      if (filters.searchText) {
-        const searchTerms = filters.searchText.split('||').map(term => term.trim()).filter(term => term.length > 0);
-        
+      if (searchData) {
+        const { searchTerms, searchRegexes } = searchData;
+
         // Check if ANY of the search terms match (OR logic)
         const matchesAnyTerm = searchTerms.some((term, index) => {
           const regex = searchRegexes[index];
           if (regex) {
             return regex.test(log.message);
           } else {
-            // Fallback to string search
-            const searchText = filters.caseSensitive ? term : term.toLowerCase();
-            const message = filters.caseSensitive ? log.message : log.message.toLowerCase();
+            // Fallback to string search (case insensitive)
+            const searchText = term.toLowerCase();
+            const message = log.message.toLowerCase();
             return message.includes(searchText);
           }
         });
-        
+
         if (!matchesAnyTerm) return false;
       }
 
@@ -133,9 +131,7 @@ const useLogsModel = () => {
 
       return true;
     });
-
-    return filtered;
-  }, [logs, filters.searchText, filters.logLevel, filters.startTime, filters.endTime, filters.caseSensitive]); const updateFilters = useCallback((newFilters) => {
+  }, [logs, searchData, filters.logLevel, filters.startTime, filters.endTime]); const updateFilters = useCallback((newFilters) => {
     setFilters(prev => ({ ...prev, ...newFilters }));
   }, []);
 
