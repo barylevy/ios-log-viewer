@@ -114,23 +114,13 @@ const useLogsModel = () => {
         const hasNewHeaders = headerData && Object.keys(headerData).length > 0;
         const hasExistingHeaders = Object.keys(existingHeaders).length > 0;
 
-        console.log('🔄 Header update decision:', {
-          fileName: file.name,
-          hasNewHeaders,
-          hasExistingHeaders,
-          newHeaderData: headerData,
-          existingHeaders
-        });
-
         // If we have existing headers and no new headers - keep existing
         if (hasExistingHeaders && !hasNewHeaders) {
-          console.log('✅ Keeping existing headers - no new headers found');
           return prev;
         }
 
         // If we have new headers - use them (merge with existing if needed)
         if (hasNewHeaders) {
-          console.log('✅ Using new headers');
           return {
             ...prev,
             [file.name]: headerData
@@ -139,7 +129,6 @@ const useLogsModel = () => {
 
         // If no existing headers and no new headers - don't add entry
         if (!hasExistingHeaders && !hasNewHeaders) {
-          console.log('❌ No headers at all - not adding entry');
           return prev;
         }
 
@@ -161,8 +150,6 @@ const useLogsModel = () => {
           module: extractModule(line),
           thread: extractThread(line)
         }));
-
-      console.log(`🎯 Filtered out ${headerLines.length} header lines, showing ${parsedLogs.length} log entries`);
 
       // Store logs for this specific file
       setAllFileLogs(prev => ({
