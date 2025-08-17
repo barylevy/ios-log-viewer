@@ -286,20 +286,11 @@ const useLogsModel = () => {
       result = allHeaders.find(headers => headers && Object.keys(headers).length > 0) || null;
     }
 
-    console.log('🔍 getCurrentFileHeaders called:', {
-      fileName,
-      logFileHeaders,
-      allKeys: Object.keys(logFileHeaders),
-      result,
-      resultDetails: result ? JSON.stringify(result, null, 2) : 'null',
-      strategy: result === logFileHeaders[fileName] ? 'specific-file' : 'fallback-to-any'
-    });
     return result;
   }, [logFileHeaders]);
 
   // Set logs for a specific file (used when switching tabs)
   const setLogsForFile = useCallback((fileName, fileLogs) => {
-    console.log('🔗 setLogsForFile called:', { fileName, logsCount: fileLogs?.length });
     try {
       // If this is a combined view, ensure unique IDs
       let processedLogs = fileLogs;
@@ -309,7 +300,6 @@ const useLogsModel = () => {
           id: `combined-${index}`,
           originalId: log.id
         }));
-        console.log('📝 Processed combined logs with unique IDs');
       }
 
       setAllFileLogs(prev => ({
@@ -319,7 +309,6 @@ const useLogsModel = () => {
       setLogs(processedLogs);
       setSelectedLog(null);
       setHighlightedLogId(null);
-      console.log('✅ setLogsForFile completed successfully');
     } catch (error) {
       console.error('❌ Error in setLogsForFile:', error);
     }
@@ -327,17 +316,11 @@ const useLogsModel = () => {
 
   // Switch to show logs for a specific file
   const switchToFile = useCallback((fileName) => {
-    console.log('🔄 switchToFile called for:', fileName);
-    console.log('📊 Available files in allFileLogs:', Object.keys(allFileLogs));
-
     const fileLogs = allFileLogs[fileName] || [];
-    console.log(`📁 Found ${fileLogs.length} logs for ${fileName}`);
 
     setLogs(fileLogs);
     setSelectedLog(null);
     setHighlightedLogId(null);
-
-    console.log('✅ switchToFile completed');
   }, [allFileLogs]);
 
   return {

@@ -202,12 +202,6 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters }) => {
 LogItem.displayName = 'LogItem';
 
 const LogListView = ({ logs, onLogClick, highlightedLogId, filters }) => {
-  console.log('📋 LogListView received:', {
-    logsCount: logs?.length || 0,
-    firstLogPreview: logs?.[0] ? logs[0].message?.substring(0, 50) + '...' : 'No logs',
-    lastLogPreview: logs?.length > 0 ? logs[logs.length - 1].message?.substring(0, 50) + '...' : 'No logs'
-  });
-
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 100 });
   const [scrollTop, setScrollTop] = useState(0);
   const containerRef = useRef(null);
@@ -215,7 +209,6 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, filters }) => {
 
   // Reset visible range when logs change (but keep scroll position)
   useEffect(() => {
-    console.log('🔄 Logs changed, refreshing visible range only');
     // Only reset the visible range calculation, not the scroll position
     setVisibleRange(prev => ({ start: 0, end: Math.max(100, prev.end) }));
   }, [logs]);
