@@ -13,7 +13,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
           <div className="relative">
             <input
               type="text"
-              placeholder="Search logs..."
+              placeholder="Search logs... (use || to separate multiple terms)"
               value={filters.searchText}
               onChange={(e) => handleFilterChange('searchText', e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
@@ -27,6 +27,11 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
               </button>
             )}
           </div>
+          {filters.searchText && filters.searchText.includes('||') && (
+            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Searching for: {filters.searchText.split('||').map(term => term.trim()).filter(term => term.length > 0).length} terms
+            </div>
+          )}
         </div>
 
         {/* Log Level Filter */}

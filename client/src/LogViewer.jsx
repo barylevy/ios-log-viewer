@@ -8,7 +8,7 @@ import AIChat from './AIChat';
 import useLogsModel from './useLogsModel';
 
 const LogViewer = () => {
-  console.log('LogViewer component loaded!');
+  console.log('LogViewer component loading...');
 
   const {
     logs,
@@ -37,15 +37,11 @@ const LogViewer = () => {
   const [isResizing, setIsResizing] = useState(false);
 
   const handleFileLoad = useCallback((file) => {
-    console.log(`handleFileLoad called with file: ${file.name}`);
-
-    // Additional filter check - only load .txt files with "log" in the name
+    // Only load .txt files with "log" in the name
     if (!file.name.toLowerCase().endsWith('.txt') || !file.name.toLowerCase().includes('log')) {
-      console.log(`Rejecting file: ${file.name} - doesn't meet criteria (.txt and contains 'log')`);
       return;
     }
 
-    console.log(`Accepting file: ${file.name}`);
     const reader = new FileReader();
     reader.onload = (e) => {
       const content = e.target.result;
@@ -161,18 +157,11 @@ const LogViewer = () => {
     setIsFileDropActive(false);
 
     const droppedFiles = Array.from(e.dataTransfer.files);
-    console.log(`Drag & Drop: checking ${droppedFiles.length} files`);
-    const textFiles = droppedFiles.filter(file => {
-      const isValid = file.name.toLowerCase().endsWith('.txt') && file.name.toLowerCase().includes('log');
-      console.log(`Dropped file: ${file.name}, valid: ${isValid}`);
-      return isValid;
-    });
+    const textFiles = droppedFiles.filter(file =>
+      file.name.toLowerCase().endsWith('.txt') && file.name.toLowerCase().includes('log')
+    );
 
-    console.log(`Loading ${textFiles.length} valid dropped files`);
-    textFiles.forEach(file => {
-      console.log(`Loading dropped file: ${file.name}`);
-      handleFileLoad(file);
-    });
+    textFiles.forEach(file => handleFileLoad(file));
   }, [handleFileLoad]);
 
   // Chat panel resizing
@@ -225,7 +214,7 @@ const LogViewer = () => {
       return (
         <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
           <div className="text-center">
-            <p className="text-xl mb-2">iOS Log Viewer</p>
+            <p className="text-xl mb-2">Cato Client Log Viewer</p>
             <p>Drop log files here or click "Choose Files" to get started</p>
             <p className="text-sm mt-2">Supports multiple files and AI-powered analysis</p>
           </div>

@@ -29,7 +29,11 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters }) => {
 
     const flags = filters.caseSensitive ? 'g' : 'gi';
     try {
-      const regex = new RegExp(`(${filters.searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, flags);
+      // Split search terms by || and create a combined regex
+      const searchTerms = filters.searchText.split('||').map(term => term.trim()).filter(term => term.length > 0);
+      const escapedTerms = searchTerms.map(term => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+      const combinedPattern = `(${escapedTerms.join('|')})`;
+      const regex = new RegExp(combinedPattern, flags);
 
       return log.message.split(regex).map((part, index) => {
         if (regex.test(part)) {
@@ -49,40 +53,19 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters }) => {
     }
   }, [log.message, filters.searchText, filters.caseSensitive]);
 
-  const highlightText = (text, searchText, caseSensitive) => {
-    if (!searchText) return text;
-
-    const flags = caseSensitive ? 'g' : 'gi';
-    const regex = new RegExp(`(${searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, flags);
-
-    return text.split(regex).map((part, index) => {
-      if (regex.test(part)) {
-        return (
-          <mark
-            key={index}
-            className="bg-yellow-200 dark:bg-yellow-800 text-yellow-900 dark:text-yellow-100"
-          >
-            {part}
-          </mark>
-        );
-      }
-      return part;
-    });
-  };
-
   return (
     <div
       onClick={() => onClick(log)}
-      className={`p-3 border-b border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${isHighlighted ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''
+      className={`px-3 py-1.5 border-b border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${isHighlighted ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''
         } ${getBgColor(log.level)}`}
     >
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-2">
         {/* Level indicator */}
-        <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${log.level === 'error' ? 'bg-red-500' :
-            log.level === 'warning' ? 'bg-yellow-500' :
-              log.level === 'info' ? 'bg-blue-500' :
-                log.level === 'debug' ? 'bg-green-500' :
-                  'bg-gray-500'
+        <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${log.level === 'error' ? 'bg-red-500' :
+          log.level === 'warning' ? 'bg-yellow-500' :
+            log.level === 'info' ? 'bg-blue-500' :
+              log.level === 'debug' ? 'bg-green-500' :
+                'bg-gray-500'
           }`} />
 
         {/* Log content */}
@@ -120,7 +103,7 @@ LogItem.displayName = 'LogItem';
 const LogListView = ({ logs, onLogClick, highlightedLogId, filters }) => {
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 100 });
   const containerRef = useRef(null);
-  const itemHeight = 80; // Approximate height per log item
+  const itemHeight = 50; // Reduced height per log item for tighter spacing
 
   const memoizedLogs = useMemo(() => logs, [logs]);
 

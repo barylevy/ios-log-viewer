@@ -79,28 +79,42 @@ const useLogsModel = () => {
     let filtered = logs;
 
     // Pre-compile search regex if using search
-    let searchRegex = null;
+    let searchRegexes = [];
     if (filters.searchText) {
-      try {
-        const flags = filters.caseSensitive ? 'g' : 'gi';
-        searchRegex = new RegExp(filters.searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
-      } catch {
-        // If regex fails, fallback to string search
-        searchRegex = null;
-      }
+      // Split by || to allow multiple search terms
+      const searchTerms = filters.searchText.split('||').map(term => term.trim()).filter(term => term.length > 0);
+      
+      searchRegexes = searchTerms.map(term => {
+        try {
+          const flags = filters.caseSensitive ? 'g' : 'gi';
+          return new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
+        } catch {
+          // If regex fails, return null for string fallback
+          return null;
+        }
+      });
     }
 
     // Single pass filtering - much more efficient
     filtered = logs.filter(log => {
-      // Search text filter
+      // Search text filter - now supports multiple terms with ||
       if (filters.searchText) {
-        if (searchRegex) {
-          if (!searchRegex.test(log.message)) return false;
-        } else {
-          const searchText = filters.caseSensitive ? filters.searchText : filters.searchText.toLowerCase();
-          const message = filters.caseSensitive ? log.message : log.message.toLowerCase();
-          if (!message.includes(searchText)) return false;
-        }
+        const searchTerms = filters.searchText.split('||').map(term => term.trim()).filter(term => term.length > 0);
+        
+        // Check if ANY of the search terms match (OR logic)
+        const matchesAnyTerm = searchTerms.some((term, index) => {
+          const regex = searchRegexes[index];
+          if (regex) {
+            return regex.test(log.message);
+          } else {
+            // Fallback to string search
+            const searchText = filters.caseSensitive ? term : term.toLowerCase();
+            const message = filters.caseSensitive ? log.message : log.message.toLowerCase();
+            return message.includes(searchText);
+          }
+        });
+        
+        if (!matchesAnyTerm) return false;
       }
 
       // Log level filter

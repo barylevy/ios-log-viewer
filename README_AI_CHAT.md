@@ -1,10 +1,10 @@
-# iOS Log Viewer with AI Chat (Client-Side)
+# Cato Client Log Viewer with AI Chat (Client-Side)
 
-An advanced iOS log viewer with client-side AI-powered chat functionality for analyzing log files.
+An advanced Cato client log viewer with client-side AI-powered chat functionality for analyzing log files.
 
 ## Features
 
-- **Interactive Log Viewing**: Browse and filter iOS log files with real-time updates
+- **Interactive Log Viewing**: Browse and filter Cato client log files with real-time updates
 - **Client-Side AI Chat**: Ask questions about your logs directly from the browser
 - **No Server Required**: AI functionality works entirely in the browser
 - **Export/Import**: Save and load log files for later analysis
@@ -37,7 +37,7 @@ Application will run on: http://localhost:3000
 
 ## Using the AI Chat
 
-1. **Load Log Files**: Click "📁 Import Log" to load your iOS log files
+1. **Load Log Files**: Click "📁 Import Log" to load your Cato client log files
 2. **Open AI Chat**: Click the "💬 AI Chat" button in the header
 3. **Enter API Key**: If prompted, enter your OpenAI API key (will be saved locally)
 4. **Ask Questions**: Type questions about your logs like:
