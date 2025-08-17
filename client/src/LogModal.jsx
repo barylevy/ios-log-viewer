@@ -1,16 +1,117 @@
-import React from "react";
+import React from 'react';
 
-export default function LogModal({ selectedLog, onClose }) {
-  if (!selectedLog) return null;
+const LogModal = ({ log, onClose, onHighlight, onClearHighlight }) => {
+  if (!log) return null;
+
+  const handleHighlight = () => {
+    onHighlight(log.id);
+    onClose();
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(log.raw);
+  };
+
+  const getLevelColor = (level) => {
+    switch (level) {
+      case 'error': return 'text-red-600 dark:text-red-400';
+      case 'warning': return 'text-yellow-600 dark:text-yellow-400';
+      case 'info': return 'text-blue-600 dark:text-blue-400';
+      case 'debug': return 'text-green-600 dark:text-green-400';
+      case 'trace': return 'text-gray-600 dark:text-gray-400';
+      default: return 'text-gray-800 dark:text-gray-200';
+    }
+  };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white dark:bg-gray-800 text-sm text-gray-800 dark:text-white p-6 rounded shadow-lg max-w-3xl max-h-[80vh] overflow-auto relative">
-        <button onClick={onClose} className="absolute top-2 right-2 text-gray-500 hover:text-black dark:hover:text-white">
-          ✖
-        </button>
-        <pre className="whitespace-pre-wrap">{selectedLog.raw}</pre>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={onClose}>
+      <div
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl max-h-[80vh] w-full mx-4 flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Log Details</h2>
+            {log.level && (
+              <span className={`px-2 py-1 rounded text-xs font-medium ${getLevelColor(log.level)}`}>
+                {log.level.toUpperCase()}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-xl"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Metadata */}
+        {(log.timestamp || log.module || log.thread || log.sourceFile) && (
+          <div className="p-4 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              {log.timestamp && (
+                <div>
+                  <span className="font-medium text-gray-600 dark:text-gray-400">Timestamp:</span>
+                  <span className="ml-2 font-mono text-gray-900 dark:text-white">{log.timestamp}</span>
+                </div>
+              )}
+              {log.module && (
+                <div>
+                  <span className="font-medium text-gray-600 dark:text-gray-400">Module:</span>
+                  <span className="ml-2 text-gray-900 dark:text-white">{log.module}</span>
+                </div>
+              )}
+              {log.thread && (
+                <div>
+                  <span className="font-medium text-gray-600 dark:text-gray-400">Thread:</span>
+                  <span className="ml-2 font-mono text-gray-900 dark:text-white">#{log.thread}</span>
+                </div>
+              )}
+              {log.sourceFile && (
+                <div>
+                  <span className="font-medium text-gray-600 dark:text-gray-400">Source:</span>
+                  <span className="ml-2 text-gray-900 dark:text-white">{log.sourceFile}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Content */}
+        <div className="flex-1 overflow-auto p-4">
+          <pre className="whitespace-pre-wrap font-mono text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-900 p-4 rounded border">
+            {log.raw}
+          </pre>
+        </div>
+
+        {/* Actions */}
+        <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+          <div className="flex gap-2">
+            <button
+              onClick={handleCopy}
+              className="px-3 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors text-sm"
+            >
+              📋 Copy
+            </button>
+            <button
+              onClick={handleHighlight}
+              className="px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors text-sm"
+            >
+              🔍 Highlight in List
+            </button>
+          </div>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );
-}
+};
+
+export default LogModal;

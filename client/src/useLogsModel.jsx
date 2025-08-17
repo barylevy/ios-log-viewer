@@ -1,241 +1,152 @@
-import { useState, useEffect } from "react";
+import { useState, useCallback, useMemo } from 'react';
 
-const parseLogLine = (line) => {
-  const regex = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}:\d{3}) \[(.*?)\] \[(\d+)\] \[(\d+)](?: \[(.*?)\])?(?: \[(.*?)\])? (.*?)$/;
-  const match = line.match(regex);
-  if (!match) return null;
-  const [_, date, time, module, pid, tid, tag, location, message] = match;
-  const level =
-    message.includes("ERROR") ? "error" :
-      message.includes("WARN") ? "warn" :
-        message.includes("INFO") ? "info" : "default";
-  return { date, time, module, pid, tid, tag, location, message, level, raw: line };
-};
+const useLogsModel = () => {
+  const [logs, setLogs] = useState([]);
+  const [selectedLog, setSelectedLog] = useState(null);
+  const [highlightedLogId, setHighlightedLogId] = useState(null);
+  const [filters, setFilters] = useState({
+    searchText: '',
+    logLevel: 'all',
+    startTime: '',
+    endTime: '',
+    showTimestamps: true,
+    caseSensitive: false
+  });
 
-export function useLogsModel({ setIsLoading, setLoadProgress }) {
+  const loadLogs = useCallback((file) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target.result;
+      const lines = content.split('\n').filter(line => line.trim());
 
-  const [parsedLogs, setParsedLogs] = useState([]);
-  const [currentDate, setCurrentDate] = useState("");
+      const parsedLogs = lines.map((line, index) => ({
+        id: index,
+        raw: line,
+        message: line,
+        timestamp: extractTimestamp(line),
+        level: extractLogLevel(line),
+        module: extractModule(line),
+        thread: extractThread(line)
+      }));
 
-  const [filterText, setFilterText] = useState(localStorage.getItem("log_filterText") || "");
-  const [filterTextInput, setFilterTextInput] = useState(filterText);
-  const [filterStart, setFilterStart] = useState(localStorage.getItem("log_filterStart") || "");
-  const [filterEnd, setFilterEnd] = useState(localStorage.getItem("log_filterEnd") || "");
-  const [removeDuplicates, setRemoveDuplicates] = useState(localStorage.getItem("log_removeDuplicates") === "true");
+      setLogs(parsedLogs);
+      setSelectedLog(null);
+      setHighlightedLogId(null);
+    };
+    reader.readAsText(file);
+  }, []);
 
-  const [logMetadata, setLogMetadata] = useState({});
-  const [renderedCount, setRenderedCount] = useState(0);
-  const [userId, setUserId] = useState(null);
+  const extractTimestamp = (line) => {
+    // Try to extract timestamp from common log formats
+    const timestampPatterns = [
+      /(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})/,
+      /(\d{2}:\d{2}:\d{2}:\d{3})/,
+      /(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/
+    ];
 
-  const [contextLines, setContextLines] = useState(
-    Number(localStorage.getItem("log_contextLines") || 2)
-  );
-
-  const extractTimePart = (datetimeStr) => {
-    if (!datetimeStr.includes("T")) return datetimeStr;
-    const [, time] = datetimeStr.split("T"); // e.g. "12:30:45.123"
-
-    const [h, m, rest] = time.split(":");
-    const [s = "00", ms = "000"] = (rest || "00").split(".");
-    const paddedMs = ms.padEnd(3, "0").slice(0, 3);
-
-    return `${h}:${m}:${s}:${paddedMs}`;
+    for (const pattern of timestampPatterns) {
+      const match = line.match(pattern);
+      if (match) return match[1];
+    }
+    return '';
   };
 
-  const [visibleLogs, setVisibleLogs] = useState([]);
-  const loadLogsFromFile = async (file) => {
-    if (!file) return;
+  const extractLogLevel = (line) => {
+    const upperLine = line.toUpperCase();
+    if (upperLine.includes('ERROR') || upperLine.includes('ERR')) return 'error';
+    if (upperLine.includes('WARN') || upperLine.includes('WARNING')) return 'warning';
+    if (upperLine.includes('INFO') || upperLine.includes('INF')) return 'info';
+    if (upperLine.includes('DEBUG') || upperLine.includes('DBG')) return 'debug';
+    if (upperLine.includes('TRACE') || upperLine.includes('TRC')) return 'trace';
+    return 'info';
+  };
 
-    setIsLoading(true);
-    setLoadProgress(0);
+  const extractModule = (line) => {
+    // Try to extract module/component name from brackets
+    const moduleMatch = line.match(/\[([^\]]+)\]/);
+    return moduleMatch ? moduleMatch[1] : '';
+  };
 
-    const text = await file.text();
-    const lines = text.split("\n");
+  const extractThread = (line) => {
+    // Try to extract thread ID
+    const threadMatch = line.match(/\[(\d+)\]/);
+    return threadMatch ? threadMatch[1] : '';
+  };
 
-    const metadata = {};
-    const metadataKeys = ["User:", "Account:", "Client version:", "OS version:"];
-    const headerLines = new Set();
+  const filteredLogs = useMemo(() => {
+    if (!logs.length) return [];
 
-    for (let i = 0; i < Math.min(20, lines.length); i++) {
-      const line = lines[i];
-      for (const key of metadataKeys) {
-        if (line.startsWith(key)) {
-          metadata[key.replace(":", "").toLowerCase().replace(" ", "")] = line.replace(key, "").trim();
-          headerLines.add(i);
-        }
+    let filtered = logs;
+
+    // Pre-compile search regex if using search
+    let searchRegex = null;
+    if (filters.searchText) {
+      try {
+        const flags = filters.caseSensitive ? 'g' : 'gi';
+        searchRegex = new RegExp(filters.searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
+      } catch {
+        // If regex fails, fallback to string search
+        searchRegex = null;
       }
     }
 
-    setLogMetadata(metadata);
-
-    const BATCH_SIZE = 2000;
-    const BATCH_DELAY = 30;
-    let allLogs = [];
-
-    let lastValidDate = "";
-    let lastValidTime = "";
-
-    const processBatch = (startIndex) => {
-      const endIndex = Math.min(startIndex + BATCH_SIZE, lines.length);
-      const batchLogs = [];
-
-      const progress = Math.round((endIndex / lines.length) * 100);
-      setLoadProgress(progress);
-
-      for (let i = startIndex; i < endIndex; i++) {
-        const line = lines[i];
-
-        if (!line.trim() || headerLines.has(i)) continue;
-
-        try {
-          const entry = parseLogLine(line);
-
-          const logItem = {
-            ...(entry || {}),
-            lineNumber: i + 1,
-            raw: line,
-          };
-
-          if (entry) {
-            lastValidDate = entry.date;
-            lastValidTime = entry.time;
-          } else {
-            logItem.message = line;
-            logItem.level = "default";
-            logItem.isMalformed = true;
-            logItem.date = lastValidDate;
-            logItem.time = lastValidTime;
-          }
-
-          batchLogs.push(logItem);
-        } catch (err) {
-          console.error("Failed to parse log line:", line, err);
-          batchLogs.push({
-            raw: line,
-            message: line,
-            level: "default",
-            isMalformed: true,
-            date: lastValidDate,
-            time: lastValidTime,
-            lineNumber: i + 1,
-          });
+    // Single pass filtering - much more efficient
+    filtered = logs.filter(log => {
+      // Search text filter
+      if (filters.searchText) {
+        if (searchRegex) {
+          if (!searchRegex.test(log.message)) return false;
+        } else {
+          const searchText = filters.caseSensitive ? filters.searchText : filters.searchText.toLowerCase();
+          const message = filters.caseSensitive ? log.message : log.message.toLowerCase();
+          if (!message.includes(searchText)) return false;
         }
       }
 
-      // add batch to existing list
-      setParsedLogs((prev) => [...prev, ...batchLogs]);
-
-      if (endIndex < lines.length) {
-        setTimeout(() => processBatch(endIndex), BATCH_DELAY);
-      } else {
-        setCurrentDate(allLogs[0]?.date || "");
-        setLoadProgress(100);
-        setIsLoading(false);
+      // Log level filter
+      if (filters.logLevel !== 'all' && log.level !== filters.logLevel) {
+        return false;
       }
-    };
 
-    setParsedLogs([]);
-    processBatch(0);
-  };
+      // Time range filters
+      if (filters.startTime && log.timestamp && log.timestamp < filters.startTime) {
+        return false;
+      }
 
+      if (filters.endTime && log.timestamp && log.timestamp > filters.endTime) {
+        return false;
+      }
 
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setFilterText(filterTextInput);
-    }, 1000);
-    return () => clearTimeout(handler);
-  }, [filterTextInput]);
+      return true;
+    });
 
-  useEffect(() => {
-    localStorage.setItem("log_filterText", filterText);
-    localStorage.setItem("log_filterStart", filterStart);
-    localStorage.setItem("log_filterEnd", filterEnd);
-    localStorage.setItem("log_removeDuplicates", removeDuplicates);
-    localStorage.setItem("log_contextLines", contextLines);
+    return filtered;
+  }, [logs, filters.searchText, filters.logLevel, filters.startTime, filters.endTime, filters.caseSensitive]); const updateFilters = useCallback((newFilters) => {
+    setFilters(prev => ({ ...prev, ...newFilters }));
+  }, []);
 
-  }, [filterText, filterStart, filterEnd, removeDuplicates, contextLines]);
+  const highlightLog = useCallback((logId) => {
+    setHighlightedLogId(logId);
+    // Auto-clear highlight after 3 seconds
+    setTimeout(() => setHighlightedLogId(null), 3000);
+  }, []);
 
-  useEffect(() => {
-    const getLogsWithContext = (logs, matchIndices, context) => {
-      const flags = new Array(logs.length).fill(null);
-
-      matchIndices.forEach(index => {
-        const start = Math.max(0, index - context);
-        const end = Math.min(logs.length, index + context + 1);
-        for (let i = start; i < end; i++) {
-          if (!flags[i]) flags[i] = { context: false, isMatch: false };
-          if (i === index) flags[i].isMatch = true;
-          else flags[i].context = true;
-        }
-      });
-
-      return flags
-        .map((flag, i) => flag ? { ...logs[i], ...flag } : null)
-        .filter(Boolean);
-    };
-
-    if (!filterText.trim()) {
-      const filtered = parsedLogs.filter(log => {
-        if (filterStart && log.time < extractTimePart(filterStart)) return false;
-        if (filterEnd && log.time > extractTimePart(filterEnd)) return false;
-        return true;
-      });
-
-      const deduped = removeDuplicates
-        ? [
-          ...Array.from(
-            new Map(
-              filtered
-                .filter(item => item.isMalformed === false)
-                .map(item => [item.originalLine, item])
-            ).values()
-          ),
-          ...filtered.filter(item => item.isMalformed !== false)
-        ]
-        : filtered;
-
-      setVisibleLogs(deduped);
-      return;
-    }
-
-    const matchIndices = parsedLogs
-      .map((log, i) => ({ log, i }))
-      .filter(({ log }) => {
-        if (filterStart && log.time < extractTimePart(filterStart)) return false;
-        if (filterEnd && log.time > extractTimePart(filterEnd)) return false;
-
-        const raw = filterText.toLowerCase();
-        const isAnd = raw.includes("&&") || (!raw.includes("||") && raw.includes(" "));
-        const separators = isAnd ? /[\s]+/ : /\|\|/;
-        const words = raw.split(separators).map(w => w.trim()).filter(Boolean);
-        const logText = (log.raw || "").toLowerCase();
-
-        const match = isAnd
-          ? words.every(word => logText.includes(word))
-          : words.some(word => logText.includes(word));
-        return match;
-      })
-      .map(({ i }) => i);
-
-    const filtered = getLogsWithContext(parsedLogs, matchIndices, contextLines);
-
-    const deduped = removeDuplicates
-      ? Array.from(new Map(filtered.map(item => [item.message + item.time, item])).values())
-      : filtered;
-
-    setVisibleLogs(deduped);
-  }, [parsedLogs, filterText, filterStart, filterEnd, removeDuplicates, contextLines]);
+  const clearHighlight = useCallback(() => {
+    setHighlightedLogId(null);
+  }, []);
 
   return {
-    logs: visibleLogs,
-    currentDate,
-    filterTextInput, setFilterTextInput,
-    filterStart, setFilterStart,
-    filterEnd, setFilterEnd,
-    removeDuplicates, setRemoveDuplicates,
-    contextLines, setContextLines,
-    loadLogsFromFile,
-    parsedLogs,
-    logMetadata
+    logs,
+    filteredLogs,
+    selectedLog,
+    filters,
+    highlightedLogId,
+    loadLogs,
+    setSelectedLog,
+    updateFilters,
+    highlightLog,
+    clearHighlight
   };
-}
+};
+
+export default useLogsModel;

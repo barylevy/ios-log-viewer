@@ -1,137 +1,181 @@
-import React, { useState, useEffect } from "react";
+import React, { memo, useMemo, useState, useRef, useCallback, useEffect } from 'react';
 
-import { FixedSizeList as List } from "react-window";
-import AutoSizer from "react-virtualized-auto-sizer";
+const LogItem = memo(({ log, onClick, isHighlighted, filters }) => {
+  const getLevelColor = (level) => {
+    switch (level) {
+      case 'error': return 'text-red-600 dark:text-red-400';
+      case 'warning': return 'text-yellow-600 dark:text-yellow-400';
+      case 'info': return 'text-blue-600 dark:text-blue-400';
+      case 'debug': return 'text-green-600 dark:text-green-400';
+      case 'trace': return 'text-gray-600 dark:text-gray-400';
+      default: return 'text-gray-800 dark:text-gray-200';
+    }
+  };
 
+  const getBgColor = (level) => {
+    switch (level) {
+      case 'error': return 'bg-red-50 dark:bg-red-900/20';
+      case 'warning': return 'bg-yellow-50 dark:bg-yellow-900/20';
+      case 'info': return 'bg-blue-50 dark:bg-blue-900/20';
+      case 'debug': return 'bg-green-50 dark:bg-green-900/20';
+      case 'trace': return 'bg-gray-50 dark:bg-gray-900/20';
+      default: return 'bg-white dark:bg-gray-800';
+    }
+  };
 
-export default function LogListView({ logs, selectedLog, setSelectedLog, visibleDate, setVisibleDate, listRef, scrollToIndex, onItemsRendered,
-  getColorByLevel, setFilterStart, setFilterEnd }) {
+  // Memoize highlighted text to avoid recalculation on every render
+  const highlightedMessage = useMemo(() => {
+    if (!filters.searchText) return log.message;
 
-  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, log: null });
+    const flags = filters.caseSensitive ? 'g' : 'gi';
+    try {
+      const regex = new RegExp(`(${filters.searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, flags);
 
-  // close the menu when click ouside to menu
-  useEffect(() => {
-    const handleClickOutside = () => {
-      setContextMenu({ visible: false, x: 0, y: 0, log: null });
-    };
+      return log.message.split(regex).map((part, index) => {
+        if (regex.test(part)) {
+          return (
+            <mark
+              key={index}
+              className="bg-yellow-200 dark:bg-yellow-800 text-yellow-900 dark:text-yellow-100"
+            >
+              {part}
+            </mark>
+          );
+        }
+        return part;
+      });
+    } catch {
+      return log.message;
+    }
+  }, [log.message, filters.searchText, filters.caseSensitive]);
 
-    const handleKeyDown = (e) => {
-      if (e.key === "Escape") {
-        setContextMenu({ visible: false, x: 0, y: 0, log: null });
+  const highlightText = (text, searchText, caseSensitive) => {
+    if (!searchText) return text;
+
+    const flags = caseSensitive ? 'g' : 'gi';
+    const regex = new RegExp(`(${searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, flags);
+
+    return text.split(regex).map((part, index) => {
+      if (regex.test(part)) {
+        return (
+          <mark
+            key={index}
+            className="bg-yellow-200 dark:bg-yellow-800 text-yellow-900 dark:text-yellow-100"
+          >
+            {part}
+          </mark>
+        );
       }
-    };
-
-    window.addEventListener("click", handleClickOutside);
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      window.removeEventListener("click", handleClickOutside);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, []);
- 
+      return part;
+    });
+  };
 
   return (
-    <div style={{ height: "75vh" }} className="border rounded">
-      <div className="text-gray-500 dark:text-gray-300 font-semibold border-b border-gray-200 dark:border-gray-700 px-2 py-1 text-sm">
-        Date: {visibleDate}
-      </div>
-      <AutoSizer>
-        {({ height, width }) => (
-          <List
-            ref={listRef}
-            height={height}
-            itemCount={logs.length}
-            itemSize={28}
-            width={width}
-            scrollToIndex={scrollToIndex ?? 0} // ← אם לא הוגדר, תחזור לראש
-            scrollToAlignment="start"
-            onItemsRendered={onItemsRendered}
-          >
-            {({ index, style }) => {
-              const log = logs[index];
-              return (
-                <div
-                  key={index}
-                  onClick={() => setSelectedLog(log)}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    setContextMenu({
-                      visible: true,
-                      x: e.clientX,
-                      y: e.clientY,
-                      log,
-                    });
-                  }}
-                  style={style}
-                  className={`
-                    border-b px-2 py-0.5 text-xs leading-tight cursor-pointer
-                    ${log.isMatch ? "font-semibold bg-white dark:bg-gray-800" : ""}
-                    ${log.context && !log.isMatch ? "opacity-60 italic" : ""}
-                    ${log.isMalformed ? "bg-orange-50 dark:bg-orange-900" : getColorByLevel(log.level)}
-                    ${index % 2 === 1 ? "bg-gray-50 dark:bg-gray-800" : ""}
-                    hover:bg-gray-100 dark:hover:bg-gray-700 transition
-                  `}
-                >
-                  <div className="grid grid-cols-5 gap-1 items-start">
-                    <div className="text-gray-500 flex items-center gap-2">
-                      {!log.isMalformed && log.time}
-                      <span className="text-[10px] text-gray-400">#{log.lineNumber}</span>
-                    </div>
-                    <div className="col-span-4 flex justify-between gap-4 text-gray-800 dark:text-gray-200 truncate">
-                      <span className="truncate">{log.message}</span>
-                      <span className="flex-shrink-0 text-[11px] text-gray-500 dark:text-gray-400 flex items-center gap-2">
-                        {log.location && <span className="text-blue-600 dark:text-blue-400 font-medium">{log.location}</span>}
-                        {log.module && <span className="text-gray-500 dark:text-gray-400">[{log.module}]</span>}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
-            }}
-          </List>
-        )}
-      </AutoSizer>
-      {contextMenu.visible && contextMenu.log && (
-        <div
-          className="absolute bg-white shadow-md border text-sm z-50 rounded"
-          style={{ top: contextMenu.y, left: contextMenu.x }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div
-            className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-xs"
-            onClick={() => {
-              const { date, time } = contextMenu.log;
-              if (date && time) {
-                const normalized = `${date}T${time.replace(/:(?=[^:]*$)/, ".")}`; // hh:mm:ss:ms → hh:mm:ss.ms
-                setFilterStart(normalized);
-              }
-              setContextMenu({ visible: false });
-            }}
-          >
-            🗓️ set start date
-          </div>
-          <div
-            className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-xs"
-            onClick={() => {
-              const { date, time } = contextMenu.log;
-              if (date && time) {
-                const normalized = `${date}T${time.replace(/:(?=[^:]*$)/, ".")}`;
-                setFilterEnd(normalized);
-              }
-              setContextMenu({ visible: false });
-            }}
-          >
-            🗓️ set end date
-          </div>
-          <div className="border-t my-1"></div>
-          <div
-            className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-xs text-gray-500"
-            onClick={() => setContextMenu({ visible: false, x: 0, y: 0, log: null })}
-          > ✖ Cancel
+    <div
+      onClick={() => onClick(log)}
+      className={`p-3 border-b border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${isHighlighted ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''
+        } ${getBgColor(log.level)}`}
+    >
+      <div className="flex items-start gap-3">
+        {/* Level indicator */}
+        <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${log.level === 'error' ? 'bg-red-500' :
+            log.level === 'warning' ? 'bg-yellow-500' :
+              log.level === 'info' ? 'bg-blue-500' :
+                log.level === 'debug' ? 'bg-green-500' :
+                  'bg-gray-500'
+          }`} />
+
+        {/* Log content */}
+        <div className="flex-1 min-w-0">
+          {/* Timestamp and metadata */}
+          {filters.showTimestamps && (log.timestamp || log.module || log.thread) && (
+            <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-1">
+              {log.timestamp && (
+                <span className="font-mono">{log.timestamp}</span>
+              )}
+              {log.module && (
+                <span className="bg-gray-200 dark:bg-gray-700 px-1 rounded">{log.module}</span>
+              )}
+              {log.thread && (
+                <span className="bg-gray-200 dark:bg-gray-700 px-1 rounded">#{log.thread}</span>
+              )}
+              <span className={`font-medium ${getLevelColor(log.level)}`}>
+                {log.level.toUpperCase()}
+              </span>
+            </div>
+          )}
+
+          {/* Log message */}
+          <div className={`font-mono text-sm break-words ${getLevelColor(log.level)}`}>
+            {highlightedMessage}
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
-}
+});
+
+LogItem.displayName = 'LogItem';
+
+const LogListView = ({ logs, onLogClick, highlightedLogId, filters }) => {
+  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 100 });
+  const containerRef = useRef(null);
+  const itemHeight = 80; // Approximate height per log item
+
+  const memoizedLogs = useMemo(() => logs, [logs]);
+
+  // Update visible range based on scroll
+  const handleScroll = useCallback(() => {
+    if (!containerRef.current) return;
+
+    const { scrollTop, clientHeight } = containerRef.current;
+    const start = Math.max(0, Math.floor(scrollTop / itemHeight) - 10); // Buffer of 10 items
+    const end = Math.min(logs.length, start + Math.ceil(clientHeight / itemHeight) + 20); // Buffer of 20 items
+
+    setVisibleRange({ start, end });
+  }, [logs.length, itemHeight]);
+
+  // Initialize visible range
+  useEffect(() => {
+    handleScroll();
+  }, [handleScroll]);
+
+  const visibleLogs = useMemo(() => {
+    return memoizedLogs.slice(visibleRange.start, visibleRange.end);
+  }, [memoizedLogs, visibleRange]);
+
+  if (!logs || logs.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
+        <p>No logs to display</p>
+      </div>
+    );
+  }
+
+  const totalHeight = logs.length * itemHeight;
+  const offsetY = visibleRange.start * itemHeight;
+
+  return (
+    <div
+      ref={containerRef}
+      className="h-full overflow-auto bg-white dark:bg-gray-900"
+      onScroll={handleScroll}
+    >
+      <div style={{ height: totalHeight, position: 'relative' }}>
+        <div style={{ transform: `translateY(${offsetY}px)` }}>
+          {visibleLogs.map((log, index) => (
+            <LogItem
+              key={log.id}
+              log={log}
+              onClick={onLogClick}
+              isHighlighted={highlightedLogId === log.id}
+              filters={filters}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default memo(LogListView);
