@@ -4,6 +4,8 @@ const useLogsModel = () => {
   const [logs, setLogs] = useState([]);
   const [selectedLog, setSelectedLog] = useState(null);
   const [highlightedLogId, setHighlightedLogId] = useState(null);
+  const [logFileHeaders, setLogFileHeaders] = useState({});
+  const [allFileLogs, setAllFileLogs] = useState({}); // Store logs per file
   const [filters, setFilters] = useState({
     searchText: '',
     logLevel: 'all',
@@ -11,20 +13,175 @@ const useLogsModel = () => {
     endTime: ''
   });
 
+  // Extract header information from log file
+  const extractLogFileHeaders = (content) => {
+    const lines = content.split('\n');
+    const headers = {};
+    const headerLineIndices = new Set(); // Track which lines are headers
+
+    console.log('🔍 Extracting headers from first 10 lines:');
+
+    // Look for header patterns in the first 10 lines
+    for (let i = 0; i < Math.min(10, lines.length); i++) {
+      const line = lines[i].trim();
+      console.log(`Line ${i}:`, line);
+
+      let isHeaderLine = false;
+
+      // Extract User information - exact line matching
+      if (line.toLowerCase().startsWith('user:')) {
+        const userValue = line.substring(5).trim(); // Remove "user:" and trim
+        if (userValue) {
+          headers.user = userValue;
+          headerLineIndices.add(i);
+          isHeaderLine = true;
+          console.log('✅ Found User:', headers.user);
+        }
+      }
+
+      // Extract Account information - exact line matching
+      if (line.toLowerCase().startsWith('account:')) {
+        const accountValue = line.substring(8).trim(); // Remove "account:" and trim
+        if (accountValue) {
+          headers.account = accountValue;
+          headerLineIndices.add(i);
+          isHeaderLine = true;
+          console.log('✅ Found Account:', headers.account);
+        }
+      }
+
+      // Extract Client version - exact line matching
+      if (line.toLowerCase().startsWith('client version:')) {
+        const clientValue = line.substring(15).trim(); // Remove "client version:" and trim
+        if (clientValue) {
+          headers.clientVersion = clientValue;
+          headerLineIndices.add(i);
+          isHeaderLine = true;
+          console.log('✅ Found Client version:', headers.clientVersion);
+        }
+      }
+
+      // Extract OS version - exact line matching
+      if (line.toLowerCase().startsWith('os version:')) {
+        const osValue = line.substring(11).trim(); // Remove "os version:" and trim
+        if (osValue) {
+          headers.osVersion = osValue;
+          headerLineIndices.add(i);
+          isHeaderLine = true;
+          console.log('✅ Found OS version:', headers.osVersion);
+        }
+      }
+
+      if (isHeaderLine) {
+        console.log(`📝 Line ${i} marked as header line`);
+      }
+    }
+
+    console.log('📋 Final headers:', headers);
+    console.log('🚫 Header line indices to exclude:', Array.from(headerLineIndices));
+
+    return {
+      headers: Object.keys(headers).length > 0 ? headers : null,
+      headerLineIndices
+    };
+  };
+
+  // Parse header information from log content
+  const parseHeaderInfo = (content) => {
+    const lines = content.split('\n');
+    const headerData = {};
+    const headerLines = [];
+
+    // Check first 10 lines for headers
+    for (let i = 0; i < Math.min(10, lines.length); i++) {
+      const line = lines[i].trim();
+
+      if (line.startsWith('User:')) {
+        headerData.user = line.substring(5).trim();
+        headerLines.push(i);
+      } else if (line.startsWith('Account:')) {
+        headerData.account = line.substring(8).trim();
+        headerLines.push(i);
+      } else if (line.startsWith('Client version:')) {
+        headerData.clientVersion = line.substring(15).trim();
+        headerLines.push(i);
+      } else if (line.startsWith('OS version:')) {
+        headerData.osVersion = line.substring(11).trim();
+        headerLines.push(i);
+      }
+    }
+
+    return { headerData, headerLines };
+  };
+
   const loadLogs = useCallback((file) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const content = e.target.result;
+
+      // Parse header information from start of file
+      const { headerData, headerLines } = parseHeaderInfo(content);
+
+      // Store headers for this file - smart merge logic
+      setLogFileHeaders(prev => {
+        const existingHeaders = prev[file.name] || {};
+        const hasNewHeaders = headerData && Object.keys(headerData).length > 0;
+        const hasExistingHeaders = Object.keys(existingHeaders).length > 0;
+
+        console.log('🔄 Header update decision:', {
+          fileName: file.name,
+          hasNewHeaders,
+          hasExistingHeaders,
+          newHeaderData: headerData,
+          existingHeaders
+        });
+
+        // If we have existing headers and no new headers - keep existing
+        if (hasExistingHeaders && !hasNewHeaders) {
+          console.log('✅ Keeping existing headers - no new headers found');
+          return prev;
+        }
+
+        // If we have new headers - use them (merge with existing if needed)
+        if (hasNewHeaders) {
+          console.log('✅ Using new headers');
+          return {
+            ...prev,
+            [file.name]: headerData
+          };
+        }
+
+        // If no existing headers and no new headers - don't add entry
+        if (!hasExistingHeaders && !hasNewHeaders) {
+          console.log('❌ No headers at all - not adding entry');
+          return prev;
+        }
+
+        return prev;
+      });
+
       const lines = content.split('\n').filter(line => line.trim());
 
-      const parsedLogs = lines.map((line, index) => ({
-        id: index,
-        raw: line,
-        message: line,
-        timestamp: extractTimestamp(line),
-        level: extractLogLevel(line),
-        module: extractModule(line),
-        thread: extractThread(line)
+      // Filter out header lines and create log entries
+      const parsedLogs = lines
+        .map((line, index) => ({ line, index }))
+        .filter(({ index }) => !headerLines.includes(index))
+        .map(({ line }, logIndex) => ({
+          id: logIndex,
+          raw: line,
+          message: line,
+          timestamp: extractTimestamp(line),
+          level: extractLogLevel(line),
+          module: extractModule(line),
+          thread: extractThread(line)
+        }));
+
+      console.log(`🎯 Filtered out ${headerLines.length} header lines, showing ${parsedLogs.length} log entries`);
+
+      // Store logs for this specific file
+      setAllFileLogs(prev => ({
+        ...prev,
+        [file.name]: parsedLogs
       }));
 
       setLogs(parsedLogs);
@@ -145,17 +302,80 @@ const useLogsModel = () => {
     setHighlightedLogId(null);
   }, []);
 
+  const getCurrentFileHeaders = useCallback((fileName) => {
+    // First try to get headers from the specific file
+    let result = logFileHeaders[fileName] || null;
+    
+    // If no headers for this file, try to get headers from any file in the session
+    // (assuming all files in a session belong to the same user)
+    if (!result) {
+      const allHeaders = Object.values(logFileHeaders);
+      result = allHeaders.find(headers => headers && Object.keys(headers).length > 0) || null;
+    }
+    
+    console.log('🔍 getCurrentFileHeaders called:', {
+      fileName,
+      logFileHeaders,
+      allKeys: Object.keys(logFileHeaders),
+      result,
+      resultDetails: result ? JSON.stringify(result, null, 2) : 'null',
+      strategy: result === logFileHeaders[fileName] ? 'specific-file' : 'fallback-to-any'
+    });
+    return result;
+  }, [logFileHeaders]);
+
+  // Set logs for a specific file (used when switching tabs)
+  const setLogsForFile = useCallback((fileName, fileLogs) => {
+    console.log('🔗 setLogsForFile called:', { fileName, logsCount: fileLogs?.length });
+    try {
+      // If this is a combined view, ensure unique IDs
+      let processedLogs = fileLogs;
+      if (fileName === 'Combined Files' && Array.isArray(fileLogs)) {
+        processedLogs = fileLogs.map((log, index) => ({
+          ...log,
+          id: `combined-${index}`,
+          originalId: log.id
+        }));
+        console.log('📝 Processed combined logs with unique IDs');
+      }
+      
+      setAllFileLogs(prev => ({
+        ...prev,
+        [fileName]: processedLogs
+      }));
+      setLogs(processedLogs);
+      setSelectedLog(null);
+      setHighlightedLogId(null);
+      console.log('✅ setLogsForFile completed successfully');
+    } catch (error) {
+      console.error('❌ Error in setLogsForFile:', error);
+    }
+  }, []);
+
+  // Switch to show logs for a specific file
+  const switchToFile = useCallback((fileName) => {
+    const fileLogs = allFileLogs[fileName] || [];
+    setLogs(fileLogs);
+    setSelectedLog(null);
+    setHighlightedLogId(null);
+  }, [allFileLogs]);
+
   return {
     logs,
     filteredLogs,
     selectedLog,
     filters,
     highlightedLogId,
+    logFileHeaders,
+    allFileLogs,
     loadLogs,
     setSelectedLog,
     updateFilters,
     highlightLog,
-    clearHighlight
+    clearHighlight,
+    getCurrentFileHeaders,
+    setLogsForFile,
+    switchToFile
   };
 };
 

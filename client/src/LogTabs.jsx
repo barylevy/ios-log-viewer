@@ -1,6 +1,6 @@
 import React from 'react';
 
-const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showCombined, onToggleCombined }) => {
+const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showCombined, onToggleCombined, allFileLogs = {} }) => {
     return (
         <div className="bg-white dark:bg-gray-900">
             <div className="flex items-center overflow-x-auto p-2 pb-0">
@@ -30,7 +30,7 @@ const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showCombin
                         >
                             <span className="text-sm font-medium">{file.name}</span>
                             <span className="text-xs text-gray-500 dark:text-gray-400">
-                                ({file.logs.length} lines)
+                                ({allFileLogs[file.name]?.length || 0} lines)
                             </span>
                             {files.length > 1 && (
                                 <button
@@ -52,7 +52,7 @@ const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showCombin
                 {showCombined && (
                     <div className="flex-shrink-0 px-4 py-2 mx-1 bg-green-50 dark:bg-green-800 text-green-700 dark:text-green-200 rounded-t-lg border border-b-0 border-green-200 dark:border-green-600 shadow-sm">
                         <span className="text-sm font-medium">
-                            All Files Combined ({files.reduce((total, file) => total + file.logs.length, 0)} total lines)
+                            All Files Combined ({files.reduce((total, file) => total + (allFileLogs[file.name]?.length || 0), 0)} total lines)
                         </span>
                     </div>
                 )}

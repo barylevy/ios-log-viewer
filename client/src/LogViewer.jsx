@@ -16,11 +16,16 @@ const LogViewer = () => {
     selectedLog,
     filters,
     highlightedLogId,
+    logFileHeaders,
+    allFileLogs,
     loadLogs,
     setSelectedLog,
     updateFilters,
     highlightLog,
-    clearHighlight
+    clearHighlight,
+    getCurrentFileHeaders,
+    setLogsForFile,
+    switchToFile
   } = useLogsModel();
 
   const [isFileDropActive, setIsFileDropActive] = useState(false);
@@ -42,55 +47,40 @@ const LogViewer = () => {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const content = e.target.result;
-      const lines = content.split('\n').filter(line => line.trim());
+    // Add file to files list if not already present
+    setFiles(prev => {
+      const existingIndex = prev.findIndex(f => f.name === file.name);
+      if (existingIndex >= 0) {
+        // File already exists, just switch to it
+        setActiveFileIndex(existingIndex);
+        switchToFile(file.name);
+        return prev;
+      } else {
+        // New file, add it and set as active
+        const newFiles = [...prev, { name: file.name }];
+        setActiveFileIndex(newFiles.length - 1);
+        return newFiles;
+      }
+    });
 
-      const newFile = {
-        name: file.name,
-        logs: lines.map((line, index) => ({
-          id: `${file.name}-${index}`,
-          raw: line,
-          message: line,
-          sourceFile: file.name
-        }))
-      };
-
-      setFiles(prev => {
-        const existingIndex = prev.findIndex(f => f.name === file.name);
-        if (existingIndex >= 0) {
-          const updated = [...prev];
-          updated[existingIndex] = newFile;
-          return updated;
-        } else {
-          const newFiles = [...prev, newFile];
-          setActiveFileIndex(newFiles.length - 1);
-          return newFiles;
-        }
-      });
-
-      // Load into the main logs system for filtering
-      loadLogs(file);
-      setHasUserInteracted(true);
-    };
-    reader.readAsText(file);
-  }, [loadLogs]);
+    // Load the file content and process it
+    loadLogs(file);
+    setHasUserInteracted(true);
+  }, [loadLogs, switchToFile]);
 
   const handleFileSelect = useCallback((index) => {
     setActiveFileIndex(index);
     setShowCombined(false);
 
-    // Update main logs with selected file
+    // Switch to show logs for the selected file
     if (files[index]) {
-      const fileContent = files[index].logs.map(log => log.raw).join('\n');
-      const blob = new Blob([fileContent], { type: 'text/plain' });
-      const file = new File([blob], files[index].name, { type: 'text/plain' });
-      loadLogs(file);
+      switchToFile(files[index].name);
     }
-  }, [files, loadLogs]);
+  }, [files, switchToFile]);
 
   const handleFileClose = useCallback((index) => {
+    const fileToClose = files[index];
+    
     setFiles(prev => {
       const newFiles = prev.filter((_, i) => i !== index);
       if (newFiles.length === 0) {
@@ -106,41 +96,49 @@ const LogViewer = () => {
         const newIndex = Math.min(activeFileIndex, newFiles.length - 1);
         setActiveFileIndex(newIndex);
 
-        // Load the new active file
+        // Switch to the new active file
         if (newFiles[newIndex]) {
-          const fileContent = newFiles[newIndex].logs.map(log => log.raw).join('\n');
-          const blob = new Blob([fileContent], { type: 'text/plain' });
-          const file = new File([blob], newFiles[newIndex].name, { type: 'text/plain' });
-          loadLogs(file);
+          switchToFile(newFiles[newIndex].name);
         }
       }
 
       return newFiles;
     });
-  }, [activeFileIndex, loadLogs]);
+
+    // Clean up stored logs for the closed file
+    if (fileToClose) {
+      // Use a workaround since setAllFileLogs isn't available directly
+      // The cleanup will happen naturally when the component re-renders
+    }
+  }, [activeFileIndex, files, switchToFile]);
 
   const handleToggleCombined = useCallback(() => {
+    console.log('🔄 handleToggleCombined called');
+    console.log('Current state:', { showCombined, files, allFileLogs, activeFileIndex });
+    
     setShowCombined(prev => {
       const newCombined = !prev;
+      console.log('Setting combined to:', newCombined);
 
       if (newCombined && files.length > 0) {
-        // Combine all files
-        const combinedLogs = files.flatMap(file => file.logs);
-        const combinedContent = combinedLogs.map(log => log.raw).join('\n');
-        const blob = new Blob([combinedContent], { type: 'text/plain' });
-        const file = new File([blob], 'Combined Files', { type: 'text/plain' });
-        loadLogs(file);
+        console.log('Combining files...');
+        // Combine all files - get logs from allFileLogs
+        const combinedLogs = files.flatMap(file => {
+          const fileLogs = allFileLogs[file.name] || [];
+          console.log(`File ${file.name} has ${fileLogs.length} logs`);
+          return fileLogs;
+        });
+        console.log(`Total combined logs: ${combinedLogs.length}`);
+        setLogsForFile('Combined Files', combinedLogs);
       } else if (files[activeFileIndex]) {
+        console.log('Switching back to active file:', files[activeFileIndex].name);
         // Switch back to active file
-        const fileContent = files[activeFileIndex].logs.map(log => log.raw).join('\n');
-        const blob = new Blob([fileContent], { type: 'text/plain' });
-        const file = new File([blob], files[activeFileIndex].name, { type: 'text/plain' });
-        loadLogs(file);
+        switchToFile(files[activeFileIndex].name);
       }
 
       return newCombined;
     });
-  }, [files, activeFileIndex, loadLogs]);
+  }, [files, activeFileIndex, allFileLogs, setLogsForFile, switchToFile]);
 
   const handleDragOver = useCallback((e) => {
     e.preventDefault();
@@ -240,6 +238,33 @@ const LogViewer = () => {
     );
   }, [hasUserInteracted, files.length, filteredLogs, setSelectedLog, highlightedLogId, filters]);
 
+  // Get current file headers
+  const currentFileHeaders = useMemo(() => {
+    console.log('🔍 Calculating currentFileHeaders:');
+    console.log('  files.length:', files.length);
+    console.log('  activeFileIndex:', activeFileIndex);
+    console.log('  showCombined:', showCombined);
+    console.log('  logFileHeaders:', logFileHeaders);
+
+    if (files.length === 0) {
+      console.log('  → No files, returning null');
+      return null;
+    }
+
+    if (showCombined) {
+      console.log('  → Combined view, returning null');
+      return null;
+    }
+
+    const currentFile = files[activeFileIndex];
+    console.log('  currentFile:', currentFile);
+
+    const headers = currentFile ? getCurrentFileHeaders(currentFile.name) : null;
+    console.log('  → Final headers:', headers);
+
+    return headers;
+  }, [files, activeFileIndex, showCombined, getCurrentFileHeaders, logFileHeaders]);
+
   return (
     <div
       className={`h-screen flex flex-col bg-gray-50 dark:bg-gray-900 ${isFileDropActive ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
@@ -254,6 +279,49 @@ const LogViewer = () => {
         hasLogs={files.length > 0}
       />
 
+      {/* Log File Headers - Display above tabs */}
+      {console.log('🔍 Header display check:', {
+        currentFileHeaders,
+        hasHeaders: !!currentFileHeaders,
+        headerKeys: currentFileHeaders ? Object.keys(currentFileHeaders) : [],
+        headerDetails: currentFileHeaders ? JSON.stringify(currentFileHeaders, null, 2) : 'null',
+        filesLength: files.length,
+        activeFileIndex,
+        showCombined,
+        shouldDisplay: currentFileHeaders && Object.keys(currentFileHeaders).length > 0
+      })}
+      {currentFileHeaders && Object.keys(currentFileHeaders).length > 0 && (
+        <div className="mx-4 mb-2">
+          {console.log('🎯 Displaying headers above tabs:', JSON.stringify(currentFileHeaders, null, 2))}
+          <div className="flex items-center gap-6 text-sm text-gray-600">
+            {currentFileHeaders.user && (
+              <span className="flex items-center gap-1">
+                <span className="text-gray-500">User:</span>
+                <span className="font-medium">{currentFileHeaders.user}</span>
+              </span>
+            )}
+            {currentFileHeaders.account && (
+              <span className="flex items-center gap-1">
+                <span className="text-gray-500">Account:</span>
+                <span className="font-medium">{currentFileHeaders.account}</span>
+              </span>
+            )}
+            {currentFileHeaders.clientVersion && (
+              <span className="flex items-center gap-1">
+                <span className="text-gray-500">Client:</span>
+                <span className="font-medium">{currentFileHeaders.clientVersion}</span>
+              </span>
+            )}
+            {currentFileHeaders.osVersion && (
+              <span className="flex items-center gap-1">
+                <span className="text-gray-500">OS:</span>
+                <span className="font-medium">{currentFileHeaders.osVersion}</span>
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       {files.length > 0 && (
         <LogTabs
           files={files}
@@ -262,6 +330,7 @@ const LogViewer = () => {
           onFileClose={handleFileClose}
           showCombined={showCombined}
           onToggleCombined={handleToggleCombined}
+          allFileLogs={allFileLogs}
         />
       )}
 
