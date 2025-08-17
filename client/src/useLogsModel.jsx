@@ -19,12 +19,9 @@ const useLogsModel = () => {
     const headers = {};
     const headerLineIndices = new Set(); // Track which lines are headers
 
-    console.log('🔍 Extracting headers from first 10 lines:');
-
     // Look for header patterns in the first 10 lines
     for (let i = 0; i < Math.min(10, lines.length); i++) {
       const line = lines[i].trim();
-      console.log(`Line ${i}:`, line);
 
       let isHeaderLine = false;
 
@@ -35,7 +32,6 @@ const useLogsModel = () => {
           headers.user = userValue;
           headerLineIndices.add(i);
           isHeaderLine = true;
-          console.log('✅ Found User:', headers.user);
         }
       }
 
@@ -46,7 +42,6 @@ const useLogsModel = () => {
           headers.account = accountValue;
           headerLineIndices.add(i);
           isHeaderLine = true;
-          console.log('✅ Found Account:', headers.account);
         }
       }
 
@@ -57,7 +52,6 @@ const useLogsModel = () => {
           headers.clientVersion = clientValue;
           headerLineIndices.add(i);
           isHeaderLine = true;
-          console.log('✅ Found Client version:', headers.clientVersion);
         }
       }
 
@@ -68,17 +62,9 @@ const useLogsModel = () => {
           headers.osVersion = osValue;
           headerLineIndices.add(i);
           isHeaderLine = true;
-          console.log('✅ Found OS version:', headers.osVersion);
         }
       }
-
-      if (isHeaderLine) {
-        console.log(`📝 Line ${i} marked as header line`);
-      }
     }
-
-    console.log('📋 Final headers:', headers);
-    console.log('🚫 Header line indices to exclude:', Array.from(headerLineIndices));
 
     return {
       headers: Object.keys(headers).length > 0 ? headers : null,
@@ -305,14 +291,14 @@ const useLogsModel = () => {
   const getCurrentFileHeaders = useCallback((fileName) => {
     // First try to get headers from the specific file
     let result = logFileHeaders[fileName] || null;
-    
+
     // If no headers for this file, try to get headers from any file in the session
     // (assuming all files in a session belong to the same user)
     if (!result) {
       const allHeaders = Object.values(logFileHeaders);
       result = allHeaders.find(headers => headers && Object.keys(headers).length > 0) || null;
     }
-    
+
     console.log('🔍 getCurrentFileHeaders called:', {
       fileName,
       logFileHeaders,
@@ -338,7 +324,7 @@ const useLogsModel = () => {
         }));
         console.log('📝 Processed combined logs with unique IDs');
       }
-      
+
       setAllFileLogs(prev => ({
         ...prev,
         [fileName]: processedLogs
@@ -354,10 +340,17 @@ const useLogsModel = () => {
 
   // Switch to show logs for a specific file
   const switchToFile = useCallback((fileName) => {
+    console.log('🔄 switchToFile called for:', fileName);
+    console.log('📊 Available files in allFileLogs:', Object.keys(allFileLogs));
+
     const fileLogs = allFileLogs[fileName] || [];
+    console.log(`📁 Found ${fileLogs.length} logs for ${fileName}`);
+
     setLogs(fileLogs);
     setSelectedLog(null);
     setHighlightedLogId(null);
+
+    console.log('✅ switchToFile completed');
   }, [allFileLogs]);
 
   return {

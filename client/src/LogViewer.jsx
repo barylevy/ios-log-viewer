@@ -8,8 +8,6 @@ import AIChat from './AIChat';
 import useLogsModel from './useLogsModel';
 
 const LogViewer = () => {
-  console.log('LogViewer component loading...');
-
   const {
     logs,
     filteredLogs,
@@ -47,26 +45,36 @@ const LogViewer = () => {
       return;
     }
 
-    // Add file to files list if not already present
+    // Check if file already exists
+    const existingIndex = files.findIndex(f => f.name === file.name);
+    if (existingIndex >= 0) {
+      // File already exists, just switch to it
+      setActiveFileIndex(existingIndex);
+      setShowCombined(false);
+      switchToFile(file.name);
+      return;
+    }
+
+    // Load the file content first
+    loadLogs(file);
+
+    // Then add file to files list and set as active
     setFiles(prev => {
-      const existingIndex = prev.findIndex(f => f.name === file.name);
-      if (existingIndex >= 0) {
-        // File already exists, just switch to it
-        setActiveFileIndex(existingIndex);
+      const newFiles = [...prev, { name: file.name }];
+      const newIndex = newFiles.length - 1;
+      setActiveFileIndex(newIndex);
+      setShowCombined(false);
+
+      // Use setTimeout to ensure loadLogs has completed
+      setTimeout(() => {
         switchToFile(file.name);
-        return prev;
-      } else {
-        // New file, add it and set as active
-        const newFiles = [...prev, { name: file.name }];
-        setActiveFileIndex(newFiles.length - 1);
-        return newFiles;
-      }
+      }, 0);
+
+      return newFiles;
     });
 
-    // Load the file content and process it
-    loadLogs(file);
     setHasUserInteracted(true);
-  }, [loadLogs, switchToFile]);
+  }, [files, loadLogs, switchToFile]);
 
   const handleFileSelect = useCallback((index) => {
     setActiveFileIndex(index);
@@ -76,11 +84,11 @@ const LogViewer = () => {
     if (files[index]) {
       switchToFile(files[index].name);
     }
-  }, [files, switchToFile]);
+  }, [files, switchToFile, activeFileIndex]);
 
   const handleFileClose = useCallback((index) => {
     const fileToClose = files[index];
-    
+
     setFiles(prev => {
       const newFiles = prev.filter((_, i) => i !== index);
       if (newFiles.length === 0) {
@@ -113,25 +121,17 @@ const LogViewer = () => {
   }, [activeFileIndex, files, switchToFile]);
 
   const handleToggleCombined = useCallback(() => {
-    console.log('🔄 handleToggleCombined called');
-    console.log('Current state:', { showCombined, files, allFileLogs, activeFileIndex });
-    
     setShowCombined(prev => {
       const newCombined = !prev;
-      console.log('Setting combined to:', newCombined);
 
       if (newCombined && files.length > 0) {
-        console.log('Combining files...');
         // Combine all files - get logs from allFileLogs
         const combinedLogs = files.flatMap(file => {
           const fileLogs = allFileLogs[file.name] || [];
-          console.log(`File ${file.name} has ${fileLogs.length} logs`);
           return fileLogs;
         });
-        console.log(`Total combined logs: ${combinedLogs.length}`);
         setLogsForFile('Combined Files', combinedLogs);
       } else if (files[activeFileIndex]) {
-        console.log('Switching back to active file:', files[activeFileIndex].name);
         // Switch back to active file
         switchToFile(files[activeFileIndex].name);
       }
@@ -240,27 +240,16 @@ const LogViewer = () => {
 
   // Get current file headers
   const currentFileHeaders = useMemo(() => {
-    console.log('🔍 Calculating currentFileHeaders:');
-    console.log('  files.length:', files.length);
-    console.log('  activeFileIndex:', activeFileIndex);
-    console.log('  showCombined:', showCombined);
-    console.log('  logFileHeaders:', logFileHeaders);
-
     if (files.length === 0) {
-      console.log('  → No files, returning null');
       return null;
     }
 
     if (showCombined) {
-      console.log('  → Combined view, returning null');
       return null;
     }
 
     const currentFile = files[activeFileIndex];
-    console.log('  currentFile:', currentFile);
-
     const headers = currentFile ? getCurrentFileHeaders(currentFile.name) : null;
-    console.log('  → Final headers:', headers);
 
     return headers;
   }, [files, activeFileIndex, showCombined, getCurrentFileHeaders, logFileHeaders]);
@@ -280,19 +269,8 @@ const LogViewer = () => {
       />
 
       {/* Log File Headers - Display above tabs */}
-      {console.log('🔍 Header display check:', {
-        currentFileHeaders,
-        hasHeaders: !!currentFileHeaders,
-        headerKeys: currentFileHeaders ? Object.keys(currentFileHeaders) : [],
-        headerDetails: currentFileHeaders ? JSON.stringify(currentFileHeaders, null, 2) : 'null',
-        filesLength: files.length,
-        activeFileIndex,
-        showCombined,
-        shouldDisplay: currentFileHeaders && Object.keys(currentFileHeaders).length > 0
-      })}
       {currentFileHeaders && Object.keys(currentFileHeaders).length > 0 && (
         <div className="mx-4 mb-2">
-          {console.log('🎯 Displaying headers above tabs:', JSON.stringify(currentFileHeaders, null, 2))}
           <div className="flex items-center gap-6 text-sm text-gray-600">
             {currentFileHeaders.user && (
               <span className="flex items-center gap-1">
