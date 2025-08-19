@@ -165,34 +165,15 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters, index }) => {
         } ${isHighlighted ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''}`}
     >
       <div className="flex items-start gap-3">
-        {/* Time */}
+        {/* Time only */}
         <div className="flex-shrink-0 w-20">
           <span className="text-xs font-mono text-gray-500 dark:text-gray-400">
             {timeInfo}
           </span>
         </div>
 
-        {/* Level indicator and text */}
-        <div className="flex-shrink-0 flex items-center gap-1">
-          <div className={levelClass} />
-          <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase">
-            {log.level}
-          </span>
-        </div>
-
-        {/* Module/Thread info */}
-        <div className="flex-shrink-0 flex gap-2 text-xs">
-          {log.module && (
-            <span className="text-purple-600 dark:text-purple-400 font-mono">
-              {log.module}
-            </span>
-          )}
-          {log.thread && (
-            <span className="text-blue-600 dark:text-blue-400 font-mono">
-              [{log.thread}]
-            </span>
-          )}
-        </div>
+        {/* Level indicator */}
+        <div className={levelClass} />
 
         {/* Log content with file info */}
         <div className="flex-1 min-w-0 flex justify-between items-start">
@@ -453,10 +434,9 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, filters }) => {
     >
       {/* Sticky Date Header */}
       {currentStickyDate && (
-        <div className="sticky top-0 z-10 bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-800 px-4 py-2">
+        <div className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2">
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-            <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
               {currentStickyDate}
             </span>
           </div>
