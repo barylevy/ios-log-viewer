@@ -139,23 +139,65 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
 
         {/* Time Range */}
         <div className="flex items-center gap-1">
-          <label className="text-xs font-medium text-gray-700 dark:text-gray-300">From:</label>
-          <input
-            type="datetime-local"
-            value={filters.startTime}
-            onChange={(e) => handleFilterChange('startTime', e.target.value)}
+          <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Date:</label>
+          <select
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value === 'custom') {
+                // Keep current custom dates if they exist
+                return;
+              } else if (value === 'today') {
+                const today = new Date().toISOString().split('T')[0];
+                handleFilterChange('startTime', `${today}T00:00`);
+                handleFilterChange('endTime', `${today}T23:59`);
+              } else if (value === 'yesterday') {
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                const yesterdayStr = yesterday.toISOString().split('T')[0];
+                handleFilterChange('startTime', `${yesterdayStr}T00:00`);
+                handleFilterChange('endTime', `${yesterdayStr}T23:59`);
+              } else if (value === 'week') {
+                const weekAgo = new Date();
+                weekAgo.setDate(weekAgo.getDate() - 7);
+                const today = new Date();
+                handleFilterChange('startTime', weekAgo.toISOString().slice(0, 16));
+                handleFilterChange('endTime', today.toISOString().slice(0, 16));
+              } else if (value === 'clear') {
+                handleFilterChange('startTime', '');
+                handleFilterChange('endTime', '');
+              }
+            }}
+            value={filters.startTime || filters.endTime ? 'custom' : ''}
             className="px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs"
-          />
-        </div>
+          >
+            <option value="">All time</option>
+            <option value="today">Today</option>
+            <option value="yesterday">Yesterday</option>
+            <option value="week">Last 7 days</option>
+            <option value="custom">Custom range...</option>
+            {(filters.startTime || filters.endTime) && <option value="clear">Clear dates</option>}
+          </select>
 
-        <div className="flex items-center gap-1">
-          <label className="text-xs font-medium text-gray-700 dark:text-gray-300">To:</label>
-          <input
-            type="datetime-local"
-            value={filters.endTime}
-            onChange={(e) => handleFilterChange('endTime', e.target.value)}
-            className="px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs"
-          />
+          {/* Show custom inputs only when custom range is selected or dates are set */}
+          {(filters.startTime || filters.endTime) && (
+            <>
+              <input
+                type="datetime-local"
+                value={filters.startTime}
+                onChange={(e) => handleFilterChange('startTime', e.target.value)}
+                className="px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs"
+                placeholder="From"
+              />
+              <span className="text-gray-400 dark:text-gray-500 text-xs">—</span>
+              <input
+                type="datetime-local"
+                value={filters.endTime}
+                onChange={(e) => handleFilterChange('endTime', e.target.value)}
+                className="px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-r-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs"
+                placeholder="To"
+              />
+            </>
+          )}
         </div>
 
         {/* Clear Filters */}
