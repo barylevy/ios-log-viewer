@@ -165,15 +165,34 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters, index }) => {
         } ${isHighlighted ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''}`}
     >
       <div className="flex items-start gap-3">
-        {/* Time only */}
+        {/* Time */}
         <div className="flex-shrink-0 w-20">
           <span className="text-xs font-mono text-gray-500 dark:text-gray-400">
             {timeInfo}
           </span>
         </div>
 
-        {/* Level indicator */}
-        <div className={levelClass} />
+        {/* Level indicator and text */}
+        <div className="flex-shrink-0 flex items-center gap-1">
+          <div className={levelClass} />
+          <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase">
+            {log.level}
+          </span>
+        </div>
+
+        {/* Module/Thread info */}
+        <div className="flex-shrink-0 flex gap-2 text-xs">
+          {log.module && (
+            <span className="text-purple-600 dark:text-purple-400 font-mono">
+              {log.module}
+            </span>
+          )}
+          {log.thread && (
+            <span className="text-blue-600 dark:text-blue-400 font-mono">
+              [{log.thread}]
+            </span>
+          )}
+        </div>
 
         {/* Log content with file info */}
         <div className="flex-1 min-w-0 flex justify-between items-start">

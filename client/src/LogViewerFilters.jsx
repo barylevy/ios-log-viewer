@@ -1,11 +1,70 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCount }) => {
+  const [isLevelDropdownOpen, setIsLevelDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
   const handleFilterChange = (key, value) => {
     onFiltersChange({ [key]: value });
   };
 
-  return (
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsLevelDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const handleLogLevelToggle = (level) => {
+    const currentLevels = filters.logLevel;
+
+    if (level === 'all') {
+      // If 'all' is clicked, toggle between all levels and just 'all'
+      if (currentLevels.includes('all')) {
+        onFiltersChange({ logLevel: ['error', 'warning', 'info', 'debug', 'trace'] });
+      } else {
+        onFiltersChange({ logLevel: ['all'] });
+      }
+    } else {
+      // Remove 'all' if it exists and we're selecting specific levels
+      let newLevels = currentLevels.filter(l => l !== 'all');
+
+      if (newLevels.includes(level)) {
+        // Remove the level
+        newLevels = newLevels.filter(l => l !== level);
+        // If no levels selected, default to 'all'
+        if (newLevels.length === 0) {
+          newLevels = ['all'];
+        }
+      } else {
+        // Add the level
+        newLevels.push(level);
+      }
+
+      onFiltersChange({ logLevel: newLevels });
+    }
+  };
+
+  // Get display text for selected levels
+  const getSelectedLevelsText = () => {
+    if (filters.logLevel.includes('all')) {
+      return 'All Levels';
+    }
+    if (filters.logLevel.length === 1) {
+      return filters.logLevel[0].charAt(0).toUpperCase() + filters.logLevel[0].slice(1);
+    }
+    if (filters.logLevel.length <= 2) {
+      return filters.logLevel.map(l => l.charAt(0).toUpperCase() + l.slice(1)).join(', ');
+    }
+    return `${filters.logLevel.length} levels selected`;
+  }; return (
     <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-2">
       <div className="flex flex-wrap items-center gap-3">
         {/* Search Input */}
@@ -34,21 +93,48 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
           )}
         </div>
 
-        {/* Log Level Filter */}
-        <div className="flex items-center gap-2">
+        {/* Log Level Filter - Multi-Select Dropdown */}
+        <div className="flex items-center gap-2" ref={dropdownRef}>
           <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Level:</label>
-          <select
-            value={filters.logLevel}
-            onChange={(e) => handleFilterChange('logLevel', e.target.value)}
-            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          >
-            <option value="all">All</option>
-            <option value="error">Error</option>
-            <option value="warning">Warning</option>
-            <option value="info">Info</option>
-            <option value="debug">Debug</option>
-            <option value="trace">Trace</option>
-          </select>
+          <div className="relative">
+            <button
+              onClick={() => setIsLevelDropdownOpen(!isLevelDropdownOpen)}
+              className="flex items-center justify-between px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm min-w-32"
+            >
+              <span>{getSelectedLevelsText()}</span>
+              <svg className={`w-4 h-4 ml-2 transition-transform ${isLevelDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {isLevelDropdownOpen && (
+              <div className="absolute z-50 mt-1 w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg">
+                <div className="py-1">
+                  {[
+                    { value: 'all', label: 'All Levels', color: 'text-gray-700 dark:text-gray-300' },
+                    { value: 'error', label: 'Error', color: 'text-red-600 dark:text-red-400' },
+                    { value: 'warning', label: 'Warning', color: 'text-yellow-600 dark:text-yellow-400' },
+                    { value: 'info', label: 'Info', color: 'text-blue-600 dark:text-blue-400' },
+                    { value: 'debug', label: 'Debug', color: 'text-green-600 dark:text-green-400' },
+                    { value: 'trace', label: 'Trace', color: 'text-purple-600 dark:text-purple-400' }
+                  ].map(({ value, label, color }) => (
+                    <label
+                      key={value}
+                      className="flex items-center px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={filters.logLevel.includes(value)}
+                        onChange={() => handleLogLevelToggle(value)}
+                        className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:bg-gray-600 mr-2"
+                      />
+                      <span className={`text-sm ${color}`}>{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Time Range */}
@@ -73,11 +159,11 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
         </div>
 
         {/* Clear Filters */}
-        {(filters.searchText || filters.logLevel !== 'all' || filters.startTime || filters.endTime) && (
+        {(filters.searchText || !filters.logLevel.includes('all') || filters.startTime || filters.endTime) && (
           <button
             onClick={() => onFiltersChange({
               searchText: '',
-              logLevel: 'all',
+              logLevel: ['all'],
               startTime: '',
               endTime: ''
             })}

@@ -8,7 +8,7 @@ const useLogsModel = () => {
   const [allFileLogs, setAllFileLogs] = useState({}); // Store logs per file
   const [filters, setFilters] = useState({
     searchText: '',
-    logLevel: 'all',
+    logLevel: ['all'], // Array to support multiple levels
     startTime: '',
     endTime: ''
   });
@@ -186,8 +186,8 @@ const useLogsModel = () => {
         if (!matchesAnyTerm) return false;
       }
 
-      // Log level filter
-      if (filters.logLevel !== 'all' && log.level !== filters.logLevel) {
+      // Log level filter - support multiple levels
+      if (!filters.logLevel.includes('all') && !filters.logLevel.includes(log.level)) {
         return false;
       }
 
