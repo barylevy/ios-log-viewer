@@ -6,8 +6,8 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
-      <div className="flex flex-wrap items-center gap-4">
+    <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-2">
+      <div className="flex flex-wrap items-center gap-3">
         {/* Search Input */}
         <div className="flex-1 min-w-64">
           <div className="relative">
@@ -89,7 +89,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
       </div>
 
       {/* Stats */}
-      <div className="mt-3 text-xs text-gray-600 dark:text-gray-400">
+      <div className="mt-1 text-[10px] text-gray-600 dark:text-gray-400">
         Showing {filteredLogsCount.toLocaleString()} of {logsCount.toLocaleString()} logs
         {filteredLogsCount !== logsCount && (
           <span className="ml-2 text-blue-600 dark:text-blue-400">

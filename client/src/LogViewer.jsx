@@ -62,14 +62,14 @@ const LogViewer = () => {
     // Then add file to files list
     setFiles(prev => {
       const newFiles = [...prev, { name: file.name }];
-      
+
       // If this is the first file being added, make it active
       // Otherwise, keep the current active file (usually the first one)
       if (prev.length === 0) {
         console.log('🎯 Setting first file as active:', file.name);
         setActiveFileIndex(0);
         setShowingCombinedView(false);
-        
+
         // Use setTimeout to ensure loadLogs has completed
         setTimeout(() => {
           switchToFile(file.name);
@@ -193,7 +193,7 @@ const LogViewer = () => {
 
     // Sort files by name before loading
     const sortedTextFiles = textFiles.sort((a, b) => a.name.localeCompare(b.name));
-    
+
     sortedTextFiles.forEach(file => handleFileLoad(file));
   }, [handleFileLoad]);
 

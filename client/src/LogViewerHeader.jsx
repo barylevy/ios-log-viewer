@@ -21,12 +21,12 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
   const handleFilesSelected = (event) => {
     const files = Array.from(event.target.files);
     console.log('Files selected:', files);
-    
+
     // Filter and sort files by name
     const logFiles = files.filter(file =>
       file.name.toLowerCase().endsWith('.txt') && file.name.toLowerCase().includes('log')
     ).sort((a, b) => a.name.localeCompare(b.name));
-    
+
     logFiles.forEach(file => {
       onFileLoad(file);
     });
@@ -39,11 +39,11 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
     const logFiles = files.filter(file =>
       file.name.toLowerCase().endsWith('.txt') && file.name.toLowerCase().includes('log')
     );
-    
+
     // Sort files by name before loading
     const sortedLogFiles = logFiles.sort((a, b) => a.name.localeCompare(b.name));
     console.log('Sorted log files:', sortedLogFiles.map(f => f.name));
-    
+
     sortedLogFiles.forEach(file => {
       onFileLoad(file);
     });
@@ -93,11 +93,10 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
             {hasLogs && (
               <button
                 onClick={onToggleAIChat}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  showAIChat
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${showAIChat
                     ? 'bg-red-600 hover:bg-red-700 text-white'
                     : 'bg-green-600 hover:bg-green-700 text-white'
-                }`}
+                  }`}
               >
                 {showAIChat ? 'Hide AI Chat' : 'Show AI Chat'}
               </button>
