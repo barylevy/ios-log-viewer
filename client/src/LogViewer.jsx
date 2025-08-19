@@ -32,7 +32,8 @@ const LogViewer = () => {
   // Multi-file support
   const [files, setFiles] = useState([]);
   const [activeFileIndex, setActiveFileIndex] = useState(0);
-  const [showCombined, setShowCombined] = useState(false);
+  const [combinedViewLoaded, setCombinedViewLoaded] = useState(false);
+  const [showingCombinedView, setShowingCombinedView] = useState(false);
 
   // AI Chat
   const [showAIChat, setShowAIChat] = useState(false);
@@ -50,7 +51,7 @@ const LogViewer = () => {
     if (existingIndex >= 0) {
       // File already exists, just switch to it
       setActiveFileIndex(existingIndex);
-      setShowCombined(false);
+      setShowingCombinedView(false);
       switchToFile(file.name);
       return;
     }
@@ -58,17 +59,24 @@ const LogViewer = () => {
     // Load the file content first
     loadLogs(file);
 
-    // Then add file to files list and set as active
+    // Then add file to files list
     setFiles(prev => {
       const newFiles = [...prev, { name: file.name }];
-      const newIndex = newFiles.length - 1;
-      setActiveFileIndex(newIndex);
-      setShowCombined(false);
-
-      // Use setTimeout to ensure loadLogs has completed
-      setTimeout(() => {
-        switchToFile(file.name);
-      }, 0);
+      
+      // If this is the first file being added, make it active
+      // Otherwise, keep the current active file (usually the first one)
+      if (prev.length === 0) {
+        console.log('🎯 Setting first file as active:', file.name);
+        setActiveFileIndex(0);
+        setShowingCombinedView(false);
+        
+        // Use setTimeout to ensure loadLogs has completed
+        setTimeout(() => {
+          switchToFile(file.name);
+        }, 0);
+      } else {
+        console.log('📄 Added additional file:', file.name, '(keeping focus on first file)');
+      }
 
       return newFiles;
     });
@@ -78,7 +86,7 @@ const LogViewer = () => {
 
   const handleFileSelect = useCallback((index) => {
     setActiveFileIndex(index);
-    setShowCombined(false);
+    setShowingCombinedView(false);
 
     // Switch to show logs for the selected file
     if (files[index]) {
@@ -94,8 +102,19 @@ const LogViewer = () => {
       if (newFiles.length === 0) {
         setHasUserInteracted(false);
         setActiveFileIndex(0);
-        setShowCombined(false);
+        setShowingCombinedView(false);
+        setCombinedViewLoaded(false);
         return [];
+      }
+
+      // Reset combined view if we have less than 2 files
+      if (newFiles.length < 2) {
+        setShowingCombinedView(false);
+        setCombinedViewLoaded(false);
+      } else if (showingCombinedView) {
+        // If combined view was active and we still have multiple files, 
+        // we need to reload the combined view
+        setCombinedViewLoaded(false);
       }
 
       if (activeFileIndex >= index && activeFileIndex > 0) {
@@ -118,27 +137,40 @@ const LogViewer = () => {
       // Use a workaround since setAllFileLogs isn't available directly
       // The cleanup will happen naturally when the component re-renders
     }
-  }, [activeFileIndex, files, switchToFile]);
+  }, [activeFileIndex, files, switchToFile, showingCombinedView]);
 
-  const handleToggleCombined = useCallback(() => {
-    setShowCombined(prev => {
-      const newCombined = !prev;
+  const handleCombinedViewSelect = useCallback(() => {
+    setShowingCombinedView(true);
 
-      if (newCombined && files.length > 0) {
-        // Combine all files - get logs from allFileLogs
-        const combinedLogs = files.flatMap(file => {
-          const fileLogs = allFileLogs[file.name] || [];
-          return fileLogs;
-        });
-        setLogsForFile('Combined Files', combinedLogs);
-      } else if (files[activeFileIndex]) {
-        // Switch back to active file
-        switchToFile(files[activeFileIndex].name);
-      }
+    // Lazy load combined view only if not already loaded
+    if (!combinedViewLoaded && files.length > 0) {
+      console.log('🔄 Loading combined view for the first time...');
 
-      return newCombined;
-    });
-  }, [files, activeFileIndex, allFileLogs, setLogsForFile, switchToFile]);
+      // Combine all files - get logs from allFileLogs
+      const combinedLogs = files.flatMap(file => {
+        const fileLogs = allFileLogs[file.name] || [];
+        return fileLogs.map((log, index) => ({
+          ...log,
+          id: `${file.name}-${log.id}`, // Ensure unique IDs
+          sourceFile: file.name
+        }));
+      });
+
+      // Sort by timestamp if available
+      combinedLogs.sort((a, b) => {
+        if (a.timestamp && b.timestamp) {
+          return a.timestamp.localeCompare(b.timestamp);
+        }
+        return 0;
+      });
+
+      setLogsForFile('Combined Files', combinedLogs);
+      setCombinedViewLoaded(true);
+    } else if (combinedViewLoaded) {
+      // Switch to already loaded combined view
+      switchToFile('Combined Files');
+    }
+  }, [files, allFileLogs, setLogsForFile, switchToFile, combinedViewLoaded]);
 
   const handleDragOver = useCallback((e) => {
     e.preventDefault();
@@ -159,7 +191,10 @@ const LogViewer = () => {
       file.name.toLowerCase().endsWith('.txt') && file.name.toLowerCase().includes('log')
     );
 
-    textFiles.forEach(file => handleFileLoad(file));
+    // Sort files by name before loading
+    const sortedTextFiles = textFiles.sort((a, b) => a.name.localeCompare(b.name));
+    
+    sortedTextFiles.forEach(file => handleFileLoad(file));
   }, [handleFileLoad]);
 
   // Chat panel resizing
@@ -193,19 +228,19 @@ const LogViewer = () => {
 
   // Get current display context for AI
   const currentDisplayContext = useMemo(() => {
-    if (showCombined) {
+    if (showingCombinedView) {
       return {
-        logs: files.flatMap(file => file.logs),
+        logs: allFileLogs['Combined Files'] || [],
         fileName: `Combined Files (${files.map(f => f.name).join(', ')})`
       };
     } else if (files[activeFileIndex]) {
       return {
-        logs: files[activeFileIndex].logs,
+        logs: allFileLogs[files[activeFileIndex].name] || [],
         fileName: files[activeFileIndex].name
       };
     }
     return { logs: [], fileName: 'No File' };
-  }, [files, activeFileIndex, showCombined]);
+  }, [files, activeFileIndex, showingCombinedView, allFileLogs]);
 
   const memoizedContent = useMemo(() => {
     if (!hasUserInteracted) {
@@ -213,7 +248,7 @@ const LogViewer = () => {
         <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
           <div className="text-center">
             <p className="text-xl mb-2">Cato Client Log Viewer</p>
-            <p>Drop log files here or click "Choose Files" to get started</p>
+            <p>Drop log files here or click "Load Files" to get started</p>
             <p className="text-sm mt-2">Supports multiple files and AI-powered analysis</p>
           </div>
         </div>
@@ -244,7 +279,7 @@ const LogViewer = () => {
       return null;
     }
 
-    if (showCombined) {
+    if (showingCombinedView) {
       return null;
     }
 
@@ -252,7 +287,7 @@ const LogViewer = () => {
     const headers = currentFile ? getCurrentFileHeaders(currentFile.name) : null;
 
     return headers;
-  }, [files, activeFileIndex, showCombined, getCurrentFileHeaders, logFileHeaders]);
+  }, [files, activeFileIndex, showingCombinedView, getCurrentFileHeaders, logFileHeaders]);
 
   return (
     <div
@@ -306,8 +341,8 @@ const LogViewer = () => {
           activeFileIndex={activeFileIndex}
           onFileSelect={handleFileSelect}
           onFileClose={handleFileClose}
-          showCombined={showCombined}
-          onToggleCombined={handleToggleCombined}
+          showingCombinedView={showingCombinedView}
+          onCombinedViewSelect={handleCombinedViewSelect}
           allFileLogs={allFileLogs}
         />
       )}

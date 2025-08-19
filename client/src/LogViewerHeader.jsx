@@ -21,10 +21,14 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
   const handleFilesSelected = (event) => {
     const files = Array.from(event.target.files);
     console.log('Files selected:', files);
-    files.forEach(file => {
-      if (file.name.toLowerCase().endsWith('.txt') && file.name.toLowerCase().includes('log')) {
-        onFileLoad(file);
-      }
+    
+    // Filter and sort files by name
+    const logFiles = files.filter(file =>
+      file.name.toLowerCase().endsWith('.txt') && file.name.toLowerCase().includes('log')
+    ).sort((a, b) => a.name.localeCompare(b.name));
+    
+    logFiles.forEach(file => {
+      onFileLoad(file);
     });
     event.target.value = '';
   };
@@ -35,7 +39,12 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
     const logFiles = files.filter(file =>
       file.name.toLowerCase().endsWith('.txt') && file.name.toLowerCase().includes('log')
     );
-    logFiles.forEach(file => {
+    
+    // Sort files by name before loading
+    const sortedLogFiles = logFiles.sort((a, b) => a.name.localeCompare(b.name));
+    console.log('Sorted log files:', sortedLogFiles.map(f => f.name));
+    
+    sortedLogFiles.forEach(file => {
       onFileLoad(file);
     });
     event.target.value = '';
