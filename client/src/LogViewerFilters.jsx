@@ -65,8 +65,8 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
     }
     return `${filters.logLevel.length} levels selected`;
   }; return (
-    <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-2">
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-3">
+      <div className="flex flex-wrap items-center gap-2">
         {/* Search Input */}
         <div className="flex-1 min-w-64">
           <div className="relative">
@@ -75,7 +75,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
               placeholder="Search logs... (use || to separate multiple terms)"
               value={filters.searchText}
               onChange={(e) => handleFilterChange('searchText', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+              className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 text-sm"
             />
             {filters.searchText && (
               <button
@@ -94,21 +94,21 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
         </div>
 
         {/* Log Level Filter - Multi-Select Dropdown */}
-        <div className="flex items-center gap-2" ref={dropdownRef}>
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Level:</label>
+        <div className="flex items-center gap-1" ref={dropdownRef}>
+          <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Level:</label>
           <div className="relative">
             <button
               onClick={() => setIsLevelDropdownOpen(!isLevelDropdownOpen)}
-              className="flex items-center justify-between px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm min-w-32"
+              className="flex items-center justify-between px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs min-w-28"
             >
               <span>{getSelectedLevelsText()}</span>
-              <svg className={`w-4 h-4 ml-2 transition-transform ${isLevelDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className={`w-3 h-3 ml-1 transition-transform ${isLevelDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </button>
 
             {isLevelDropdownOpen && (
-              <div className="absolute z-10 mt-1 w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg">
+              <div className="absolute z-50 mt-1 w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg">
                 <div className="py-1">
                   {[
                     { value: 'all', label: 'All Levels', color: 'text-gray-700 dark:text-gray-300' },
@@ -138,23 +138,23 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
         </div>
 
         {/* Time Range */}
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">From:</label>
+        <div className="flex items-center gap-1">
+          <label className="text-xs font-medium text-gray-700 dark:text-gray-300">From:</label>
           <input
             type="datetime-local"
             value={filters.startTime}
             onChange={(e) => handleFilterChange('startTime', e.target.value)}
-            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            className="px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs"
           />
         </div>
 
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">To:</label>
+        <div className="flex items-center gap-1">
+          <label className="text-xs font-medium text-gray-700 dark:text-gray-300">To:</label>
           <input
             type="datetime-local"
             value={filters.endTime}
             onChange={(e) => handleFilterChange('endTime', e.target.value)}
-            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            className="px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs"
           />
         </div>
 
@@ -167,7 +167,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
               startTime: '',
               endTime: ''
             })}
-            className="px-3 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors text-sm"
+            className="px-2 py-1.5 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors text-xs"
           >
             Clear Filters
           </button>
