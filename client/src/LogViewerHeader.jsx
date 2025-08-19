@@ -73,7 +73,7 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
                   <>
                     <span className="flex items-baseline gap-1">
                       <span className="text-gray-500 dark:text-gray-500">User:</span>
-                      <span className="font-medium text-blue-600 dark:text-blue-400">{currentFileHeaders.user}</span>
+                      <span className="font-medium">{currentFileHeaders.user}</span>
                     </span>
                     {(currentFileHeaders.account || currentFileHeaders.clientVersion || currentFileHeaders.osVersion) && (
                       <span className="text-gray-400">•</span>
