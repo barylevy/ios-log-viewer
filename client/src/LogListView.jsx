@@ -93,7 +93,7 @@ const cleanMessage = (message) => {
   return cleaned.trim();
 };
 
-const LogItem = memo(({ log, onClick, isHighlighted, filters }) => {
+const LogItem = memo(({ log, onClick, isHighlighted, filters, index }) => {
   // Process the log message and extract file info - memoized by log.id to prevent recalculation
   const cleanedMessage = useMemo(() => cleanMessage(log.message), [log.message]);
   const fileInfo = useMemo(() => extractFileInfo(log), [log.message, log.timestamp]);
@@ -155,11 +155,14 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters }) => {
   // Memoize the click handler to prevent function recreation
   const handleClick = useCallback(() => onClick(log), [onClick, log]);
 
+  // Determine if this is an odd or even line for alternating background
+  const isOddLine = index % 2 === 1;
+
   return (
     <div
       onClick={handleClick}
-      className={`px-3 py-1 border-b border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${isHighlighted ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''
-        }`}
+      className={`px-3 py-1 border-b border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${isOddLine ? 'bg-gray-50/50 dark:bg-gray-800/30' : 'bg-white dark:bg-gray-900'
+        } ${isHighlighted ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''}`}
     >
       <div className="flex items-start gap-3">
         {/* Time only */}
@@ -443,13 +446,14 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, filters }) => {
 
       <div style={{ height: totalHeight, position: 'relative' }}>
         <div style={{ transform: `translateY(${offsetY}px)` }}>
-          {visibleItems.map((item) => (
+          {visibleItems.map((item, visibleIndex) => (
             <LogItem
               key={`${logsKey}-${item.id}`}
               log={item.log}
               onClick={onLogClick}
               isHighlighted={highlightedLogId === item.log.id}
               filters={filters}
+              index={item.log.originalIndex || (visibleRange.start + visibleIndex)}
             />
           ))}
         </div>
