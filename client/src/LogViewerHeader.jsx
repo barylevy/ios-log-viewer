@@ -59,17 +59,17 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
   };
 
   return (
-    <header className="bg-gray-800 dark:bg-gray-800 shadow-sm border-b border-gray-600 p-4">
+    <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-600 p-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <img src="/cato-logo.svg" alt="Cato Networks" className="h-8 w-auto" />
-          <h1 className="text-xl font-semibold text-white">Cato Client Log Viewer</h1>
+          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Cato Client Log Viewer</h1>
         </div>
 
         <div className="flex flex-col space-y-2">
           {/* Display parsed headers from log files */}
           {currentFileHeaders && Object.keys(currentFileHeaders).length > 0 && (
-            <div className="text-sm text-gray-300 text-right">
+            <div className="text-sm text-gray-600 dark:text-gray-300 text-right">
               {currentFileHeaders.user && (
                 <div>User: {currentFileHeaders.user}</div>
               )}
