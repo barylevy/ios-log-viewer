@@ -66,7 +66,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
     return `${filters.logLevel.length} levels selected`;
   }; return (
     <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-3">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-6">
         {/* Search Input */}
         <div className="flex-1 min-w-64">
           <div className="relative">
@@ -138,13 +138,19 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
         </div>
 
         {/* Time Range */}
-        <div className="flex items-center gap-1">
+        <div className={`flex items-center gap-2 ${(filters.startTime || filters.endTime) ? 'px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md' : ''}`}>
           <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Date:</label>
           <select
             onChange={(e) => {
               const value = e.target.value;
               if (value === 'custom') {
-                // Keep current custom dates if they exist
+                // If no dates are set yet, set default range (today)
+                if (!filters.startTime && !filters.endTime) {
+                  const today = new Date().toISOString().split('T')[0];
+                  handleFilterChange('startTime', `${today}T00:00`);
+                  handleFilterChange('endTime', `${today}T23:59`);
+                }
+                // If dates already exist, keep them as is
                 return;
               } else if (value === 'today') {
                 const today = new Date().toISOString().split('T')[0];
@@ -162,9 +168,6 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
                 const today = new Date();
                 handleFilterChange('startTime', weekAgo.toISOString().slice(0, 16));
                 handleFilterChange('endTime', today.toISOString().slice(0, 16));
-              } else if (value === 'clear') {
-                handleFilterChange('startTime', '');
-                handleFilterChange('endTime', '');
               }
             }}
             value={filters.startTime || filters.endTime ? 'custom' : ''}
@@ -175,7 +178,6 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
             <option value="yesterday">Yesterday</option>
             <option value="week">Last 7 days</option>
             <option value="custom">Custom range...</option>
-            {(filters.startTime || filters.endTime) && <option value="clear">Clear dates</option>}
           </select>
 
           {/* Show custom inputs only when custom range is selected or dates are set */}
@@ -196,6 +198,16 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
                 className="px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-r-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs"
                 placeholder="To"
               />
+              <button
+                onClick={() => {
+                  handleFilterChange('startTime', '');
+                  handleFilterChange('endTime', '');
+                }}
+                className="ml-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-sm"
+                title="Clear dates"
+              >
+                ×
+              </button>
             </>
           )}
         </div>
