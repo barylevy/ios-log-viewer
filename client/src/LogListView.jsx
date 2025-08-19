@@ -434,13 +434,10 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, filters }) => {
     >
       {/* Sticky Date Header */}
       {currentStickyDate && (
-        <div className="sticky top-0 z-10 bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-800 px-4 py-2">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-            <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
-              {currentStickyDate}
-            </span>
-          </div>
+        <div className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            {currentStickyDate}
+          </span>
         </div>
       )}
 
