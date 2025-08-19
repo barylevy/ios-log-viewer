@@ -75,7 +75,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
               placeholder="Search logs... (use || to separate multiple terms)"
               value={filters.searchText}
               onChange={(e) => handleFilterChange('searchText', e.target.value)}
-              className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 text-sm"
+              className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
             />
             {filters.searchText && (
               <button
@@ -87,7 +87,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
             )}
           </div>
           {filters.searchText && filters.searchText.includes('||') && (
-            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            <div className="text-xs text-gray-400 dark:text-gray-500 mt-1 opacity-75">
               Searching for: {filters.searchText.split('||').map(term => term.trim()).filter(term => term.length > 0).length} terms
             </div>
           )}
