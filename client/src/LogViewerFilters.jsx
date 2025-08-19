@@ -108,7 +108,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
             </button>
 
             {isLevelDropdownOpen && (
-              <div className="absolute z-50 mt-1 w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg">
+              <div className="absolute z-10 mt-1 w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg">
                 <div className="py-1">
                   {[
                     { value: 'all', label: 'All Levels', color: 'text-gray-700 dark:text-gray-300' },

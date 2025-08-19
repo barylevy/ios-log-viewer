@@ -60,48 +60,78 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
 
   return (
     <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-600 p-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <img src="/cato-logo.svg" alt="Cato Networks" className="h-8 w-auto" />
-          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Cato Client Log Viewer</h1>
-        </div>
+      <div className="flex items-center justify-between flex-nowrap gap-4">
+        <div className="flex items-center space-x-3 min-w-0 flex-1">
+          <img src="/cato-logo.svg" alt="Cato Networks" className="h-8 w-auto flex-shrink-0" />
+          <div className="flex items-baseline space-x-3">
+            <h1 className="text-xl font-semibold text-gray-900 dark:text-white whitespace-nowrap">Cato Client Log Viewer</h1>
 
-        <div className="flex flex-col space-y-2">
-          {/* Display parsed headers from log files */}
-          {currentFileHeaders && Object.keys(currentFileHeaders).length > 0 && (
-            <div className="text-sm text-gray-600 dark:text-gray-300 text-right">
-              {currentFileHeaders.user && (
-                <div>User: {currentFileHeaders.user}</div>
-              )}
-              {currentFileHeaders.timestamp && (
-                <div>Timestamp: {currentFileHeaders.timestamp}</div>
-              )}
-              {currentFileHeaders.device && (
-                <div>Device: {currentFileHeaders.device}</div>
-              )}
-            </div>
-          )}
-
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={handleLoadFilesClick}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
-            >
-              Load Files
-            </button>
-
-            {hasLogs && (
-              <button
-                onClick={onToggleAIChat}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${showAIChat
-                    ? 'bg-red-600 hover:bg-red-700 text-white'
-                    : 'bg-green-600 hover:bg-green-700 text-white'
-                  }`}
-              >
-                {showAIChat ? 'Hide AI Chat' : 'Show AI Chat'}
-              </button>
+            {/* User Details - Baseline aligned with title */}
+            {currentFileHeaders && Object.keys(currentFileHeaders).length > 0 && (
+              <div className="flex items-baseline gap-3 text-sm text-gray-600 dark:text-gray-400">
+                {currentFileHeaders.user && (
+                  <>
+                    <span className="flex items-baseline gap-1">
+                      <span className="text-gray-500 dark:text-gray-500">User:</span>
+                      <span className="font-medium text-blue-600 dark:text-blue-400">{currentFileHeaders.user}</span>
+                    </span>
+                    {(currentFileHeaders.account || currentFileHeaders.clientVersion || currentFileHeaders.osVersion) && (
+                      <span className="text-gray-400">•</span>
+                    )}
+                  </>
+                )}
+                {currentFileHeaders.account && (
+                  <>
+                    <span className="flex items-baseline gap-1">
+                      <span className="text-gray-500 dark:text-gray-500">Account:</span>
+                      <span className="font-medium">{currentFileHeaders.account}</span>
+                    </span>
+                    {(currentFileHeaders.clientVersion || currentFileHeaders.osVersion) && (
+                      <span className="text-gray-400">•</span>
+                    )}
+                  </>
+                )}
+                {currentFileHeaders.clientVersion && (
+                  <>
+                    <span className="flex items-baseline gap-1">
+                      <span className="text-gray-500 dark:text-gray-500">Client:</span>
+                      <span className="font-medium">{currentFileHeaders.clientVersion}</span>
+                    </span>
+                    {currentFileHeaders.osVersion && (
+                      <span className="text-gray-400">•</span>
+                    )}
+                  </>
+                )}
+                {currentFileHeaders.osVersion && (
+                  <span className="flex items-baseline gap-1">
+                    <span className="text-gray-500 dark:text-gray-500">OS:</span>
+                    <span className="font-medium">{currentFileHeaders.osVersion}</span>
+                  </span>
+                )}
+              </div>
             )}
           </div>
+        </div>
+
+        <div className="flex items-center space-x-3 flex-shrink-0">
+          <button
+            onClick={handleLoadFilesClick}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+          >
+            Load Files
+          </button>
+
+          {hasLogs && (
+            <button
+              onClick={onToggleAIChat}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${showAIChat
+                ? 'bg-red-600 hover:bg-red-700 text-white'
+                : 'bg-green-600 hover:bg-green-700 text-white'
+                }`}
+            >
+              {showAIChat ? 'Hide AI Chat' : 'Show AI Chat'}
+            </button>
+          )}
         </div>
       </div>
 

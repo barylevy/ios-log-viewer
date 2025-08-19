@@ -301,39 +301,8 @@ const LogViewer = () => {
         onToggleAIChat={() => setShowAIChat(!showAIChat)}
         showAIChat={showAIChat}
         hasLogs={files.length > 0}
+        currentFileHeaders={currentFileHeaders}
       />
-
-      {/* Log File Headers - Display above tabs */}
-      {currentFileHeaders && Object.keys(currentFileHeaders).length > 0 && (
-        <div className="mx-4 mb-2">
-          <div className="flex items-center gap-6 text-sm text-gray-600">
-            {currentFileHeaders.user && (
-              <span className="flex items-center gap-1">
-                <span className="text-gray-500">User:</span>
-                <span className="font-medium">{currentFileHeaders.user}</span>
-              </span>
-            )}
-            {currentFileHeaders.account && (
-              <span className="flex items-center gap-1">
-                <span className="text-gray-500">Account:</span>
-                <span className="font-medium">{currentFileHeaders.account}</span>
-              </span>
-            )}
-            {currentFileHeaders.clientVersion && (
-              <span className="flex items-center gap-1">
-                <span className="text-gray-500">Client:</span>
-                <span className="font-medium">{currentFileHeaders.clientVersion}</span>
-              </span>
-            )}
-            {currentFileHeaders.osVersion && (
-              <span className="flex items-center gap-1">
-                <span className="text-gray-500">OS:</span>
-                <span className="font-medium">{currentFileHeaders.osVersion}</span>
-              </span>
-            )}
-          </div>
-        </div>
-      )}
 
       {files.length > 0 && (
         <LogTabs
