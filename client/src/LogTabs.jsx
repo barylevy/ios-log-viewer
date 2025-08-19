@@ -35,18 +35,16 @@ const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showCombin
                             <span className="text-xs text-gray-500 dark:text-gray-400">
                                 ({allFileLogs[file.name]?.length || 0} lines)
                             </span>
-                            {files.length > 1 && (
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onFileClose(index);
-                                    }}
-                                    className="ml-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-lg"
-                                    title="Close file"
-                                >
-                                    ×
-                                </button>
-                            )}
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onFileClose(index);
+                                }}
+                                className="ml-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-lg"
+                                title="Close file"
+                            >
+                                ×
+                            </button>
                         </div>
                     ))}
                 </div>
