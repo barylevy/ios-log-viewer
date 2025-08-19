@@ -13,65 +13,6 @@ const useLogsModel = () => {
     endTime: ''
   });
 
-  // Extract header information from log file
-  const extractLogFileHeaders = (content) => {
-    const lines = content.split('\n');
-    const headers = {};
-    const headerLineIndices = new Set(); // Track which lines are headers
-
-    // Look for header patterns in the first 10 lines
-    for (let i = 0; i < Math.min(10, lines.length); i++) {
-      const line = lines[i].trim();
-
-      let isHeaderLine = false;
-
-      // Extract User information - exact line matching
-      if (line.toLowerCase().startsWith('user:')) {
-        const userValue = line.substring(5).trim(); // Remove "user:" and trim
-        if (userValue) {
-          headers.user = userValue;
-          headerLineIndices.add(i);
-          isHeaderLine = true;
-        }
-      }
-
-      // Extract Account information - exact line matching
-      if (line.toLowerCase().startsWith('account:')) {
-        const accountValue = line.substring(8).trim(); // Remove "account:" and trim
-        if (accountValue) {
-          headers.account = accountValue;
-          headerLineIndices.add(i);
-          isHeaderLine = true;
-        }
-      }
-
-      // Extract Client version - exact line matching
-      if (line.toLowerCase().startsWith('client version:')) {
-        const clientValue = line.substring(15).trim(); // Remove "client version:" and trim
-        if (clientValue) {
-          headers.clientVersion = clientValue;
-          headerLineIndices.add(i);
-          isHeaderLine = true;
-        }
-      }
-
-      // Extract OS version - exact line matching
-      if (line.toLowerCase().startsWith('os version:')) {
-        const osValue = line.substring(11).trim(); // Remove "os version:" and trim
-        if (osValue) {
-          headers.osVersion = osValue;
-          headerLineIndices.add(i);
-          isHeaderLine = true;
-        }
-      }
-    }
-
-    return {
-      headers: Object.keys(headers).length > 0 ? headers : null,
-      headerLineIndices
-    };
-  };
-
   // Parse header information from log content
   const parseHeaderInfo = (content) => {
     const lines = content.split('\n');
