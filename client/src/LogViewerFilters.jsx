@@ -65,7 +65,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
     }
     return `${filters.logLevel.length} levels selected`;
   }; return (
-    <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-3">
+    <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-2 py-3">
       {/* Main filter row */}
       <div className="flex flex-wrap items-center gap-6">
         {/* Search Input */}

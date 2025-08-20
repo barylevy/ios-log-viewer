@@ -167,8 +167,8 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters, index }) => {
         <div className="flex-1 flex items-start justify-between gap-1 min-w-0">
           <div
             className={`text-xs break-words ${log.isContextLine
-                ? 'text-gray-600 dark:text-gray-400'
-                : 'text-gray-800 dark:text-gray-200'
+              ? 'text-gray-600 dark:text-gray-400'
+              : 'text-gray-800 dark:text-gray-200'
               }`}
             dangerouslySetInnerHTML={{ __html: highlightedMessage }}
           />
@@ -318,7 +318,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, filters }) => {
     <div className="h-full flex flex-col bg-white dark:bg-gray-900">
       {/* Fixed Date Header with Navigation - Outside of scroll container */}
       {currentStickyDate && (
-        <div className="flex-shrink-0 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2">
+        <div className="flex-shrink-0 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-1">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               {/* Previous Date Button */}
