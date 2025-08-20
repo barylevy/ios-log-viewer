@@ -228,20 +228,22 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
         </div>
 
         {/* Clear Filters */}
-        {(filters.searchText || !filters.logLevel.includes('all') || filters.startTime || filters.endTime || filters.contextLines) && (
-          <button
-            onClick={() => onFiltersChange({
-              searchText: '',
-              logLevel: ['all'],
-              startTime: '',
-              endTime: '',
-              contextLines: 0
-            })}
-            className="px-2 py-1.5 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors text-xs"
-          >
-            Clear Filters
-          </button>
-        )}
+        <button
+          onClick={() => onFiltersChange({
+            searchText: '',
+            logLevel: ['all'],
+            startTime: '',
+            endTime: '',
+            contextLines: 0
+          })}
+          disabled={!filters.searchText && filters.logLevel.includes('all') && !filters.startTime && !filters.endTime && !filters.contextLines}
+          className={`px-2 py-1.5 rounded-md transition-colors text-xs ${!filters.searchText && filters.logLevel.includes('all') && !filters.startTime && !filters.endTime && !filters.contextLines
+              ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+              : 'bg-gray-500 text-white hover:bg-gray-600 dark:bg-gray-600 dark:hover:bg-gray-500'
+            }`}
+        >
+          Clear Filters
+        </button>
       </div>
 
       {/* Stats */}
