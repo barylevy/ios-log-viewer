@@ -195,11 +195,25 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, filters }) => {
   const groupedLogs = useMemo(() => {
     if (!logs || logs.length === 0) return [];
 
+    // Filter out user details/header lines since they're shown in the header
+    const filteredLogs = logs.filter(log => {
+      const message = log.message || log.raw || '';
+      const trimmedMessage = message.trim();
+      
+      // Filter out header/user details lines
+      return !(
+        trimmedMessage.startsWith('User:') ||
+        trimmedMessage.startsWith('Account:') ||
+        trimmedMessage.startsWith('Client version:') ||
+        trimmedMessage.startsWith('OS version:')
+      );
+    });
+
     const groups = [];
     let currentDate = null;
     let currentGroup = [];
 
-    logs.forEach((log, index) => {
+    filteredLogs.forEach((log, index) => {
       const logDate = extractDateFromTimestamp(log.timestamp);
 
       // If this log has a date
