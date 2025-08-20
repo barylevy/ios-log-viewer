@@ -269,6 +269,7 @@ const LogViewer = () => {
         onLogClick={setSelectedLog}
         highlightedLogId={highlightedLogId}
         filters={filters}
+        onFiltersChange={updateFilters}
       />
     );
   }, [hasUserInteracted, files.length, filteredLogs, setSelectedLog, highlightedLogId, filters]);

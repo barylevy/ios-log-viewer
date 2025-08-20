@@ -143,6 +143,34 @@ const useLogsModel = () => {
     return threadMatch ? threadMatch[1] : '';
   };
 
+  // Normalize timestamps for comparison
+  const normalizeTimestamp = (timestamp) => {
+    if (!timestamp) return null;
+
+    try {
+      let date;
+
+      if (timestamp.includes('T')) {
+        // ISO format from datetime-local: 2025-08-02T23:54:57
+        date = new Date(timestamp);
+      } else if (timestamp.includes('-') && timestamp.includes(' ')) {
+        // Log format: 2025-08-02 23:54:57:514 or 2025-08-02 23:54:57
+        const cleanTimestamp = timestamp.replace(/:\d{3}$/, ''); // Remove milliseconds if present
+        date = new Date(cleanTimestamp.replace(' ', 'T'));
+      } else if (timestamp.includes(':')) {
+        // Time only: 23:54:57 - use today's date
+        const today = new Date().toISOString().split('T')[0];
+        date = new Date(`${today}T${timestamp}`);
+      } else {
+        return null;
+      }
+
+      return isNaN(date.getTime()) ? null : date;
+    } catch {
+      return null;
+    }
+  };
+
   // Pre-compile search terms and regexes for performance
   const searchData = useMemo(() => {
     if (!filters.searchText) return null;
@@ -194,13 +222,21 @@ const useLogsModel = () => {
         return;
       }
 
-      // Time range filters
-      if (filters.startTime && log.timestamp && log.timestamp < filters.startTime) {
-        return;
+      // Time range filters - convert to comparable timestamps
+      if (filters.startTime && log.timestamp) {
+        const logTime = normalizeTimestamp(log.timestamp);
+        const startTime = normalizeTimestamp(filters.startTime);
+        if (logTime && startTime && logTime < startTime) {
+          return;
+        }
       }
 
-      if (filters.endTime && log.timestamp && log.timestamp > filters.endTime) {
-        return;
+      if (filters.endTime && log.timestamp) {
+        const logTime = normalizeTimestamp(log.timestamp);
+        const endTime = normalizeTimestamp(filters.endTime);
+        if (logTime && endTime && logTime > endTime) {
+          return;
+        }
       }
 
       // This log matches all filters
@@ -233,7 +269,7 @@ const useLogsModel = () => {
     // Convert set to sorted array and return the corresponding logs with metadata
     const sortedIndices = Array.from(includedIndices).sort((a, b) => a - b);
     const matchingIndicesSet = new Set(matchingLogIndices);
-    
+
     return sortedIndices.map(index => ({
       ...logs[index],
       isContextLine: !matchingIndicesSet.has(index)

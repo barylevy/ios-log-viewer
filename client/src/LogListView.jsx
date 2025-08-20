@@ -94,7 +94,9 @@ const cleanMessage = (message) => {
   return cleaned.trim();
 };
 
-const LogItem = memo(({ log, onClick, isHighlighted, filters, index }) => {
+const LogItem = memo(({ log, onClick, isHighlighted, filters, index, onFiltersChange }) => {
+  const [contextMenu, setContextMenu] = useState(null);
+
   // Process the log message and extract file info - memoized by log.id to prevent recalculation
   const cleanedMessage = useMemo(() => cleanMessage(log.message), [log.message]);
   const fileInfo = useMemo(() => extractFileInfo(log), [log.message, log.timestamp]);
@@ -139,55 +141,153 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters, index }) => {
     trace: 'text-purple-600 dark:text-purple-400'
   }[logLevel];
 
+  // Handle right-click context menu
+  const handleContextMenu = useCallback((e) => {
+    e.preventDefault();
+    if (log.timestamp) {
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        timestamp: log.timestamp
+      });
+    }
+  }, [log.timestamp]);
+
+  // Close context menu when clicking elsewhere
+  useEffect(() => {
+    const handleClickOutside = () => setContextMenu(null);
+    if (contextMenu) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [contextMenu]);
+
+  // Convert timestamp to datetime-local format
+  const formatTimestampForInput = (timestamp) => {
+    if (!timestamp) return '';
+
+    // Handle different timestamp formats
+    let date;
+    if (timestamp.includes('T')) {
+      // ISO format: 2025-08-02T23:54:57
+      date = new Date(timestamp);
+    } else if (timestamp.includes('-') && timestamp.includes(' ')) {
+      // Format: 2025-08-02 23:54:57:514
+      const cleanTimestamp = timestamp.replace(/:\d{3}$/, ''); // Remove milliseconds
+      date = new Date(cleanTimestamp.replace(' ', 'T'));
+    } else if (timestamp.includes(':')) {
+      // Time only: 23:54:57 - use today's date
+      const today = new Date().toISOString().split('T')[0];
+      date = new Date(`${today}T${timestamp}`);
+    } else {
+      return '';
+    }
+
+    if (isNaN(date.getTime())) return '';
+
+    // Format for datetime-local input (YYYY-MM-DDTHH:mm:ss) using local time
+    // Avoid toISOString() which converts to UTC - use local time instead
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+  };
+
+  // Set as from filter
+  const setAsFromFilter = () => {
+    const formattedTime = formatTimestampForInput(log.timestamp);
+    if (formattedTime && onFiltersChange) {
+      onFiltersChange({ startTime: formattedTime });
+    }
+    setContextMenu(null);
+  };
+
+  // Set as to filter
+  const setAsToFilter = () => {
+    const formattedTime = formatTimestampForInput(log.timestamp);
+    if (formattedTime && onFiltersChange) {
+      onFiltersChange({ endTime: formattedTime });
+    }
+    setContextMenu(null);
+  };
+
   return (
-    <div
-      className={`border-b border-gray-100 dark:border-gray-800 px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors ${isHighlighted ? 'bg-blue-50 dark:bg-blue-900 border-blue-200 dark:border-blue-700' : ''
-        } ${log.isContextLine ? 'bg-gray-50 dark:bg-gray-850 opacity-75' : ''}`}
-      onClick={() => onClick(log)}
-    >
-      <div className="flex items-start gap-2">
-        {/* Timestamp */}
-        <div className="flex-shrink-0 text-xs text-gray-500 dark:text-gray-400 font-mono min-w-14">
-          {timeInfo}
-        </div>
-
-        {/* Log Level Indicator */}
-        <div className={`flex-shrink-0 text-xs font-semibold uppercase min-w-8 ${logLevelColor}`}>
-          {logLevel.charAt(0).toUpperCase()}
-        </div>
-
-        {/* Context Line Indicator */}
-        {log.isContextLine && (
-          <div className="flex-shrink-0 text-xs text-gray-400 dark:text-gray-500 font-mono">
-            ~
+    <>
+      <div
+        className={`border-b border-gray-100 dark:border-gray-800 px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors ${isHighlighted ? 'bg-blue-50 dark:bg-blue-900 border-blue-200 dark:border-blue-700' : ''
+          } ${log.isContextLine ? 'bg-gray-50 dark:bg-gray-850 opacity-75' : ''}`}
+        onClick={() => onClick(log)}
+        onContextMenu={handleContextMenu}
+      >
+        <div className="flex items-start gap-2">
+          {/* Timestamp */}
+          <div className="flex-shrink-0 text-xs text-gray-500 dark:text-gray-400 font-mono min-w-14">
+            {timeInfo}
           </div>
-        )}
 
-        {/* Message content */}
-        <div className="flex-1 flex items-start justify-between gap-1 min-w-0">
-          <div
-            className={`text-xs break-words ${log.isContextLine
-              ? 'text-gray-600 dark:text-gray-400'
-              : 'text-gray-800 dark:text-gray-200'
-              }`}
-            dangerouslySetInnerHTML={{ __html: highlightedMessage }}
-          />
+          {/* Log Level Indicator */}
+          <div className={`flex-shrink-0 text-xs font-semibold uppercase min-w-8 ${logLevelColor}`}>
+            {logLevel.charAt(0).toUpperCase()}
+          </div>
 
-          {/* File info at the end */}
-          {fileInfo && (
+          {/* Context Line Indicator */}
+          {log.isContextLine && (
             <div className="flex-shrink-0 text-xs text-gray-400 dark:text-gray-500 font-mono">
-              {fileInfo}
+              ~
             </div>
           )}
+
+          {/* Message content */}
+          <div className="flex-1 flex items-start justify-between gap-1 min-w-0">
+            <div
+              className={`text-xs break-words ${log.isContextLine
+                ? 'text-gray-600 dark:text-gray-400'
+                : 'text-gray-800 dark:text-gray-200'
+                }`}
+              dangerouslySetInnerHTML={{ __html: highlightedMessage }}
+            />
+
+            {/* File info at the end */}
+            {fileInfo && (
+              <div className="flex-shrink-0 text-xs text-gray-400 dark:text-gray-500 font-mono">
+                {fileInfo}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1 min-w-48"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <button
+            onClick={setAsFromFilter}
+            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+          >
+            Set as "From" time filter
+          </button>
+          <button
+            onClick={setAsToFilter}
+            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+          >
+            Set as "To" time filter
+          </button>
+        </div>
+      )}
+    </>
   );
 });
 
 LogItem.displayName = 'LogItem';
 
-const LogListView = ({ logs, onLogClick, highlightedLogId, filters }) => {
+const LogListView = ({ logs, onLogClick, highlightedLogId, filters, onFiltersChange }) => {
   const virtuosoRef = useRef(null);
   const [currentStickyDate, setCurrentStickyDate] = useState(null);
 
@@ -199,7 +299,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, filters }) => {
     const filteredLogs = logs.filter(log => {
       const message = log.message || log.raw || '';
       const trimmedMessage = message.trim();
-      
+
       // Filter out header/user details lines
       return !(
         trimmedMessage.startsWith('User:') ||
@@ -393,6 +493,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, filters }) => {
               isHighlighted={highlightedLogId === log.id}
               filters={filters}
               index={index}
+              onFiltersChange={onFiltersChange}
             />
           )}
           rangeChanged={handleRangeChanged}
