@@ -111,9 +111,22 @@ const AIChat = ({ logs, fileName, isOpen, onClose }) => {
             }
 
             const logContext = logs.slice(0, 50).map((log, index) => {
-                const text = typeof log === 'string' ? log : log.message || log.raw || JSON.stringify(log);
+                // More robust text extraction
+                let text = '';
+                if (typeof log === 'string') {
+                    text = log;
+                } else if (log && typeof log === 'object') {
+                    // Try different possible properties
+                    text = log.message || log.raw || log.content || log.text || log.line || JSON.stringify(log);
+                } else {
+                    text = String(log);
+                }
                 return `[${index + 1}] ${text}`;
             }).join('\n');
+
+            const systemMessage = logContext.length > 0 
+                ? `You are a log analysis assistant. Here are the logs from file "${fileName}":\n\n${logContext}\n\nAnalyze these logs and answer questions about them.`
+                : `You are a log analysis assistant. The user is asking about logs from file "${fileName}", but no log content was provided. Please ask them to load some logs first.`;
 
             const response = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
@@ -126,7 +139,7 @@ const AIChat = ({ logs, fileName, isOpen, onClose }) => {
                     messages: [
                         {
                             role: "system",
-                            content: `You are a log analysis assistant. Here are the logs:\n${logContext}`
+                            content: systemMessage
                         },
                         { role: "user", content: userMessage }
                     ],

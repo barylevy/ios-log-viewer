@@ -234,13 +234,14 @@ const LogViewer = () => {
         fileName: `Combined Files (${files.map(f => f.name).join(', ')})`
       };
     } else if (files[activeFileIndex]) {
+      // Use the current logs from useLogsModel, which should be the active file's logs
       return {
-        logs: allFileLogs[files[activeFileIndex].name] || [],
+        logs: logs || [],
         fileName: files[activeFileIndex].name
       };
     }
     return { logs: [], fileName: 'No File' };
-  }, [files, activeFileIndex, showingCombinedView, allFileLogs]);
+  }, [files, activeFileIndex, showingCombinedView, allFileLogs, logs]);
 
   const memoizedContent = useMemo(() => {
     if (!hasUserInteracted) {
