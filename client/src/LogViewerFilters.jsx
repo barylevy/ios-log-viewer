@@ -66,10 +66,11 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
     return `${filters.logLevel.length} levels selected`;
   }; return (
     <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-3">
+      {/* Main filter row */}
       <div className="flex flex-wrap items-center gap-6">
         {/* Search Input */}
-        <div className="flex-1 min-w-64">
-          <div className="relative">
+        <div className="flex-1 min-w-64 flex items-center">
+          <div className="relative w-full">
             <input
               type="text"
               placeholder="Search logs... (use || to separate multiple terms)"
@@ -138,8 +139,8 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
         </div>
 
         {/* Time Range */}
-        <div className={`flex items-center gap-2 ${(filters.startTime || filters.endTime) ? 'px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md' : ''}`}>
-          <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Date:</label>
+        <div className={`flex items-center gap-2 min-w-fit rounded-md ${(filters.startTime || filters.endTime) ? 'px-3 bg-gray-100 dark:bg-gray-600' : ''}`}>
+          <label className="text-xs font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">Date:</label>
           <select
             onChange={(e) => {
               const value = e.target.value;
@@ -238,8 +239,8 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
           })}
           disabled={!filters.searchText && filters.logLevel.includes('all') && !filters.startTime && !filters.endTime && !filters.contextLines}
           className={`px-2 py-1.5 rounded-md transition-colors text-xs ${!filters.searchText && filters.logLevel.includes('all') && !filters.startTime && !filters.endTime && !filters.contextLines
-              ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-              : 'bg-gray-500 text-white hover:bg-gray-600 dark:bg-gray-600 dark:hover:bg-gray-500'
+            ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+            : 'bg-gray-500 text-white hover:bg-gray-600 dark:bg-gray-600 dark:hover:bg-gray-500'
             }`}
         >
           Clear Filters
