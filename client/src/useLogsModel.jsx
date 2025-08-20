@@ -1,4 +1,24 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
+
+// Generate unique file identifier
+const getFileIdentifier = (file) => {
+  // Priority order for file identification:
+  // 1. Full path if available (webkitRelativePath or path property)
+  // 2. File name with last modified time for uniqueness
+  // 3. File name only as fallback
+
+  if (file.webkitRelativePath && file.webkitRelativePath !== '') {
+    return file.webkitRelativePath;
+  }
+
+  // For drag-and-drop files, try to use the file name with size and modified date for uniqueness
+  if (file.lastModified && file.size) {
+    return `${file.name}_${file.size}_${file.lastModified}`;
+  }
+
+  // Fallback to just the file name
+  return file.name;
+};
 
 const useLogsModel = () => {
   const [logs, setLogs] = useState([]);
@@ -6,6 +26,17 @@ const useLogsModel = () => {
   const [highlightedLogId, setHighlightedLogId] = useState(null);
   const [logFileHeaders, setLogFileHeaders] = useState({});
   const [allFileLogs, setAllFileLogs] = useState({}); // Store logs per file
+  const [allFileFilters, setAllFileFilters] = useState(() => {
+    // Load saved filters from localStorage on initial load
+    try {
+      const saved = localStorage.getItem('logViewerFilters');
+      return saved ? JSON.parse(saved) : {};
+    } catch (error) {
+      console.error('Failed to load saved filters:', error);
+      return {};
+    }
+  }); // Store filters per file
+  const [currentFileName, setCurrentFileName] = useState(null); // Track current file
   const [filters, setFilters] = useState({
     searchText: '',
     logLevel: ['all'], // Array to support multiple levels
@@ -13,6 +44,39 @@ const useLogsModel = () => {
     endTime: '',
     contextLines: 0
   });
+
+  // Load filters when current file changes
+  useEffect(() => {
+    if (currentFileName && allFileFilters[currentFileName]) {
+      setFilters({ ...allFileFilters[currentFileName] });
+    }
+  }, [currentFileName, allFileFilters]);
+
+  // Save filters to localStorage whenever allFileFilters changes
+  useEffect(() => {
+    try {
+      // Clean up old entries if we have too many (keep only last 50 files)
+      const entries = Object.entries(allFileFilters);
+      if (entries.length > 50) {
+        const recentEntries = entries.slice(-50);
+        const cleanedFilters = Object.fromEntries(recentEntries);
+        localStorage.setItem('logViewerFilters', JSON.stringify(cleanedFilters));
+      } else {
+        localStorage.setItem('logViewerFilters', JSON.stringify(allFileFilters));
+      }
+    } catch (error) {
+      console.error('Failed to save filters to localStorage:', error);
+      // If localStorage is full, clear old data and try again
+      if (error.name === 'QuotaExceededError') {
+        try {
+          localStorage.removeItem('logViewerFilters');
+          localStorage.setItem('logViewerFilters', JSON.stringify({}));
+        } catch (clearError) {
+          console.error('Failed to clear localStorage:', clearError);
+        }
+      }
+    }
+  }, [allFileFilters]);
 
   // Parse header information from log content
   const parseHeaderInfo = (content) => {
@@ -47,12 +111,15 @@ const useLogsModel = () => {
     reader.onload = (e) => {
       const content = e.target.result;
 
+      // Create unique file identifier
+      const fileId = getFileIdentifier(file);
+
       // Parse header information from start of file
       const { headerData, headerLines } = parseHeaderInfo(content);
 
       // Store headers for this file - smart merge logic
       setLogFileHeaders(prev => {
-        const existingHeaders = prev[file.name] || {};
+        const existingHeaders = prev[fileId] || {};
         const hasNewHeaders = headerData && Object.keys(headerData).length > 0;
         const hasExistingHeaders = Object.keys(existingHeaders).length > 0;
 
@@ -65,7 +132,7 @@ const useLogsModel = () => {
         if (hasNewHeaders) {
           return {
             ...prev,
-            [file.name]: headerData
+            [fileId]: headerData
           };
         }
 
@@ -97,8 +164,11 @@ const useLogsModel = () => {
       // Store logs for this specific file
       setAllFileLogs(prev => ({
         ...prev,
-        [file.name]: parsedLogs
+        [fileId]: parsedLogs
       }));
+
+      // Set current file name using the unique identifier
+      setCurrentFileName(fileId);
 
       setLogs(parsedLogs);
       setSelectedLog(null);
@@ -275,9 +345,23 @@ const useLogsModel = () => {
       ...logs[index],
       isContextLine: !matchingIndicesSet.has(index)
     }));
-  }, [logs, searchData, filters.logLevel, filters.startTime, filters.endTime, filters.contextLines]); const updateFilters = useCallback((newFilters) => {
-    setFilters(prev => ({ ...prev, ...newFilters }));
-  }, []);
+  }, [logs, searchData, filters.logLevel, filters.startTime, filters.endTime, filters.contextLines]);
+
+  const updateFilters = useCallback((newFilters) => {
+    setFilters(prev => {
+      const updatedFilters = { ...prev, ...newFilters };
+
+      // Save filters for current file if we have one
+      if (currentFileName) {
+        setAllFileFilters(prevFileFilters => ({
+          ...prevFileFilters,
+          [currentFileName]: updatedFilters
+        }));
+      }
+
+      return updatedFilters;
+    });
+  }, [currentFileName]);
 
   const highlightLog = useCallback((logId) => {
     setHighlightedLogId(logId);
@@ -320,22 +404,83 @@ const useLogsModel = () => {
         ...prev,
         [fileName]: processedLogs
       }));
+
+      // Set current file name
+      setCurrentFileName(fileName);
+
+      // Load filters for this file if they exist, otherwise use default filters
+      const defaultFilters = {
+        searchText: '',
+        logLevel: ['all'],
+        startTime: '',
+        endTime: '',
+        contextLines: 0
+      };
+
+      const fileFilters = allFileFilters[fileName];
+      setFilters(fileFilters ? { ...fileFilters } : defaultFilters);
+
       setLogs(processedLogs);
       setSelectedLog(null);
       setHighlightedLogId(null);
     } catch (error) {
       console.error('❌ Error in setLogsForFile:', error);
     }
-  }, []);
+  }, [allFileFilters]);
 
   // Switch to show logs for a specific file
   const switchToFile = useCallback((fileName) => {
     const fileLogs = allFileLogs[fileName] || [];
 
+    // Set current file name
+    setCurrentFileName(fileName);
+
+    // Load filters for this file if they exist, otherwise use default filters
+    const defaultFilters = {
+      searchText: '',
+      logLevel: ['all'],
+      startTime: '',
+      endTime: '',
+      contextLines: 0
+    };
+
+    const fileFilters = allFileFilters[fileName];
+    setFilters(fileFilters ? { ...fileFilters } : defaultFilters);
+
     setLogs(fileLogs);
     setSelectedLog(null);
     setHighlightedLogId(null);
-  }, [allFileLogs]);
+  }, [allFileLogs, allFileFilters]);
+
+  // Clear all saved filters from localStorage
+  const clearSavedFilters = useCallback(() => {
+    try {
+      localStorage.removeItem('logViewerFilters');
+      setAllFileFilters({});
+    } catch (error) {
+      console.error('Failed to clear saved filters:', error);
+    }
+  }, []);
+
+  // Get display name from file identifier
+  const getFileDisplayName = useCallback((fileId) => {
+    if (!fileId) return '';
+
+    // If it contains the size and timestamp pattern, extract just the filename
+    const sizeTimestampPattern = /^(.+)_\d+_\d+$/;
+    const match = fileId.match(sizeTimestampPattern);
+    if (match) {
+      return match[1]; // Return just the filename part
+    }
+
+    // If it's a path, return just the filename
+    if (fileId.includes('/')) {
+      return fileId.split('/').pop();
+    }
+
+    // Otherwise return as-is
+    return fileId;
+  }, []);
 
   return {
     logs,
@@ -345,6 +490,8 @@ const useLogsModel = () => {
     highlightedLogId,
     logFileHeaders,
     allFileLogs,
+    allFileFilters,
+    currentFileName,
     loadLogs,
     setSelectedLog,
     updateFilters,
@@ -352,7 +499,9 @@ const useLogsModel = () => {
     clearHighlight,
     getCurrentFileHeaders,
     setLogsForFile,
-    switchToFile
+    switchToFile,
+    clearSavedFilters,
+    getFileDisplayName
   };
 };
 

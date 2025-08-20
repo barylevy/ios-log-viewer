@@ -19,9 +19,6 @@ const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCom
                             }}
                         >
                             <span className="text-sm font-medium">{file.name}</span>
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
-                                ({allFileLogs[file.name]?.length || 0} lines)
-                            </span>
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
@@ -48,9 +45,6 @@ const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCom
                             }}
                         >
                             <span className="text-sm font-medium">All Files</span>
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
-                                ({files.reduce((total, file) => total + (allFileLogs[file.name]?.length || 0), 0)} total lines)
-                            </span>
                         </div>
                     )}
                 </div>
