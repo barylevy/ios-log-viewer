@@ -164,6 +164,19 @@ const AIChat = ({ logs, fileName, isOpen, onClose }) => {
         }
     };
 
+    const handleKeyDown = (e) => {
+        if (e.key === 'Enter') {
+            if (e.metaKey || e.ctrlKey) {
+                // Cmd+Enter or Ctrl+Enter: allow new line (default behavior)
+                return;
+            } else {
+                // Enter: send message
+                e.preventDefault();
+                sendMessage();
+            }
+        }
+    };
+
     return (
         <div className="h-full flex flex-col bg-white dark:bg-gray-900">
             <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
@@ -239,7 +252,8 @@ const AIChat = ({ logs, fileName, isOpen, onClose }) => {
                         <textarea
                             value={inputMessage}
                             onChange={(e) => setInputMessage(e.target.value)}
-                            placeholder="Ask about the logs..."
+                            onKeyDown={handleKeyDown}
+                            placeholder="Ask about the logs... (Enter to send, Cmd+Enter for new line)"
                             className="flex-1 p-2 border border-gray-300 dark:border-gray-600 rounded resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                             rows="3"
                             disabled={isLoading}

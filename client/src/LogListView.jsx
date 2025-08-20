@@ -236,8 +236,8 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters, index, onFiltersCh
         <div className="flex items-start gap-2">
           {/* Timestamp */}
           <div className={`flex-shrink-0 text-xs font-mono min-w-14 ${timeInfo === '--:--:--.---'
-              ? 'text-gray-300 dark:text-gray-600 opacity-50'
-              : 'text-gray-500 dark:text-gray-400'
+            ? 'text-gray-300 dark:text-gray-600 opacity-50'
+            : 'text-gray-500 dark:text-gray-400'
             }`}>
             {timeInfo}
           </div>
