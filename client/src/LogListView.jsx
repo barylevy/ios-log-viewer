@@ -1,6 +1,7 @@
 import React, { memo, useMemo, useState, useRef, useCallback, useEffect } from 'react';
+import { Virtuoso } from 'react-virtuoso';
 
-// Helper functions for date handling
+// Helper functions for date handling (same as before)
 const extractDateFromTimestamp = (timestamp) => {
   if (!timestamp) return null;
 
@@ -99,109 +100,78 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters, index }) => {
   const fileInfo = useMemo(() => extractFileInfo(log), [log.message, log.timestamp]);
   const timeInfo = useMemo(() => extractTimeFromTimestamp(log.timestamp || log.message) || '--:--:--', [log.timestamp, log.message]);
 
-  // Pre-compile search regex for highlighting - memoized by search text
-  const highlightRegex = useMemo(() => {
-    if (!filters.searchText) return null;
-
-    try {
-      const searchTerms = filters.searchText.split('||')
-        .map(term => term.trim())
-        .filter(term => term.length > 0);
-      const escapedTerms = searchTerms.map(term => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-      const combinedPattern = `(${escapedTerms.join('|')})`;
-      return new RegExp(combinedPattern, 'gi');
-    } catch {
-      return null;
-    }
-  }, [filters.searchText]);
-
-  // Memoize highlighted text to avoid recalculation on every render
+  // Apply search highlighting if there's a search term
   const highlightedMessage = useMemo(() => {
-    if (!highlightRegex) return cleanedMessage;
+    if (!filters.searchText) return cleanedMessage;
 
-    try {
-      return cleanedMessage.split(highlightRegex).map((part, index) => {
-        // Reset regex for test since split consumes it
-        highlightRegex.lastIndex = 0;
-        if (highlightRegex.test(part)) {
-          return (
-            <mark
-              key={index}
-              className="bg-yellow-200 dark:bg-yellow-800 text-yellow-900 dark:text-yellow-100"
-            >
-              {part}
-            </mark>
-          );
-        }
-        return part;
-      });
-    } catch {
-      return cleanedMessage;
-    }
-  }, [cleanedMessage, highlightRegex]);
+    const searchTerms = filters.searchText
+      .split('||')
+      .map(term => term.trim())
+      .filter(term => term.length > 0);
 
-  // Memoize the level indicator class to prevent recalculation
-  const levelClass = useMemo(() => {
-    const baseClass = 'w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0 ';
-    switch (log.level) {
-      case 'error': return baseClass + 'bg-red-500';
-      case 'warning': return baseClass + 'bg-yellow-500';
-      case 'info': return baseClass + 'bg-blue-500';
-      case 'debug': return baseClass + 'bg-green-500';
-      default: return baseClass + 'bg-gray-500';
-    }
-  }, [log.level]);
+    if (searchTerms.length === 0) return cleanedMessage;
 
-  // Memoize the click handler to prevent function recreation
-  const handleClick = useCallback(() => onClick(log), [onClick, log]);
+    let highlighted = cleanedMessage;
+    searchTerms.forEach(term => {
+      const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+      highlighted = highlighted.replace(regex, '<mark class="bg-yellow-200 dark:bg-yellow-600">$1</mark>');
+    });
 
-  // Determine if this is an odd or even line for alternating background
-  const isOddLine = index % 2 === 1;
+    return highlighted;
+  }, [cleanedMessage, filters.searchText]);
 
-  // Different styling for context lines vs matching lines
-  const getBackgroundClass = () => {
-    if (log.isContextLine) {
-      // Context lines have more muted background
-      return isOddLine
-        ? 'bg-gray-50/30 dark:bg-gray-800/15'
-        : 'bg-gray-50/10 dark:bg-gray-800/5';
-    } else {
-      // Matching lines have normal background
-      return isOddLine
-        ? 'bg-gray-50/50 dark:bg-gray-800/30'
-        : 'bg-white dark:bg-gray-900';
-    }
-  };
+  // Determine log level for styling
+  const logLevel = useMemo(() => {
+    const message = (log.message || '').toLowerCase();
+    if (message.includes('error') || message.includes('err') || message.includes('fail')) return 'error';
+    if (message.includes('warn') || message.includes('warning')) return 'warning';
+    if (message.includes('info') || message.includes('information')) return 'info';
+    if (message.includes('debug') || message.includes('dbg')) return 'debug';
+    if (message.includes('trace') || message.includes('verbose')) return 'trace';
+    return 'info'; // default
+  }, [log.message]);
+
+  const logLevelColor = {
+    error: 'text-red-600 dark:text-red-400',
+    warning: 'text-yellow-600 dark:text-yellow-500',
+    info: 'text-blue-600 dark:text-blue-400',
+    debug: 'text-green-600 dark:text-green-400',
+    trace: 'text-purple-600 dark:text-purple-400'
+  }[logLevel];
 
   return (
     <div
-      onClick={handleClick}
-      className={`px-3 py-1 border-b border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${getBackgroundClass()} ${isHighlighted ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''
-        } ${log.isContextLine ? 'opacity-75' : ''}`}
+      className={`border-b border-gray-100 dark:border-gray-800 px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors ${isHighlighted ? 'bg-blue-50 dark:bg-blue-900 border-blue-200 dark:border-blue-700' : ''
+        } ${log.isContextLine ? 'bg-gray-50 dark:bg-gray-850 opacity-75' : ''}`}
+      onClick={() => onClick(log)}
     >
-      <div className="flex items-start gap-3">
-        {/* Time only */}
-        <div className="flex-shrink-0 w-20">
-          <span className={`text-xs font-mono ${log.isContextLine
-              ? 'text-gray-400 dark:text-gray-500'
-              : 'text-gray-500 dark:text-gray-400'
-            }`}>
-            {timeInfo}
-          </span>
+      <div className="flex items-start gap-2">
+        {/* Timestamp */}
+        <div className="flex-shrink-0 text-xs text-gray-500 dark:text-gray-400 font-mono min-w-14">
+          {timeInfo}
         </div>
 
-        {/* Level indicator */}
-        <div className={levelClass} />
+        {/* Log Level Indicator */}
+        <div className={`flex-shrink-0 text-xs font-semibold uppercase min-w-8 ${logLevelColor}`}>
+          {logLevel.charAt(0).toUpperCase()}
+        </div>
 
-        {/* Log content with file info */}
-        <div className="flex-1 min-w-0 flex justify-between items-start">
-          {/* Log message */}
-          <div className={`font-mono text-sm break-words flex-1 mr-2 ${log.isContextLine
-              ? 'text-gray-600 dark:text-gray-400'
-              : 'text-gray-800 dark:text-gray-200'
-            }`}>
-            {highlightedMessage}
+        {/* Context Line Indicator */}
+        {log.isContextLine && (
+          <div className="flex-shrink-0 text-xs text-gray-400 dark:text-gray-500 font-mono">
+            ~
           </div>
+        )}
+
+        {/* Message content */}
+        <div className="flex-1 flex items-start justify-between gap-1 min-w-0">
+          <div
+            className={`text-xs break-words ${log.isContextLine
+                ? 'text-gray-600 dark:text-gray-400'
+                : 'text-gray-800 dark:text-gray-200'
+              }`}
+            dangerouslySetInnerHTML={{ __html: highlightedMessage }}
+          />
 
           {/* File info at the end */}
           {fileInfo && (
@@ -213,46 +183,23 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters, index }) => {
       </div>
     </div>
   );
-}, (prevProps, nextProps) => {
-  // Custom comparison function for better performance
-  return (
-    prevProps.log.id === nextProps.log.id &&
-    prevProps.isHighlighted === nextProps.isHighlighted &&
-    prevProps.filters.searchText === nextProps.filters.searchText &&
-    prevProps.onClick === nextProps.onClick
-  );
 });
 
 LogItem.displayName = 'LogItem';
 
 const LogListView = ({ logs, onLogClick, highlightedLogId, filters }) => {
-  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 100 });
-  const [scrollTop, setScrollTop] = useState(0);
-  const containerRef = useRef(null);
-  const itemHeight = 50; // Height per log item
-
-  // Reset visible range when logs change (but keep scroll position)
-  useEffect(() => {
-    // Only reset the visible range calculation, not the scroll position
-    setVisibleRange(prev => ({ start: 0, end: Math.max(100, prev.end) }));
-  }, [logs]);
-
-  // Create a key that changes when logs change to force re-render
-  const logsKey = useMemo(() => {
-    return logs && logs.length > 0 ? `${logs.length}-${logs[0]?.id || ''}-${logs[logs.length - 1]?.id || ''}` : 'no-logs';
-  }, [logs]);
-
-  const memoizedLogs = useMemo(() => logs, [logs]);
+  const virtuosoRef = useRef(null);
+  const [currentStickyDate, setCurrentStickyDate] = useState(null);
 
   // Group logs by date for sticky headers
   const groupedLogs = useMemo(() => {
-    if (!memoizedLogs || memoizedLogs.length === 0) return [];
+    if (!logs || logs.length === 0) return [];
 
     const groups = [];
     let currentDate = null;
     let currentGroup = [];
 
-    memoizedLogs.forEach((log, index) => {
+    logs.forEach((log, index) => {
       const logDate = extractDateFromTimestamp(log.timestamp);
 
       // If this log has a date
@@ -286,157 +233,77 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, filters }) => {
     }
 
     return groups;
-  }, [memoizedLogs]);
+  }, [logs]);
 
-  // Flatten for virtual scrolling - only logs, no separators
-  const virtualItems = useMemo(() => {
+  // Flatten for React Virtuoso - only logs, no separators
+  const flatLogs = useMemo(() => {
     if (!groupedLogs || groupedLogs.length === 0) return [];
 
     const items = [];
-
     groupedLogs.forEach(group => {
-      // Add logs from this group (no date separators)
+      // Add logs from this group with date metadata
       group.logs.forEach(log => {
         items.push({
-          type: 'log',
-          log,
-          date: group.date, // Store date for sticky header calculation
-          id: `log-${log.originalIndex}`,
-          height: itemHeight
+          ...log,
+          date: group.date // Store date for sticky header calculation
         });
       });
     });
 
     return items;
-  }, [groupedLogs, itemHeight]);
+  }, [groupedLogs]);
 
-  // Find current sticky date based on scroll position
-  const currentStickyDate = useMemo(() => {
-    if (!virtualItems.length) return null;
-
-    let currentHeight = 0;
-    let currentIndex = 0;
-
-    // Find which log we're currently looking at
-    for (let i = 0; i < virtualItems.length; i++) {
-      const item = virtualItems[i];
-
-      if (currentHeight + item.height > scrollTop) {
-        currentIndex = i;
-        break;
+  // Get all unique dates in chronological order
+  const allDates = useMemo(() => {
+    const uniqueDates = new Set();
+    groupedLogs.forEach(group => {
+      if (group.date) {
+        uniqueDates.add(group.date);
       }
-
-      currentHeight += item.height;
-    }
-
-    // If we've scrolled past all items, use the last item
-    if (currentIndex >= virtualItems.length) {
-      currentIndex = virtualItems.length - 1;
-    }
-
-    // Try to get date from current item
-    let foundDate = virtualItems[currentIndex]?.date;
-
-    // If current item doesn't have a date, search around it
-    if (!foundDate || foundDate === null) {
-      // Search backwards first (higher priority for previous dates)
-      for (let i = currentIndex - 1; i >= 0; i--) {
-        const date = virtualItems[i]?.date;
-        if (date && date !== null) {
-          foundDate = date;
-          break;
-        }
-      }
-
-      // If still no date found, search forwards
-      if (!foundDate || foundDate === null) {
-        for (let i = currentIndex + 1; i < virtualItems.length; i++) {
-          const date = virtualItems[i]?.date;
-          if (date && date !== null) {
-            foundDate = date;
-            break;
-          }
-        }
-      }
-    }
-
-    return foundDate || null;
-  }, [virtualItems, scrollTop]);
-
-  // Memoized height calculations for virtual scrolling performance
-  const itemHeights = useMemo(() => {
-    if (!virtualItems || virtualItems.length === 0) return { heights: [], totalHeight: 0 };
-
-    const heights = [];
-    let accumulated = 0;
-    virtualItems.forEach((item, index) => {
-      const height = item?.height || itemHeight;
-      heights[index] = { height, accumulated };
-      accumulated += height;
     });
-    return { heights, totalHeight: accumulated };
-  }, [virtualItems, itemHeight]);
+    return Array.from(uniqueDates).sort();
+  }, [groupedLogs]);
 
-  // Update visible range and scroll position based on scroll
-  const handleScroll = useCallback(() => {
-    if (!containerRef.current) return;
+  // Find current date index for navigation
+  const currentDateIndex = useMemo(() => {
+    if (!currentStickyDate || !allDates.length) return -1;
+    return allDates.indexOf(currentStickyDate);
+  }, [currentStickyDate, allDates]);
 
-    const { scrollTop: newScrollTop, clientHeight } = containerRef.current;
-    setScrollTop(newScrollTop);
+  // Navigation functions
+  const scrollToDate = useCallback((targetDate) => {
+    if (!virtuosoRef.current || !targetDate) return;
 
-    const { heights } = itemHeights;
-    let start = 0;
-    let end = virtualItems.length;
+    // Find the first log with this date
+    const targetIndex = flatLogs.findIndex(log => log.date === targetDate);
+    if (targetIndex >= 0) {
+      virtuosoRef.current.scrollToIndex({ index: targetIndex, align: 'start' });
+    }
+  }, [flatLogs]);
 
-    // Binary search for start position (more efficient for large lists)
-    let left = 0, right = heights.length - 1;
-    while (left <= right) {
-      const mid = Math.floor((left + right) / 2);
-      if (heights[mid].accumulated <= newScrollTop - clientHeight) {
-        start = mid;
-        left = mid + 1;
-      } else {
-        right = mid - 1;
+  const goToPreviousDate = useCallback(() => {
+    if (currentDateIndex > 0) {
+      const prevDate = allDates[currentDateIndex - 1];
+      scrollToDate(prevDate);
+    }
+  }, [currentDateIndex, allDates, scrollToDate]);
+
+  const goToNextDate = useCallback(() => {
+    if (currentDateIndex < allDates.length - 1) {
+      const nextDate = allDates[currentDateIndex + 1];
+      scrollToDate(nextDate);
+    }
+  }, [currentDateIndex, allDates, scrollToDate]);
+
+  // Handle range changes to update sticky date
+  const handleRangeChanged = useCallback((range) => {
+    if (range && range.startIndex < flatLogs.length) {
+      const firstVisibleLog = flatLogs[range.startIndex];
+      if (firstVisibleLog?.date) {
+        setCurrentStickyDate(firstVisibleLog.date);
       }
     }
-    start = Math.max(0, start - 10); // Buffer
-
-    // Find end position
-    left = 0; right = heights.length - 1;
-    while (left <= right) {
-      const mid = Math.floor((left + right) / 2);
-      if (heights[mid].accumulated <= newScrollTop + clientHeight * 2) {
-        end = mid;
-        left = mid + 1;
-      } else {
-        right = mid - 1;
-      }
-    }
-    end = Math.min(virtualItems.length, end + 10); // Buffer
-
-    setVisibleRange({ start, end });
-  }, [virtualItems, itemHeight, itemHeights]);
-
-  // Initialize visible range
-  useEffect(() => {
-    handleScroll();
-  }, [handleScroll]);
-
-  const visibleItems = useMemo(() => {
-    const start = visibleRange.start;
-    const end = visibleRange.end;
-    return virtualItems.slice(start, end);
-  }, [virtualItems, visibleRange.start, visibleRange.end]);
-
-  // Calculate total height and offset for virtual scrolling
-  const { totalHeight } = itemHeights;
-  const offsetY = useMemo(() => {
-    let offset = 0;
-    for (let i = 0; i < visibleRange.start; i++) {
-      offset += virtualItems[i]?.height || itemHeight;
-    }
-    return offset;
-  }, [virtualItems, visibleRange.start, itemHeight]);
+  }, [flatLogs]);
 
   // Early return AFTER all hooks have been called
   if (!logs || logs.length === 0) {
@@ -448,33 +315,75 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, filters }) => {
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="h-full overflow-auto bg-white dark:bg-gray-900 relative"
-      onScroll={handleScroll}
-    >
-      {/* Sticky Date Header */}
+    <div className="h-full flex flex-col bg-white dark:bg-gray-900">
+      {/* Fixed Date Header with Navigation - Outside of scroll container */}
       {currentStickyDate && (
-        <div className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2">
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            {currentStickyDate}
-          </span>
+        <div className="flex-shrink-0 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {/* Previous Date Button */}
+              <button
+                onClick={goToPreviousDate}
+                disabled={currentDateIndex <= 0}
+                className={`p-1.5 rounded-md transition-colors ${currentDateIndex <= 0
+                  ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200'
+                  }`}
+                title={currentDateIndex > 0 ? `Go to ${allDates[currentDateIndex - 1]}` : 'No previous date'}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+
+              {/* Current Date */}
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                {currentStickyDate}
+              </span>
+
+              {/* Next Date Button */}
+              <button
+                onClick={goToNextDate}
+                disabled={currentDateIndex >= allDates.length - 1}
+                className={`p-1.5 rounded-md transition-colors ${currentDateIndex >= allDates.length - 1
+                  ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200'
+                  }`}
+                title={currentDateIndex < allDates.length - 1 ? `Go to ${allDates[currentDateIndex + 1]}` : 'No next date'}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Date Counter */}
+            {allDates.length > 1 && (
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                {currentDateIndex + 1} of {allDates.length}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      <div style={{ height: totalHeight, position: 'relative' }}>
-        <div style={{ transform: `translateY(${offsetY}px)` }}>
-          {visibleItems.map((item, visibleIndex) => (
+      {/* React Virtuoso List - NO CUSTOM VIRTUAL SCROLLING! */}
+      <div className="flex-1">
+        <Virtuoso
+          ref={virtuosoRef}
+          data={flatLogs}
+          itemContent={(index, log) => (
             <LogItem
-              key={`${logsKey}-${item.id}`}
-              log={item.log}
+              log={log}
               onClick={onLogClick}
-              isHighlighted={highlightedLogId === item.log.id}
+              isHighlighted={highlightedLogId === log.id}
               filters={filters}
-              index={item.log.originalIndex || (visibleRange.start + visibleIndex)}
+              index={index}
             />
-          ))}
-        </div>
+          )}
+          rangeChanged={handleRangeChanged}
+          style={{ height: '100%' }}
+        />
       </div>
     </div>
   );
