@@ -28,12 +28,22 @@ const extractDateFromTimestamp = (timestamp) => {
 
 const extractTimeFromTimestamp = (timestamp) => {
   if (!timestamp) return null;
-  // Extract time part from various formats:
-  // 2025-08-02 23:54:57:514 -> 23:54:57
-  // [08/02/25 18:21:40.615] -> 18:21:40
-  // 2025-08-05 10:41:50.665754+0300 -> 10:41:50
+  // Extract time part from various formats with milliseconds:
+  // 2025-08-02 23:54:57:514 -> 23:54:57.514
+  // 2025-08-02 23:54:57.514 -> 23:54:57.514
+  // [08/02/25 18:21:40.615] -> 18:21:40.615
+  // 2025-08-05 10:41:50.665754+0300 -> 10:41:50.665
 
-  const timeMatch = timestamp.match(/(\d{2}:\d{2}:\d{2})(?::\d{3}|\.\d{3,6})?/);
+  // Try to match time with milliseconds first
+  const timeWithMsMatch = timestamp.match(/(\d{2}:\d{2}:\d{2})[:.](\d{3,6})/);
+  if (timeWithMsMatch) {
+    const time = timeWithMsMatch[1];
+    const ms = timeWithMsMatch[2].substring(0, 3); // Take only first 3 digits for milliseconds
+    return `${time}.${ms}`;
+  }
+
+  // Fallback to time without milliseconds
+  const timeMatch = timestamp.match(/(\d{2}:\d{2}:\d{2})/);
   return timeMatch ? timeMatch[1] : null;
 };
 
@@ -100,7 +110,7 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters, index, onFiltersCh
   // Process the log message and extract file info - memoized by log.id to prevent recalculation
   const cleanedMessage = useMemo(() => cleanMessage(log.message), [log.message]);
   const fileInfo = useMemo(() => extractFileInfo(log), [log.message, log.timestamp]);
-  const timeInfo = useMemo(() => extractTimeFromTimestamp(log.timestamp || log.message) || '--:--:--', [log.timestamp, log.message]);
+  const timeInfo = useMemo(() => extractTimeFromTimestamp(log.timestamp || log.message) || '--:--:--.---', [log.timestamp, log.message]);
 
   // Apply search highlighting if there's a search term
   const highlightedMessage = useMemo(() => {

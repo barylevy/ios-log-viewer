@@ -178,11 +178,15 @@ const useLogsModel = () => {
   }, []);
 
   const extractTimestamp = (line) => {
-    // Try to extract timestamp from common log formats
+    // Try to extract timestamp from common log formats with milliseconds
     const timestampPatterns = [
-      /(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})/,
-      /(\d{2}:\d{2}:\d{2}:\d{3})/,
-      /(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/
+      /(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}:\d{3})/,  // 2025-08-02 23:54:57:514
+      /(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3,6})/,  // 2025-08-02 23:54:57.514 or .514123
+      /(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})/,        // 2025-08-02 23:54:57 (fallback without ms)
+      /(\d{2}:\d{2}:\d{2}:\d{3})/,                      // 23:54:57:514
+      /(\d{2}:\d{2}:\d{2}\.\d{3,6})/,                   // 23:54:57.514 or .514123
+      /(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3,6})/,  // 2025-08-02T23:54:57.514
+      /(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/          // 2025-08-02T23:54:57 (fallback without ms)
     ];
 
     for (const pattern of timestampPatterns) {
