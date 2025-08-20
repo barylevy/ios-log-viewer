@@ -5,7 +5,7 @@ import LogViewerHeader from './LogViewerHeader';
 import LogViewerFilters from './LogViewerFilters';
 import LogTabs from './LogTabs';
 import AIChat from './AIChat';
-import useLogsModel from './useLogsModel';
+import useLogsModel, { getFileIdentifier } from './useLogsModel';
 
 const LogViewer = () => {
   const {
@@ -46,13 +46,15 @@ const LogViewer = () => {
       return;
     }
 
+    const fileId = getFileIdentifier(file);
+
     // Check if file already exists
-    const existingIndex = files.findIndex(f => f.name === file.name);
+    const existingIndex = files.findIndex(f => f.id === fileId);
     if (existingIndex >= 0) {
       // File already exists, just switch to it
       setActiveFileIndex(existingIndex);
       setShowingCombinedView(false);
-      switchToFile(file.name);
+      switchToFile(fileId);
       return;
     }
 
@@ -61,7 +63,7 @@ const LogViewer = () => {
 
     // Then add file to files list
     setFiles(prev => {
-      const newFiles = [...prev, { name: file.name }];
+      const newFiles = [...prev, { name: file.name, id: fileId }];
 
       // If this is the first file being added, make it active
       // Otherwise, keep the current active file (usually the first one)
@@ -72,7 +74,7 @@ const LogViewer = () => {
 
         // Use setTimeout to ensure loadLogs has completed
         setTimeout(() => {
-          switchToFile(file.name);
+          switchToFile(fileId);
         }, 0);
       } else {
         console.log('📄 Added additional file:', file.name, '(keeping focus on first file)');
@@ -90,7 +92,7 @@ const LogViewer = () => {
 
     // Switch to show logs for the selected file
     if (files[index]) {
-      switchToFile(files[index].name);
+      switchToFile(files[index].id);
     }
   }, [files, switchToFile, activeFileIndex]);
 
@@ -125,7 +127,7 @@ const LogViewer = () => {
 
         // Switch to the new active file
         if (newFiles[newIndex]) {
-          switchToFile(newFiles[newIndex].name);
+          switchToFile(newFiles[newIndex].id);
         }
       }
 
@@ -148,10 +150,10 @@ const LogViewer = () => {
 
       // Combine all files - get logs from allFileLogs
       const combinedLogs = files.flatMap(file => {
-        const fileLogs = allFileLogs[file.name] || [];
+        const fileLogs = allFileLogs[file.id] || [];
         return fileLogs.map((log, index) => ({
           ...log,
-          id: `${file.name}-${log.id}`, // Ensure unique IDs
+          id: `${file.id}-${log.id}`, // Ensure unique IDs
           sourceFile: file.name
         }));
       });

@@ -510,3 +510,4 @@ const useLogsModel = () => {
 };
 
 export default useLogsModel;
+export { getFileIdentifier };
