@@ -317,96 +317,61 @@ const LogViewer = () => {
         />
       )}
 
-      {/* Log viewing container with rounded border */}
-      {hasUserInteracted && logs.length > 0 && (
-        <div className="flex-1 mx-2 mt-2 mb-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex flex-col">
-          <LogViewerFilters
-            filters={filters}
-            onFiltersChange={updateFilters}
-            logsCount={logs.length}
-            filteredLogsCount={filteredLogs.length}
-          />
-
-          <div className="flex-1 overflow-hidden flex">
-            {/* Main content */}
-            <div
-              className="flex-1 overflow-hidden"
-              style={{
-                marginRight: showAIChat ? chatPanelWidth : 0,
-                transition: isResizing ? 'none' : 'margin-right 0.2s ease'
-              }}
-            >
+      {/* Main content area - Panel container for left + right */}
+      <div className="flex-1 overflow-hidden flex">
+        {/* Left panel - Log container with fixed structure */}
+        <div 
+          className="overflow-hidden"
+          style={{
+            width: showAIChat ? `calc(100% - ${chatPanelWidth}px)` : '100%',
+            transition: isResizing ? 'none' : 'width 0.2s ease'
+          }}
+        >
+          {/* Log viewing container with rounded border - only when logs are available */}
+          {hasUserInteracted && logs.length > 0 ? (
+            <div className="h-full mt-2 mb-2 ml-2 mr-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex flex-col pb-0">
+              <LogViewerFilters
+                filters={filters}
+                onFiltersChange={updateFilters}
+                logsCount={logs.length}
+                filteredLogsCount={filteredLogs.length}
+              />
+              <div className="flex-1 overflow-hidden">
+                {memoizedContent}
+              </div>
+            </div>
+          ) : (
+            <div className="h-full flex items-center justify-center ml-2 mr-2">
               {memoizedContent}
             </div>
-
-            {/* AI Chat Panel */}
-            {showAIChat && (
-              <>
-                {/* Resize handle */}
-                <div
-                  className="w-1 bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 cursor-col-resize flex-shrink-0"
-                  onMouseDown={handleMouseDown}
-                  style={{ cursor: isResizing ? 'col-resize' : 'col-resize' }}
-                />
-
-                {/* Chat panel */}
-                <div
-                  className="bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 flex-shrink-0"
-                  style={{ width: chatPanelWidth }}
-                >
-                  <AIChat
-                    logs={currentDisplayContext.logs}
-                    fileName={currentDisplayContext.fileName}
-                    isOpen={showAIChat}
-                    onClose={() => setShowAIChat(false)}
-                  />
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Content when no logs are loaded */}
-      {(!hasUserInteracted || logs.length === 0) && (
-        <div className="flex-1 overflow-hidden flex">
-          {/* Main content */}
-          <div
-            className="flex-1 overflow-hidden"
-            style={{
-              marginRight: showAIChat ? chatPanelWidth : 0,
-              transition: isResizing ? 'none' : 'margin-right 0.2s ease'
-            }}
-          >
-            {memoizedContent}
-          </div>
-
-          {/* AI Chat Panel */}
-          {showAIChat && (
-            <>
-              {/* Resize handle */}
-              <div
-                className="w-1 bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 cursor-col-resize flex-shrink-0"
-                onMouseDown={handleMouseDown}
-                style={{ cursor: isResizing ? 'col-resize' : 'col-resize' }}
-              />
-
-              {/* Chat panel */}
-              <div
-                className="bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 flex-shrink-0"
-                style={{ width: chatPanelWidth }}
-              >
-                <AIChat
-                  logs={currentDisplayContext.logs}
-                  fileName={currentDisplayContext.fileName}
-                  isOpen={showAIChat}
-                  onClose={() => setShowAIChat(false)}
-                />
-              </div>
-            </>
           )}
         </div>
-      )}
+
+        {/* AI Chat Panel - Right panel */}
+        {showAIChat && (
+          <>
+            {/* Dynamic separator/resize handle - wider for easier dragging */}
+            <div
+              className="w-1 bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 cursor-col-resize flex-shrink-0"
+              onMouseDown={handleMouseDown}
+              style={{ cursor: isResizing ? 'col-resize' : 'col-resize' }}
+            />
+
+            {/* Right panel - AI Chat with margin from edge */}
+            <div
+              className="bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 flex-shrink-0 mr-2"
+              style={{ width: chatPanelWidth }}
+            >
+              <AIChat
+                logs={currentDisplayContext.logs}
+                fileName={currentDisplayContext.fileName}
+                isOpen={showAIChat}
+                onClose={() => setShowAIChat(false)}
+              />
+            </div>
+          </>
+        )}
+      </div>
 
       {selectedLog && (
         <LogModal
