@@ -83,14 +83,15 @@ const useLogsModel = () => {
       const parsedLogs = lines
         .map((line, index) => ({ line, index }))
         .filter(({ index }) => !headerLines.includes(index))
-        .map(({ line }, logIndex) => ({
+        .map(({ line, index }, logIndex) => ({
           id: logIndex,
           raw: line,
           message: line,
           timestamp: extractTimestamp(line),
           level: extractLogLevel(line),
           module: extractModule(line),
-          thread: extractThread(line)
+          thread: extractThread(line),
+          lineNumber: index + 1 // Store original line number from file (1-based)
         }));
 
       // Store logs for this specific file

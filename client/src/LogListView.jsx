@@ -229,6 +229,11 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters, index, onFiltersCh
             {timeInfo}
           </div>
 
+          {/* Line Number */}
+          <div className="flex-shrink-0 text-xs text-gray-400 dark:text-gray-500 font-mono min-w-12 text-right mr-3">
+            {log.lineNumber ? `#${log.lineNumber}` : ''}
+          </div>
+
           {/* Log Level Indicator */}
           <div className={`flex-shrink-0 text-xs font-semibold uppercase min-w-8 ${logLevelColor}`}>
             {logLevel.charAt(0).toUpperCase()}
