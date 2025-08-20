@@ -157,17 +157,37 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters, index }) => {
 
   // Determine if this is an odd or even line for alternating background
   const isOddLine = index % 2 === 1;
+  
+  // Different styling for context lines vs matching lines
+  const getBackgroundClass = () => {
+    if (log.isContextLine) {
+      // Context lines have more muted background
+      return isOddLine 
+        ? 'bg-gray-50/30 dark:bg-gray-800/15' 
+        : 'bg-gray-50/10 dark:bg-gray-800/5';
+    } else {
+      // Matching lines have normal background
+      return isOddLine 
+        ? 'bg-gray-50/50 dark:bg-gray-800/30' 
+        : 'bg-white dark:bg-gray-900';
+    }
+  };
 
   return (
     <div
       onClick={handleClick}
-      className={`px-3 py-1 border-b border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${isOddLine ? 'bg-gray-50/50 dark:bg-gray-800/30' : 'bg-white dark:bg-gray-900'
-        } ${isHighlighted ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''}`}
+      className={`px-3 py-1 border-b border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${getBackgroundClass()} ${
+        isHighlighted ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''
+      } ${log.isContextLine ? 'opacity-75' : ''}`}
     >
       <div className="flex items-start gap-3">
         {/* Time only */}
         <div className="flex-shrink-0 w-20">
-          <span className="text-xs font-mono text-gray-500 dark:text-gray-400">
+          <span className={`text-xs font-mono ${
+            log.isContextLine 
+              ? 'text-gray-400 dark:text-gray-500' 
+              : 'text-gray-500 dark:text-gray-400'
+          }`}>
             {timeInfo}
           </span>
         </div>
@@ -178,7 +198,11 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters, index }) => {
         {/* Log content with file info */}
         <div className="flex-1 min-w-0 flex justify-between items-start">
           {/* Log message */}
-          <div className="font-mono text-sm break-words text-gray-800 dark:text-gray-200 flex-1 mr-2">
+          <div className={`font-mono text-sm break-words flex-1 mr-2 ${
+            log.isContextLine 
+              ? 'text-gray-600 dark:text-gray-400' 
+              : 'text-gray-800 dark:text-gray-200'
+          }`}>
             {highlightedMessage}
           </div>
 

@@ -212,14 +212,30 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
           )}
         </div>
 
+        {/* Context Lines */}
+        <div className="flex items-center gap-1">
+          <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Context:</label>
+          <input
+            type="number"
+            min="0"
+            max="50"
+            value={filters.contextLines || 0}
+            onChange={(e) => handleFilterChange('contextLines', parseInt(e.target.value) || 0)}
+            className="w-16 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs"
+            placeholder="0"
+          />
+          <span className="text-xs text-gray-500 dark:text-gray-400">lines</span>
+        </div>
+
         {/* Clear Filters */}
-        {(filters.searchText || !filters.logLevel.includes('all') || filters.startTime || filters.endTime) && (
+        {(filters.searchText || !filters.logLevel.includes('all') || filters.startTime || filters.endTime || filters.contextLines) && (
           <button
             onClick={() => onFiltersChange({
               searchText: '',
               logLevel: ['all'],
               startTime: '',
-              endTime: ''
+              endTime: '',
+              contextLines: 0
             })}
             className="px-2 py-1.5 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors text-xs"
           >

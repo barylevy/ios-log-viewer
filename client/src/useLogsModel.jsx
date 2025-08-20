@@ -10,7 +10,8 @@ const useLogsModel = () => {
     searchText: '',
     logLevel: ['all'], // Array to support multiple levels
     startTime: '',
-    endTime: ''
+    endTime: '',
+    contextLines: 0
   });
 
   // Parse header information from log content
@@ -164,15 +165,17 @@ const useLogsModel = () => {
   const filteredLogs = useMemo(() => {
     if (!logs.length) return [];
 
-    // Single pass filtering - much more efficient
-    return logs.filter(log => {
+    // First pass: find all logs that match the base filters (excluding context)
+    const matchingLogIndices = [];
+
+    logs.forEach((log, index) => {
       // Search text filter - now supports multiple terms with ||
       if (searchData) {
         const { searchTerms, searchRegexes } = searchData;
 
         // Check if ANY of the search terms match (OR logic)
-        const matchesAnyTerm = searchTerms.some((term, index) => {
-          const regex = searchRegexes[index];
+        const matchesAnyTerm = searchTerms.some((term, termIndex) => {
+          const regex = searchRegexes[termIndex];
           if (regex) {
             return regex.test(log.message);
           } else {
@@ -183,26 +186,59 @@ const useLogsModel = () => {
           }
         });
 
-        if (!matchesAnyTerm) return false;
+        if (!matchesAnyTerm) return;
       }
 
       // Log level filter - support multiple levels
       if (!filters.logLevel.includes('all') && !filters.logLevel.includes(log.level)) {
-        return false;
+        return;
       }
 
       // Time range filters
       if (filters.startTime && log.timestamp && log.timestamp < filters.startTime) {
-        return false;
+        return;
       }
 
       if (filters.endTime && log.timestamp && log.timestamp > filters.endTime) {
-        return false;
+        return;
       }
 
-      return true;
+      // This log matches all filters
+      matchingLogIndices.push(index);
     });
-  }, [logs, searchData, filters.logLevel, filters.startTime, filters.endTime]); const updateFilters = useCallback((newFilters) => {
+
+    // If no context lines requested, just return the matching logs
+    if (!filters.contextLines || filters.contextLines === 0) {
+      return matchingLogIndices.map(index => ({
+        ...logs[index],
+        isContextLine: false
+      }));
+    }
+
+    // Second pass: include context lines around matching logs
+    const includedIndices = new Set();
+
+    matchingLogIndices.forEach(matchingIndex => {
+      // Add context lines before
+      const startIndex = Math.max(0, matchingIndex - filters.contextLines);
+      // Add context lines after
+      const endIndex = Math.min(logs.length - 1, matchingIndex + filters.contextLines);
+
+      // Include all indices in the range
+      for (let i = startIndex; i <= endIndex; i++) {
+        includedIndices.add(i);
+      }
+    });
+
+    // Convert set to sorted array and return the corresponding logs with metadata
+    const sortedIndices = Array.from(includedIndices).sort((a, b) => a - b);
+    const matchingIndicesSet = new Set(matchingLogIndices);
+    
+    return sortedIndices.map(index => ({
+      ...logs[index],
+      isContextLine: !matchingIndicesSet.has(index)
+    }));
+  }, [logs, searchData, filters.logLevel, filters.startTime, filters.endTime, filters.contextLines]); const updateFilters = useCallback((newFilters) => {
     setFilters(prev => ({ ...prev, ...newFilters }));
   }, []);
 
