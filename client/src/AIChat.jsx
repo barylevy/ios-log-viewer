@@ -28,14 +28,14 @@ const retrieveApiKey = () => {
     if (encrypted) {
         return decryptKey(encrypted);
     }
-    
+
     const oldKey = localStorage.getItem('openai_api_key');
     if (oldKey) {
         storeApiKey(oldKey);
         localStorage.removeItem('openai_api_key');
         return oldKey;
     }
-    
+
     return '';
 };
 
@@ -71,7 +71,7 @@ const ApiKeyInput = ({ onSubmit }) => {
     );
 };
 
-const AIChat = ({ logs, fileName, isOpen, onClose }) => {
+const AIChat = ({ logs, fileName, isOpen, onClose, isFullWidth, onToggleFullWidth }) => {
     const [messages, setMessages] = useState([]);
     const [inputMessage, setInputMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -79,6 +79,13 @@ const AIChat = ({ logs, fileName, isOpen, onClose }) => {
     const [apiKey, setApiKey] = useState(retrieveApiKey());
     const [showApiKeyInput, setShowApiKeyInput] = useState(!apiKey);
     const messagesEndRef = useRef(null);
+
+    // Scroll to the latest message when messages change
+    useEffect(() => {
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [messages]);
 
     if (!isOpen) return null;
 
@@ -124,7 +131,7 @@ const AIChat = ({ logs, fileName, isOpen, onClose }) => {
                 return `[${index + 1}] ${text}`;
             }).join('\n');
 
-            const systemMessage = logContext.length > 0 
+            const systemMessage = logContext.length > 0
                 ? `You are a log analysis assistant. Here are the logs from file "${fileName}":\n\n${logContext}\n\nAnalyze these logs and answer questions about them.`
                 : `You are a log analysis assistant. The user is asking about logs from file "${fileName}", but no log content was provided. Please ask them to load some logs first.`;
 
@@ -179,8 +186,8 @@ const AIChat = ({ logs, fileName, isOpen, onClose }) => {
 
     const handleKeyDown = (e) => {
         if (e.key === 'Enter') {
-            if (e.metaKey || e.ctrlKey) {
-                // Cmd+Enter or Ctrl+Enter: allow new line (default behavior)
+            if (e.shiftKey) {
+                // Shift+Enter: allow new line (default behavior)
                 return;
             } else {
                 // Enter: send message
@@ -197,12 +204,29 @@ const AIChat = ({ logs, fileName, isOpen, onClose }) => {
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-white">AI Chat</h2>
                     <p className="text-sm text-gray-600 dark:text-gray-400">Analyzing: {fileName}</p>
                 </div>
-                <button
-                    onClick={onClose}
-                    className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-xl"
-                >
-                    ×
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={onToggleFullWidth}
+                        className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                        title={isFullWidth ? "Exit full width" : "Full width"}
+                    >
+                        {isFullWidth ? (
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                            </svg>
+                        ) : (
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                            </svg>
+                        )}
+                    </button>
+                    <button
+                        onClick={onClose}
+                        className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-xl"
+                    >
+                        ×
+                    </button>
+                </div>
             </div>
 
             {showApiKeyInput && (
@@ -224,13 +248,12 @@ const AIChat = ({ logs, fileName, isOpen, onClose }) => {
                         className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                         <div
-                            className={`max-w-3xl p-3 rounded-lg ${
-                                message.type === 'user'
-                                    ? 'bg-blue-500 text-white'
-                                    : message.type === 'error'
+                            className={`max-w-3xl p-3 rounded-lg ${message.type === 'user'
+                                ? 'bg-blue-500 text-white'
+                                : message.type === 'error'
                                     ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
                                     : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
-                            }`}
+                                }`}
                         >
                             <p className="whitespace-pre-wrap">{message.content}</p>
                             <div className="text-xs opacity-70 mt-2">
@@ -266,7 +289,7 @@ const AIChat = ({ logs, fileName, isOpen, onClose }) => {
                             value={inputMessage}
                             onChange={(e) => setInputMessage(e.target.value)}
                             onKeyDown={handleKeyDown}
-                            placeholder="Ask about the logs... (Enter to send, Cmd+Enter for new line)"
+                            placeholder="Ask about the logs... (Enter to send, Shift+Enter for new line)"
                             className="flex-1 p-2 border border-gray-300 dark:border-gray-600 rounded resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                             rows="3"
                             disabled={isLoading}
