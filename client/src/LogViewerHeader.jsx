@@ -7,20 +7,17 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
   const [showFileSelectionModal, setShowFileSelectionModal] = useState(false);
 
   const handleChooseFiles = () => {
-    console.log('Choose Files clicked');
     fileInputRef.current?.click();
     setShowFileSelectionModal(false);
   };
 
   const handleChooseDirectory = () => {
-    console.log('Choose Directory clicked');
     directoryInputRef.current?.click();
     setShowFileSelectionModal(false);
   };
 
   const handleFilesSelected = (event) => {
     const files = Array.from(event.target.files);
-    console.log('Files selected:', files);
 
     // Filter and sort files by name
     const logFiles = files.filter(file =>
@@ -35,14 +32,12 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
 
   const handleDirectorySelected = (event) => {
     const files = Array.from(event.target.files);
-    console.log('Directory selected:', files);
     const logFiles = files.filter(file =>
       file.name.toLowerCase().endsWith('.txt') && file.name.toLowerCase().includes('log')
     );
 
     // Sort files by name before loading
     const sortedLogFiles = logFiles.sort((a, b) => a.name.localeCompare(b.name));
-    console.log('Sorted log files:', sortedLogFiles.map(f => f.name));
 
     sortedLogFiles.forEach(file => {
       onFileLoad(file);

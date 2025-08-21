@@ -14,7 +14,6 @@ const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCom
                                 : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
                                 }`}
                             onClick={() => {
-                                console.log('🏷️ Tab clicked:', { index, fileName: file.name, currentActive: activeFileIndex });
                                 onFileSelect(index);
                             }}
                         >
@@ -40,7 +39,6 @@ const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCom
                                 : 'text-gray-600 dark:text-gray-400 hover:text-green-700 dark:hover:text-green-200 hover:bg-green-50 dark:hover:bg-green-800 border-gray-200 dark:border-gray-600 hover:border-green-300 dark:hover:border-green-600'
                                 }`}
                             onClick={() => {
-                                console.log('🔄 Combined view tab clicked');
                                 onCombinedViewSelect();
                             }}
                         >
