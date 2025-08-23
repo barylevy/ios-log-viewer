@@ -114,23 +114,45 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters, index, onFiltersCh
 
   // Apply search highlighting if there's a search term
   const highlightedMessage = useMemo(() => {
-    if (!filters.searchQuery) return cleanedMessage;
+    // Start with the cleaned message
+    let messageHtml = cleanedMessage;
 
-    const searchTerms = filters.searchQuery
-      .split('||')
-      .map(term => term.trim())
-      .filter(term => term.length > 0);
+    // Highlight filter terms
+    if (filters.searchText) {
+      const filterTerms = filters.searchText
+        .split('||')
+        .map(term => term.trim())
+        .filter(term => term.length > 0);
 
-    if (searchTerms.length === 0) return cleanedMessage;
+      filterTerms.forEach(term => {
+        const escaped = term.replace(/[.*+?^${}()|[\\]\\\\\\]/g, '\\$&');
+        const regex = new RegExp(`(${escaped})`, 'gi');
+        messageHtml = messageHtml.replace(
+          regex,
+          '<mark class="bg-blue-200 dark:bg-blue-600">$1</mark>'
+        );
+      });
+    }
 
-    let highlighted = cleanedMessage;
-    searchTerms.forEach(term => {
-      const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-      highlighted = highlighted.replace(regex, '<mark class="bg-yellow-200 dark:bg-yellow-600">$1</mark>');
-    });
+    // Highlight search query terms (navigation)
+    if (filters.searchQuery) {
+      const searchTerms = filters.searchQuery
+        .split('||')
+        .map(term => term.trim())
+        .filter(term => term.length > 0);
 
-    return highlighted;
-  }, [cleanedMessage, filters.searchQuery]);
+      searchTerms.forEach(term => {
+        const escaped = term.replace(/[.*+?^${}()|[\\]\\\\\\]/g, '\\$&');
+        const regex = new RegExp(`(${escaped})`, 'gi');
+        messageHtml = messageHtml.replace(
+          regex,
+          '<mark class="bg-green-200 dark:bg-green-600">$1</mark>'
+        );
+      });
+    }
+
+    return messageHtml;
+  }, [cleanedMessage, filters.searchQuery, filters.searchText]);
 
   // Determine log level for styling
   const logLevel = useMemo(() => {
