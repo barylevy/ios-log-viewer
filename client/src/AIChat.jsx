@@ -248,7 +248,7 @@ const AIChat = ({ logs, fileName, isOpen, onClose, isFullWidth, onToggleFullWidt
                         className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                         <div
-                            className={`max-w-3xl p-3 rounded-lg ${message.type === 'user'
+                            className={`w-full p-3 rounded-lg ${message.type === 'user'
                                 ? 'bg-blue-500 text-white'
                                 : message.type === 'error'
                                     ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
