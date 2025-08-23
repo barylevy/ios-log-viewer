@@ -39,6 +39,7 @@ const useLogsModel = () => {
   const [currentFileName, setCurrentFileName] = useState(null); // Track current file
   const [filters, setFilters] = useState({
     searchText: '',
+    searchQuery: '',
     logLevel: ['all'], // Array to support multiple levels
     startTime: '',
     endTime: '',

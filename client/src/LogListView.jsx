@@ -114,9 +114,9 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters, index, onFiltersCh
 
   // Apply search highlighting if there's a search term
   const highlightedMessage = useMemo(() => {
-    if (!filters.searchText) return cleanedMessage;
+    if (!filters.searchQuery) return cleanedMessage;
 
-    const searchTerms = filters.searchText
+    const searchTerms = filters.searchQuery
       .split('||')
       .map(term => term.trim())
       .filter(term => term.length > 0);
@@ -130,7 +130,7 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters, index, onFiltersCh
     });
 
     return highlighted;
-  }, [cleanedMessage, filters.searchText]);
+  }, [cleanedMessage, filters.searchQuery]);
 
   // Determine log level for styling
   const logLevel = useMemo(() => {
@@ -305,9 +305,13 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters, index, onFiltersCh
 
 LogItem.displayName = 'LogItem';
 
-const LogListView = ({ logs, onLogClick, highlightedLogId, filters, onFiltersChange }) => {
+const LogListView = ({ logs, onLogClick, highlightedLogId, filters, onFiltersChange, onSearchMatchUpdate }) => {
   const virtuosoRef = useRef(null);
+  // Refs for each item element to allow focus
+  const itemRefs = useRef({});
   const [currentStickyDate, setCurrentStickyDate] = useState(null);
+  // Search navigation state
+  const [currentMatchIndex, setCurrentMatchIndex] = useState(-1);
 
   // Group logs by date for sticky headers
   const groupedLogs = useMemo(() => {
@@ -384,6 +388,73 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, filters, onFiltersCha
 
     return items;
   }, [groupedLogs]);
+  // Compute search match positions based on searchQuery
+  const matchIndices = useMemo(() => {
+    if (!filters.searchQuery || !flatLogs.length) return [];
+    const terms = filters.searchQuery.split('||').map(t => t.trim().toLowerCase()).filter(Boolean);
+    if (!terms.length) return [];
+    return flatLogs.reduce((acc, log, idx) => {
+      const msg = cleanMessage(log.message || '').toLowerCase();
+      if (terms.some(term => msg.includes(term))) acc.push(idx);
+      return acc;
+    }, []);
+  }, [filters.searchQuery, flatLogs]);
+  // Reset on filter change
+  useEffect(() => {
+    setCurrentMatchIndex(matchIndices.length ? 0 : -1);
+  }, [matchIndices]);
+  // Next/Prev navigation
+  const goToNextMatch = useCallback(() => {
+    if (!virtuosoRef.current || !matchIndices.length) return;
+    // Non-cyclic: stop if already at last match
+    if (currentMatchIndex >= matchIndices.length - 1) return;
+    const next = currentMatchIndex + 1;
+    const target = matchIndices[next];
+    // Scroll to match without opening modal
+    virtuosoRef.current.scrollToIndex({ index: target, align: 'start' });
+    setCurrentMatchIndex(next);
+    // Focus the target item after scrolling
+    // Focus the matched item without opening the modal
+    setTimeout(() => {
+      const wrapper = itemRefs.current[target];
+      if (wrapper) wrapper.focus();
+    }, 100);
+  }, [currentMatchIndex, matchIndices]);
+  const goToPreviousMatch = useCallback(() => {
+    if (!virtuosoRef.current || !matchIndices.length) return;
+    // Non-cyclic: stop if already at first match
+    if (currentMatchIndex <= 0) return;
+    const prev = currentMatchIndex - 1;
+    const target = matchIndices[prev];
+    // Scroll to match without opening modal
+    virtuosoRef.current.scrollToIndex({ index: target, align: 'start' });
+    setCurrentMatchIndex(prev);
+    // Focus the target item
+    // Focus the matched item without opening the modal
+    setTimeout(() => {
+      const wrapper = itemRefs.current[target];
+      if (wrapper) wrapper.focus();
+    }, 100);
+  }, [currentMatchIndex, matchIndices]);
+
+  // Notify parent when match position or total changes
+  useEffect(() => {
+    if (onSearchMatchUpdate) {
+      const pos = currentMatchIndex >= 0 ? currentMatchIndex + 1 : 0;
+      const total = matchIndices.length;
+      onSearchMatchUpdate(pos, total);
+    }
+  }, [currentMatchIndex, matchIndices, onSearchMatchUpdate]);
+  useEffect(() => {
+    const handleNext = () => goToNextMatch();
+    const handlePrev = () => goToPreviousMatch();
+    window.addEventListener('nextSearchMatch', handleNext);
+    window.addEventListener('prevSearchMatch', handlePrev);
+    return () => {
+      window.removeEventListener('nextSearchMatch', handleNext);
+      window.removeEventListener('prevSearchMatch', handlePrev);
+    };
+  }, [goToNextMatch, goToPreviousMatch]);
 
   // Get all unique dates in chronological order
   const allDates = useMemo(() => {
@@ -505,14 +576,21 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, filters, onFiltersCha
           ref={virtuosoRef}
           data={flatLogs}
           itemContent={(index, log) => (
-            <LogItem
-              log={log}
-              onClick={onLogClick}
-              isHighlighted={highlightedLogId === log.id}
-              filters={filters}
-              index={index}
-              onFiltersChange={onFiltersChange}
-            />
+            <div
+              ref={el => itemRefs.current[index] = el}
+              tabIndex={-1}
+              key={log.id}
+              className="outline-none"
+            >
+              <LogItem
+                log={log}
+                onClick={onLogClick}
+                isHighlighted={highlightedLogId === log.id}
+                filters={filters}
+                index={index}
+                onFiltersChange={onFiltersChange}
+              />
+            </div>
           )}
           rangeChanged={handleRangeChanged}
           style={{ height: '100%' }}

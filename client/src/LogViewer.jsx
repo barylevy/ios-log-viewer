@@ -27,8 +27,24 @@ const LogViewer = () => {
   } = useLogsModel();
 
   const [isFileDropActive, setIsFileDropActive] = useState(false);
+  // Track current search match position and total
+  const [searchPos, setSearchPos] = useState(0);
+  const [searchTotal, setSearchTotal] = useState(0);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
 
+  // Compute number of search matches
+  const searchMatchCount = useMemo(() => {
+    if (!filters.searchQuery) return 0;
+    const terms = filters.searchQuery
+      .split('||')
+      .map(t => t.trim().toLowerCase())
+      .filter(Boolean);
+    if (!terms.length) return 0;
+    return filteredLogs.reduce((cnt, log) => {
+      const msg = (log.message || '').toLowerCase();
+      return terms.some(term => msg.includes(term)) ? cnt + 1 : cnt;
+    }, 0);
+  }, [filters.searchQuery, filteredLogs]);
   // Multi-file support
   const [files, setFiles] = useState([]);
   const [activeFileIndex, setActiveFileIndex] = useState(0);
@@ -266,6 +282,7 @@ const LogViewer = () => {
       );
     }
 
+    // Only render the list; filters toolbar is rendered above
     return (
       <LogListView
         logs={filteredLogs}
@@ -273,6 +290,10 @@ const LogViewer = () => {
         highlightedLogId={highlightedLogId}
         filters={filters}
         onFiltersChange={updateFilters}
+        onSearchMatchUpdate={(pos, total) => {
+          setSearchPos(pos);
+          setSearchTotal(total);
+        }}
       />
     );
   }, [hasUserInteracted, files.length, filteredLogs, setSelectedLog, highlightedLogId, filters]);
@@ -346,6 +367,8 @@ const LogViewer = () => {
                   onFiltersChange={updateFilters}
                   logsCount={logs.length}
                   filteredLogsCount={filteredLogs.length}
+                  searchMatchCount={searchMatchCount}
+                  searchMatchPos={searchPos}
                 />
                 <div className="flex-1 overflow-hidden">
                   {memoizedContent}
@@ -370,7 +393,6 @@ const LogViewer = () => {
                 style={{ cursor: isResizing ? 'col-resize' : 'col-resize' }}
               />
             )}
-
             {/* Right panel - AI Chat */}
             <div
               className="bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 flex-shrink-0 mr-2"
