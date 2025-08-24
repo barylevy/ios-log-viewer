@@ -198,6 +198,36 @@ const useLogsModel = () => {
   };
 
   const extractLogLevel = (line) => {
+    // Prioritize structured level field (after timestamp and thread)
+    const parts = line.trim().split(/\s+/);
+    // Expected format: [date] [time] [thread] [level]
+    if (parts.length >= 4) {
+      const levelToken = parts[3];
+      if (/^(Activity|Error|Default)$/i.test(levelToken)) {
+        return levelToken.toLowerCase();
+      }
+    }
+
+    // Check for full-word log levels: Activity, Error, Default
+    const wordMatch = line.match(/\b(Activity|Error|Default)\b/i);
+    if (wordMatch) {
+      return wordMatch[1].toLowerCase();
+    }
+
+    // Next, check for single-letter bracketed level tags: [E], [W], [I], [D], [T]
+    const bracketMatch = line.match(/\[([EWIDT])\]/i);
+    if (bracketMatch) {
+      const letter = bracketMatch[1].toUpperCase();
+      switch (letter) {
+        case 'E': return 'error';
+        case 'W': return 'warning';
+        case 'I': return 'info';
+        case 'D': return 'debug';
+        case 'T': return 'trace';
+      }
+    }
+
+    // Fallback to substring checks
     const upperLine = line.toUpperCase();
     if (upperLine.includes('ERROR') || upperLine.includes('ERR')) return 'error';
     if (upperLine.includes('WARN') || upperLine.includes('WARNING')) return 'warning';

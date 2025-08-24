@@ -1,26 +1,35 @@
 import React, { useState, useRef, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 
 const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCount, searchMatchCount, searchMatchPos }) => {
   const [isLevelDropdownOpen, setIsLevelDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const portalRef = useRef(null);
+  // For portal positioning
+  const buttonRef = useRef(null);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
 
   const handleFilterChange = (key, value) => {
     onFiltersChange({ [key]: value });
   };
 
-  // Close dropdown when clicking outside
+  // Close dropdown when clicking outside (using click event to allow checkbox selection)
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsLevelDropdownOpen(false);
+      if (
+        (dropdownRef.current && dropdownRef.current.contains(event.target)) ||
+        (portalRef.current && portalRef.current.contains(event.target))
+      ) {
+        return;
       }
+      setIsLevelDropdownOpen(false);
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('click', handleClickOutside);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('click', handleClickOutside);
     };
-  }, []);
+  }, [dropdownRef, portalRef]);
 
   const handleLogLevelToggle = (level) => {
     const currentLevels = filters.logLevel;
@@ -28,7 +37,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
     if (level === 'all') {
       // If 'all' is clicked, toggle between all levels and just 'all'
       if (currentLevels.includes('all')) {
-        onFiltersChange({ logLevel: ['error', 'warning', 'info', 'debug', 'trace'] });
+        onFiltersChange({ logLevel: ['error', 'warning', 'info', 'debug', 'trace', 'activity', 'default'] });
       } else {
         onFiltersChange({ logLevel: ['all'] });
       }
@@ -141,12 +150,21 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
     </div>
   );
 
-  const renderLogLevelFilter = () => (
-    <div className="flex items-center gap-1" ref={dropdownRef}>
-      <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Level:</label>
-      <div className="relative">
+  const renderLogLevelFilter = () => {
+    // Compute dropdown position when opening
+    useEffect(() => {
+      if (isLevelDropdownOpen && buttonRef.current) {
+        const rect = buttonRef.current.getBoundingClientRect();
+        setDropdownPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX });
+      }
+    }, [isLevelDropdownOpen]);
+
+    return (
+      <div className="flex items-center gap-1" ref={dropdownRef}>
+        <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Level:</label>
         <button
-          onClick={() => setIsLevelDropdownOpen(!isLevelDropdownOpen)}
+          ref={buttonRef}
+          onClick={() => setIsLevelDropdownOpen(o => !o)}
           className="flex items-center justify-between px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs min-w-28"
         >
           <span>{getSelectedLevelsText()}</span>
@@ -154,9 +172,12 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
         </button>
-
-        {isLevelDropdownOpen && (
-          <div className="absolute z-50 mt-1 w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg">
+        {isLevelDropdownOpen && ReactDOM.createPortal(
+          <div
+            ref={portalRef}
+            style={{ position: 'absolute', top: dropdownPos.top, left: dropdownPos.left, zIndex: 9999 }}
+            className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg"
+          >
             <div className="py-1">
               {[
                 { value: 'all', label: 'All Levels', color: 'text-gray-700 dark:text-gray-300' },
@@ -164,7 +185,9 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
                 { value: 'warning', label: 'Warning', color: 'text-yellow-600 dark:text-yellow-400' },
                 { value: 'info', label: 'Info', color: 'text-blue-600 dark:text-blue-400' },
                 { value: 'debug', label: 'Debug', color: 'text-green-600 dark:text-green-400' },
-                { value: 'trace', label: 'Trace', color: 'text-purple-600 dark:text-purple-400' }
+                { value: 'trace', label: 'Trace', color: 'text-purple-600 dark:text-purple-400' },
+                { value: 'activity', label: 'Activity', color: 'text-indigo-600 dark:text-indigo-400' },
+                { value: 'default', label: 'Default', color: 'text-gray-500 dark:text-gray-400' }
               ].map(({ value, label, color }) => (
                 <label
                   key={value}
@@ -180,11 +203,12 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
                 </label>
               ))}
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderTimeRangeFilter = () => (
     <div className={`flex items-center gap-2 min-w-fit rounded-md ${(filters.startTime || filters.endTime) ? 'px-3 bg-gray-100 dark:bg-gray-600' : ''}`}>
@@ -303,15 +327,17 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
   );
 
   return (
-    <div className="bg-white/50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700 px-2 py-4 backdrop-blur-sm">
+    <div className="overflow-visible bg-white/50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700 px-2 py-4">
       {/* Main filter row - no-wrap with horizontal scroll to keep all controls on one line */}
-      <div className="flex items-center gap-6 flex-nowrap overflow-x-auto h-14">
-        {renderSearchNavigationInput()}
-        {renderFilterInput()}
-        {renderLogLevelFilter()}
-        {renderTimeRangeFilter()}
-        {renderContextLines()}
-        {renderClearFiltersButton()}
+      <div className="relative z-10 overflow-visible">
+        <div className="flex items-center gap-6 flex-nowrap overflow-x-auto overflow-y-visible">
+          {renderSearchNavigationInput()}
+          {renderFilterInput()}
+          {renderLogLevelFilter()}
+          {renderTimeRangeFilter()}
+          {renderContextLines()}
+          {renderClearFiltersButton()}
+        </div>
       </div>
 
       {renderStats()}
