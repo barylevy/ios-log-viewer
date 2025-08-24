@@ -1,6 +1,14 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
 const LogModal = ({ log, onClose, onHighlight, onClearHighlight }) => {
+  // Close modal when Escape key is pressed
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
   if (!log) return null;
 
   const handleHighlight = () => {
