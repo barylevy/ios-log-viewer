@@ -330,7 +330,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
     <div className="overflow-visible bg-white/50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700 px-2 py-4">
       {/* Main filter row - no-wrap with horizontal scroll to keep all controls on one line */}
       <div className="relative z-10 overflow-visible">
-        <div className="flex items-center gap-6 flex-nowrap overflow-x-auto overflow-y-visible">
+        <div className="flex items-center gap-6 flex-nowrap overflow-x-auto overflow-y-visible h-14">
           {renderSearchNavigationInput()}
           {renderFilterInput()}
           {renderLogLevelFilter()}
