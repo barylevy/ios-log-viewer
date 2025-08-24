@@ -146,7 +146,7 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters, index, onFiltersCh
         const regex = new RegExp(`(${escaped})`, 'gi');
         messageHtml = messageHtml.replace(
           regex,
-          '<mark class="bg-green-200 dark:bg-green-600">$1</mark>'
+          '<mark class="bg-green-200 dark:bg-green-600 font-bold">$1</mark>'
         );
       });
     }
