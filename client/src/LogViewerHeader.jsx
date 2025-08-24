@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import FileSelectionModal from './FileSelectionModal';
 
-const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, currentFileHeaders }) => {
+const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, currentFileHeaders, onClearTabs }) => {
   const fileInputRef = useRef(null);
   const directoryInputRef = useRef(null);
   const [showFileSelectionModal, setShowFileSelectionModal] = useState(false);
@@ -31,6 +31,8 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
   };
 
   const handleDirectorySelected = (event) => {
+    // Clear existing open tabs before loading a new folder
+    onClearTabs?.();
     const files = Array.from(event.target.files);
     const logFiles = files.filter(file =>
       file.name.toLowerCase().endsWith('.txt') && file.name.toLowerCase().includes('log')

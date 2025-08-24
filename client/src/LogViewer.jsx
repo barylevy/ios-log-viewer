@@ -50,6 +50,15 @@ const LogViewer = () => {
   const [activeFileIndex, setActiveFileIndex] = useState(0);
   const [combinedViewLoaded, setCombinedViewLoaded] = useState(false);
   const [showingCombinedView, setShowingCombinedView] = useState(false);
+  
+  // Clear existing tabs before loading a new folder
+  const handleClearTabs = useCallback(() => {
+    setFiles([]);
+    setActiveFileIndex(0);
+    setShowingCombinedView(false);
+    setCombinedViewLoaded(false);
+    setHasUserInteracted(false);
+  }, [setFiles, setActiveFileIndex, setShowingCombinedView, setCombinedViewLoaded, setHasUserInteracted]);
 
   // AI Chat
   const [showAIChat, setShowAIChat] = useState(false);
@@ -322,6 +331,7 @@ const LogViewer = () => {
       onDrop={handleDrop}
     >
       <LogViewerHeader
+        onClearTabs={handleClearTabs}
         onFileLoad={handleFileLoad}
         onToggleAIChat={() => {
           setShowAIChat(!showAIChat);
