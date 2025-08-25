@@ -198,43 +198,22 @@ const useLogsModel = () => {
   };
 
   const extractLogLevel = (line) => {
-    // Prioritize structured level field (after timestamp and thread)
-    const parts = line.trim().split(/\s+/);
-    // Expected format: [date] [time] [thread] [level]
-    if (parts.length >= 4) {
-      const levelToken = parts[3];
-      if (/^(Activity|Error|Default)$/i.test(levelToken)) {
-        return levelToken.toLowerCase();
+    const LOG_LEVEL_MATRIX = [
+      ['error', '[Error]', ' E ', '[E]'],
+      ['warning', '[Warn]', ' W ', '[W]'],
+      ['info', '[Info]', ' I ', '[I]'],
+      ['debug', '[Debug]', ' D ', '[D]'],
+      ['trace', '[Trace]', ' T ', '[T]', '[verbose]'],
+      ['activity', 'Activity']
+    ];
+
+    for (const [level, ...patterns] of LOG_LEVEL_MATRIX) {
+      for (const pattern of patterns) {
+        if (line.includes(pattern)) return level;
       }
     }
-
-    // Check for full-word log levels: Activity, Error, Default
-    const wordMatch = line.match(/\b(Activity|Error|Default)\b/i);
-    if (wordMatch) {
-      return wordMatch[1].toLowerCase();
-    }
-
-    // Next, check for single-letter bracketed level tags: [E], [W], [I], [D], [T]
-    const bracketMatch = line.match(/\[([EWIDT])\]/i);
-    if (bracketMatch) {
-      const letter = bracketMatch[1].toUpperCase();
-      switch (letter) {
-        case 'E': return 'error';
-        case 'W': return 'warning';
-        case 'I': return 'info';
-        case 'D': return 'debug';
-        case 'T': return 'trace';
-      }
-    }
-
-    // Fallback to substring checks
-    const upperLine = line.toUpperCase();
-    if (upperLine.includes('ERROR') || upperLine.includes('ERR')) return 'error';
-    if (upperLine.includes('WARN') || upperLine.includes('WARNING')) return 'warning';
-    if (upperLine.includes('INFO') || upperLine.includes('INF')) return 'info';
-    if (upperLine.includes('DEBUG') || upperLine.includes('DBG')) return 'debug';
-    if (upperLine.includes('TRACE') || upperLine.includes('TRC')) return 'trace';
     return 'info';
+
   };
 
   const extractModule = (line) => {

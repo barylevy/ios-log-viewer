@@ -125,7 +125,7 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters, index, onFiltersCh
         .filter(term => term.length > 0);
 
       filterTerms.forEach(term => {
-        const escaped = term.replace(/[.*+?^${}()|[\\]\\\\\\]/g, '\\$&');
+        const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const regex = new RegExp(`(${escaped})`, 'gi');
         messageHtml = messageHtml.replace(
           regex,
@@ -142,7 +142,7 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters, index, onFiltersCh
         .filter(term => term.length > 0);
 
       searchTerms.forEach(term => {
-        const escaped = term.replace(/[.*+?^${}()|[\\]\\\\\\]/g, '\\$&');
+        const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const regex = new RegExp(`(${escaped})`, 'gi');
         messageHtml = messageHtml.replace(
           regex,
@@ -156,13 +156,22 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters, index, onFiltersCh
 
   // Determine log level for styling
   const logLevel = useMemo(() => {
-    const message = (log.message || '').toLowerCase();
-    if (message.includes('error') || message.includes('err') || message.includes('fail')) return 'error';
-    if (message.includes('warn') || message.includes('warning')) return 'warning';
-    if (message.includes('info') || message.includes('information')) return 'info';
-    if (message.includes('debug') || message.includes('dbg')) return 'debug';
-    if (message.includes('trace') || message.includes('verbose')) return 'trace';
-    return 'info'; // default
+    const message = (log.message || '');//.toLowerCase();
+    const LOG_LEVEL_MATRIX = [
+      ['error', '[Error]', ' E ', '[E]'],
+      ['warning', '[Warn]', ' W ', '[W]'],
+      ['info', '[Info]', ' I ', '[I]'],
+      ['debug', '[Debug]', ' D ', '[D]'],
+      ['trace', '[Trace]', ' T ', '[T]', '[verbose]'],
+      ['activity', 'Activity']
+    ];
+
+    for (const [level, ...patterns] of LOG_LEVEL_MATRIX) {
+      for (const pattern of patterns) {
+        if (message.includes(pattern)) return level;
+      }
+    }
+    return 'info';
   }, [log.message]);
 
   const logLevelColor = {
