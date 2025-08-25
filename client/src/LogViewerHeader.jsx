@@ -137,7 +137,7 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
         ref={fileInputRef}
         type="file"
         multiple
-        accept=".txt"
+        accept=".txt,.log"
         onChange={handleFilesSelected}
         style={{ display: 'none' }}
       />

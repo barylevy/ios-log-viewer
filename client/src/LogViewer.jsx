@@ -17,6 +17,8 @@ const LogViewer = () => {
     logFileHeaders,
     allFileLogs,
     loadLogs,
+    requestFileLoad,
+    isFileLoading,
     setSelectedLog,
     updateFilters,
     highlightLog,
@@ -50,7 +52,7 @@ const LogViewer = () => {
   const [activeFileIndex, setActiveFileIndex] = useState(0);
   const [combinedViewLoaded, setCombinedViewLoaded] = useState(false);
   const [showingCombinedView, setShowingCombinedView] = useState(false);
-  
+
   // Clear existing tabs before loading a new folder
   const handleClearTabs = useCallback(() => {
     setFiles([]);
@@ -84,43 +86,35 @@ const LogViewer = () => {
       return;
     }
 
-    // Load the file content first
-    loadLogs(file);
-
-    // Then add file to files list
     setFiles(prev => {
-      const newFiles = [...prev, { name: file.name, id: fileId }];
-
-      // If this is the first file being added, make it active
-      // Otherwise, keep the current active file (usually the first one)
+      const newFiles = [...prev, { name: file.name, id: fileId, fileObj: file }];
       if (prev.length === 0) {
-        console.log('🎯 Setting first file as active:', file.name);
         setActiveFileIndex(0);
         setShowingCombinedView(false);
-
-        // Use setTimeout to ensure loadLogs has completed
+        // Immediately trigger log load for first file
+        requestFileLoad(fileId, file);
         setTimeout(() => {
           switchToFile(fileId);
         }, 0);
-      } else {
-        console.log('📄 Added additional file:', file.name, '(keeping focus on first file)');
       }
-
       return newFiles;
     });
-
     setHasUserInteracted(true);
-  }, [files, loadLogs, switchToFile]);
+  }, [files, switchToFile, requestFileLoad]);
 
   const handleFileSelect = useCallback((index) => {
     setActiveFileIndex(index);
     setShowingCombinedView(false);
 
-    // Switch to show logs for the selected file
-    if (files[index]) {
-      switchToFile(files[index].id);
+    // Lazy load: If logs for this file are not loaded, load them now
+    const file = files[index];
+    if (file) {
+      if (!allFileLogs[file.id] && file.fileObj) {
+        requestFileLoad(file.id, file.fileObj);
+      }
+      switchToFile(file.id);
     }
-  }, [files, switchToFile, activeFileIndex]);
+  }, [files, allFileLogs, requestFileLoad, switchToFile]);
 
   const handleFileClose = useCallback((index) => {
     const fileToClose = files[index];
@@ -366,6 +360,7 @@ const LogViewer = () => {
                 showingCombinedView={showingCombinedView}
                 onCombinedViewSelect={handleCombinedViewSelect}
                 allFileLogs={allFileLogs}
+                isFileLoading={isFileLoading}
               />
             )}
 

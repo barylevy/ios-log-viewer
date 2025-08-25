@@ -21,6 +21,7 @@ const getFileIdentifier = (file) => {
 };
 
 const useLogsModel = () => {
+  const [fileLoadingState, setFileLoadingState] = useState({}); // { [fileId]: true/false }
   const [logs, setLogs] = useState([]);
   const [selectedLog, setSelectedLog] = useState(null);
   const [highlightedLogId, setHighlightedLogId] = useState(null);
@@ -107,47 +108,28 @@ const useLogsModel = () => {
     return { headerData, headerLines };
   };
 
+  // Internal: load logs for a file object (async)
   const loadLogs = useCallback((file) => {
+    const fileId = getFileIdentifier(file);
+    // Mark loading as started
+    setFileLoadingState(prev => ({ ...prev, [fileId]: true }));
     const reader = new FileReader();
     reader.onload = (e) => {
       const content = e.target.result;
-
-      // Create unique file identifier
-      const fileId = getFileIdentifier(file);
-
       // Parse header information from start of file
       const { headerData, headerLines } = parseHeaderInfo(content);
-
-      // Store headers for this file - smart merge logic
       setLogFileHeaders(prev => {
         const existingHeaders = prev[fileId] || {};
         const hasNewHeaders = headerData && Object.keys(headerData).length > 0;
         const hasExistingHeaders = Object.keys(existingHeaders).length > 0;
-
-        // If we have existing headers and no new headers - keep existing
-        if (hasExistingHeaders && !hasNewHeaders) {
-          return prev;
-        }
-
-        // If we have new headers - use them (merge with existing if needed)
+        if (hasExistingHeaders && !hasNewHeaders) return prev;
         if (hasNewHeaders) {
-          return {
-            ...prev,
-            [fileId]: headerData
-          };
+          return { ...prev, [fileId]: headerData };
         }
-
-        // If no existing headers and no new headers - don't add entry
-        if (!hasExistingHeaders && !hasNewHeaders) {
-          return prev;
-        }
-
+        if (!hasExistingHeaders && !hasNewHeaders) return prev;
         return prev;
       });
-
       const lines = content.split('\n').filter(line => line.trim());
-
-      // Filter out header lines and create log entries
       const parsedLogs = lines
         .map((line, index) => ({ line, index }))
         .filter(({ index }) => !headerLines.includes(index))
@@ -159,24 +141,29 @@ const useLogsModel = () => {
           level: extractLogLevel(line),
           module: extractModule(line),
           thread: extractThread(line),
-          lineNumber: index + 1 // Store original line number from file (1-based)
+          lineNumber: index + 1
         }));
-
-      // Store logs for this specific file
-      setAllFileLogs(prev => ({
-        ...prev,
-        [fileId]: parsedLogs
-      }));
-
-      // Set current file name using the unique identifier
-      setCurrentFileName(fileId);
-
+      setAllFileLogs(prev => ({ ...prev, [fileId]: parsedLogs }));
       setLogs(parsedLogs);
       setSelectedLog(null);
       setHighlightedLogId(null);
+      setCurrentFileName(fileId);
+      setFileLoadingState(prev => ({ ...prev, [fileId]: false }));
     };
     reader.readAsText(file);
   }, []);
+
+  // Request file load if not loaded yet
+  const requestFileLoad = useCallback((fileId, fileObj) => {
+    if (!allFileLogs[fileId] && !fileLoadingState[fileId]) {
+      loadLogs(fileObj);
+    }
+  }, [allFileLogs, fileLoadingState, loadLogs]);
+
+  // Is file loading?
+  const isFileLoading = useCallback((fileId) => {
+    return !!fileLoadingState[fileId];
+  }, [fileLoadingState]);
 
   const extractTimestamp = (line) => {
     // Try to extract timestamp from common log formats with milliseconds
@@ -507,6 +494,8 @@ const useLogsModel = () => {
     allFileFilters,
     currentFileName,
     loadLogs,
+    requestFileLoad,
+    isFileLoading,
     setSelectedLog,
     updateFilters,
     highlightLog,
