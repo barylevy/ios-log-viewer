@@ -95,11 +95,16 @@ const cleanMessage = (message) => {
 
   // Also remove patterns where the log level is followed by a word and colon
   // Example: "D catoapi:" -> "catoapi:"
-  cleaned = cleaned.replace(/^[DIWETVF]\s+(\w+:)/g, '$1'); // Remove "D " before "catoapi:"
+  // cleaned = cleaned.replace(/^[DIWETVF]\s+(\w+:)/g, '$1'); // Remove "D " before "catoapi:"
 
   // Remove file:line info from anywhere in the message since we show it at the end
   // Examples: [DEMModule.cpp:46], [CNVpnConfManager:404]
   cleaned = cleaned.replace(/\[[\w\.]+:\d+\]/g, ''); // Remove [file:line] patterns
+
+  // Also remove patterns where the log level is followed by a word and colon
+  // Example: "D catoapi:" -> "catoapi:"
+  // cleaned = cleaned.replace(/^[DIWETVF]\s+(\w+:)/g, '$1'); // Remove "D " before "catoapi:"
+  cleaned = cleaned.replace(/^\s*[DIWETVF]\s+(\w+:)/, '$1');
 
   return cleaned.trim();
 };
