@@ -129,11 +129,12 @@ const useLogsModel = () => {
         if (!hasExistingHeaders && !hasNewHeaders) return prev;
         return prev;
       });
-      const lines = content.split('\n').filter(line => line.trim());
-      const parsedLogs = lines
-        .map((line, index) => ({ line, index }))
-        .filter(({ index }) => !headerLines.includes(index))
-        .map(({ line, index }, logIndex) => ({
+      const allLines = content.split('\n'); // Keep all lines including empty ones
+      const parsedLogs = allLines
+        .map((line, originalIndex) => ({ line, originalIndex }))
+        .filter(({ line }) => line.trim()) // Filter out empty lines but keep original index
+        .filter(({ originalIndex }) => !headerLines.includes(originalIndex))
+        .map(({ line, originalIndex }, logIndex) => ({
           id: logIndex,
           raw: line,
           message: line,
@@ -141,7 +142,7 @@ const useLogsModel = () => {
           level: extractLogLevel(line),
           module: extractModule(line),
           thread: extractThread(line),
-          lineNumber: index + 1
+          lineNumber: originalIndex + 1 // Use actual line number from original file
         }));
       setAllFileLogs(prev => ({ ...prev, [fileId]: parsedLogs }));
       setLogs(parsedLogs);
