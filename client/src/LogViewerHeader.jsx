@@ -17,35 +17,31 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
   };
 
   const handleFilesSelected = (event) => {
+    console.debug('handleFilesSelected triggered');
     const files = Array.from(event.target.files);
+    console.debug('Files selected:', files);
 
-    // Filter and sort files by name
-    const logFiles = files.filter(file =>
-      file.name.toLowerCase().endsWith('.txt') && file.name.toLowerCase().includes('log')
-    ).sort((a, b) => a.name.localeCompare(b.name));
-
-    // Don't clear tabs when loading individual files - just add them
-    logFiles.forEach(file => {
+    // Load all files without filtering by name
+    files.forEach(file => {
+      console.debug('Loading file:', file.name);
       onFileLoad(file);
     });
     event.target.value = '';
   };
 
   const handleDirectorySelected = (event) => {
+    console.debug('handleDirectorySelected triggered');
     const files = Array.from(event.target.files);
-    const logFiles = files.filter(file =>
-      file.name.toLowerCase().endsWith('.txt') && file.name.toLowerCase().includes('log')
-    );
-
-    // Sort files by name before loading
-    const sortedLogFiles = logFiles.sort((a, b) => a.name.localeCompare(b.name));
+    console.debug('Directory files selected:', files);
 
     // Clear previous files when loading new directory
     if (onClearTabs && sortedLogFiles.length > 0) {
       onClearTabs();
     }
 
-    sortedLogFiles.forEach(file => {
+    // Load all files without filtering by name
+    files.forEach(file => {
+      console.debug('Loading file:', file.name);
       onFileLoad(file);
     });
     event.target.value = '';

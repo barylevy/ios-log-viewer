@@ -71,8 +71,8 @@ const LogViewer = () => {
   const [isAIChatFullWidth, setIsAIChatFullWidth] = useState(false);
 
   const handleFileLoad = useCallback((file, clearTabsFirst = false) => {
-    // Only load .txt files with "log" in the name
-    if (!file.name.toLowerCase().endsWith('.txt') || !file.name.toLowerCase().includes('log')) {
+    // Only load .txt files or .log files
+    if (!file.name.toLowerCase().endsWith('.txt') && !file.name.toLowerCase().endsWith('.log')) {
       return;
     }
     const fileId = getFileIdentifier(file);
@@ -240,7 +240,7 @@ const LogViewer = () => {
 
     const droppedFiles = Array.from(e.dataTransfer.files);
     const textFiles = droppedFiles.filter(file =>
-      file.name.toLowerCase().endsWith('.txt') && file.name.toLowerCase().includes('log')
+      file.name.toLowerCase().endsWith('.txt') || file.name.toLowerCase().endsWith('.log')
     );
 
     // Sort files by name before loading
