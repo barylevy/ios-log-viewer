@@ -24,6 +24,11 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
       file.name.toLowerCase().endsWith('.txt') && file.name.toLowerCase().includes('log')
     ).sort((a, b) => a.name.localeCompare(b.name));
 
+    // Clear previous files when loading new files
+    if (onClearTabs && logFiles.length > 0) {
+      onClearTabs();
+    }
+
     logFiles.forEach(file => {
       onFileLoad(file);
     });
@@ -31,8 +36,6 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
   };
 
   const handleDirectorySelected = (event) => {
-    // Clear existing open tabs before loading a new folder
-    onClearTabs?.();
     const files = Array.from(event.target.files);
     const logFiles = files.filter(file =>
       file.name.toLowerCase().endsWith('.txt') && file.name.toLowerCase().includes('log')
@@ -40,6 +43,11 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
 
     // Sort files by name before loading
     const sortedLogFiles = logFiles.sort((a, b) => a.name.localeCompare(b.name));
+
+    // Clear previous files when loading new directory
+    if (onClearTabs && sortedLogFiles.length > 0) {
+      onClearTabs();
+    }
 
     sortedLogFiles.forEach(file => {
       onFileLoad(file);

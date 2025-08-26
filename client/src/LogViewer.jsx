@@ -33,6 +33,7 @@ const LogViewer = () => {
   const [searchPos, setSearchPos] = useState(0);
   const [searchTotal, setSearchTotal] = useState(0);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
+  const [headerState, setHeaderState] = useState(null);
 
   // Compute number of search matches
   const searchMatchCount = useMemo(() => {
@@ -60,7 +61,8 @@ const LogViewer = () => {
     setShowingCombinedView(false);
     setCombinedViewLoaded(false);
     setHasUserInteracted(false);
-  }, [setFiles, setActiveFileIndex, setShowingCombinedView, setCombinedViewLoaded, setHasUserInteracted]);
+    setHeaderState(null); // Clear header details
+  }, []);
 
   // AI Chat
   const [showAIChat, setShowAIChat] = useState(false);
@@ -68,31 +70,31 @@ const LogViewer = () => {
   const [isResizing, setIsResizing] = useState(false);
   const [isAIChatFullWidth, setIsAIChatFullWidth] = useState(false);
 
-  const handleFileLoad = useCallback((file) => {
+  const handleFileLoad = useCallback((file, clearTabsFirst = false) => {
     // Only load .txt files with "log" in the name
     if (!file.name.toLowerCase().endsWith('.txt') || !file.name.toLowerCase().includes('log')) {
       return;
     }
-
     const fileId = getFileIdentifier(file);
-
+    // Optionally clear all tabs before loading (for new folder)
+    if (clearTabsFirst) {
+      handleClearTabs();
+    }
     // Check if file already exists
     const existingIndex = files.findIndex(f => f.id === fileId);
     if (existingIndex >= 0) {
-      // File already exists, just switch to it
       setActiveFileIndex(existingIndex);
       setShowingCombinedView(false);
       switchToFile(fileId);
       return;
     }
-
     setFiles(prev => {
       const newFiles = [...prev, { name: file.name, id: fileId, fileObj: file }];
       if (prev.length === 0) {
         setActiveFileIndex(0);
         setShowingCombinedView(false);
-        // Immediately trigger log load for first file
         requestFileLoad(fileId, file);
+        // Immediately switch to the first file to show its logs
         setTimeout(() => {
           switchToFile(fileId);
         }, 0);
@@ -100,7 +102,35 @@ const LogViewer = () => {
       return newFiles;
     });
     setHasUserInteracted(true);
-  }, [files, switchToFile, requestFileLoad]);
+  }, [files, switchToFile, requestFileLoad, handleClearTabs]);
+
+  // Watch for logs changes to update header
+  useEffect(() => {
+    if (logs && logs.length > 0) {
+      // First try to get headers from file headers using file ID instead of name
+      const currentFile = files[activeFileIndex];
+      if (currentFile) {
+        const fileHeaders = getCurrentFileHeaders(currentFile.id);
+        if (fileHeaders && (fileHeaders.user || fileHeaders.account || fileHeaders.clientVersion || fileHeaders.osVersion)) {
+          setHeaderState(fileHeaders);
+          return;
+        }
+      }
+
+      // If no file headers, try to find header details from first few logs
+      const headerInfo = {};
+      for (let i = 0; i < Math.min(logs.length, 10); i++) {
+        const log = logs[i];
+        if (log.user && !headerInfo.user) headerInfo.user = log.user;
+        if (log.account && !headerInfo.account) headerInfo.account = log.account;
+        if (log.clientVersion && !headerInfo.clientVersion) headerInfo.clientVersion = log.clientVersion;
+        if (log.osVersion && !headerInfo.osVersion) headerInfo.osVersion = log.osVersion;
+      }
+      if (Object.keys(headerInfo).length > 0) {
+        setHeaderState(headerInfo);
+      }
+    }
+  }, [logs, files, activeFileIndex, getCurrentFileHeaders]);
 
   const handleFileSelect = useCallback((index) => {
     setActiveFileIndex(index);
@@ -301,21 +331,7 @@ const LogViewer = () => {
     );
   }, [hasUserInteracted, files.length, filteredLogs, setSelectedLog, highlightedLogId, filters]);
 
-  // Get current file headers
-  const currentFileHeaders = useMemo(() => {
-    if (files.length === 0) {
-      return null;
-    }
-
-    if (showingCombinedView) {
-      return null;
-    }
-
-    const currentFile = files[activeFileIndex];
-    const headers = currentFile ? getCurrentFileHeaders(currentFile.name) : null;
-
-    return headers;
-  }, [files, activeFileIndex, showingCombinedView, getCurrentFileHeaders, logFileHeaders]);
+  // Remove old currentFileHeaders logic - now using headerState
 
   return (
     <div
@@ -336,7 +352,7 @@ const LogViewer = () => {
         }}
         showAIChat={showAIChat}
         hasLogs={files.length > 0}
-        currentFileHeaders={currentFileHeaders}
+        currentFileHeaders={headerState}
       />
 
       {/* Main content area - Split panel container */}
