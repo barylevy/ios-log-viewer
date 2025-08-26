@@ -24,11 +24,7 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
       file.name.toLowerCase().endsWith('.txt') && file.name.toLowerCase().includes('log')
     ).sort((a, b) => a.name.localeCompare(b.name));
 
-    // Clear previous files when loading new files
-    if (onClearTabs && logFiles.length > 0) {
-      onClearTabs();
-    }
-
+    // Don't clear tabs when loading individual files - just add them
     logFiles.forEach(file => {
       onFileLoad(file);
     });

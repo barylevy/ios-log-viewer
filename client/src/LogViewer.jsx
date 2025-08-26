@@ -156,6 +156,7 @@ const LogViewer = () => {
         setActiveFileIndex(0);
         setShowingCombinedView(false);
         setCombinedViewLoaded(false);
+        setHeaderState(null); // Clear header details when last tab is closed
         return [];
       }
 
