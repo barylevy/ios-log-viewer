@@ -248,48 +248,58 @@ const useLogsModel = () => {
   const searchData = useMemo(() => {
     if (!filters.searchText) return null;
 
-    const searchTerms = filters.searchText.split('||')
-      .map(term => term.trim())
-      .filter(term => term.length > 0);
+    // Split by ||, trim, and classify as include/exclude
+    const terms = filters.searchText.split('||').map(term => term.trim()).filter(Boolean);
+    const includeTerms = terms.filter(term => !term.startsWith('!'));
+    const excludeTerms = terms.filter(term => term.startsWith('!')).map(term => term.slice(1));
 
-    const searchRegexes = searchTerms.map(term => {
+    // Build regexes for each term (case-insensitive, supports spaces)
+    const includeRegexes = includeTerms.map(term => {
       try {
-        return new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+        return new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      } catch {
+        return null;
+      }
+    });
+    const excludeRegexes = excludeTerms.map(term => {
+      try {
+        return new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
       } catch {
         return null;
       }
     });
 
-    return { searchTerms, searchRegexes };
+    return { includeTerms, excludeTerms, includeRegexes, excludeRegexes };
   }, [filters.searchText]);
 
   const filteredLogs = useMemo(() => {
     if (!logs.length) return [];
 
-    // First pass: find all logs that match the base filters (excluding context)
     const matchingLogIndices = [];
 
     logs.forEach((log, index) => {
-      // Search text filter - now supports multiple terms with ||
       if (searchData) {
-        const { searchTerms, searchRegexes } = searchData;
+        const { includeTerms, excludeTerms, includeRegexes, excludeRegexes } = searchData;
+        const message = log.message.toLowerCase();
 
-        // Check if ANY of the search terms match (OR logic)
-        const matchesAnyTerm = searchTerms.some((term, termIndex) => {
-          const regex = searchRegexes[termIndex];
-          if (regex) {
-            return regex.test(log.message);
-          } else {
-            // Fallback to string search (case insensitive)
-            const searchText = term.toLowerCase();
-            const message = log.message.toLowerCase();
-            return message.includes(searchText);
-          }
+        // Exclude logic: if any exclude term matches, skip this log
+        const isExcluded = excludeTerms.some((term, i) => {
+          const regex = excludeRegexes[i];
+          if (regex) return regex.test(message);
+          return message.includes(term.toLowerCase());
         });
+        if (isExcluded) return;
 
-        if (!matchesAnyTerm) return;
+        // Include logic: if there are include terms, at least one must match
+        if (includeTerms.length > 0) {
+          const matchesAnyInclude = includeTerms.some((term, i) => {
+            const regex = includeRegexes[i];
+            if (regex) return regex.test(message);
+            return message.includes(term.toLowerCase());
+          });
+          if (!matchesAnyInclude) return;
+        }
       }
-
       // Log level filter - support multiple levels
       if (!filters.logLevel.includes('all') && !filters.logLevel.includes(log.level)) {
         return;
@@ -318,10 +328,7 @@ const useLogsModel = () => {
 
     // If no context lines requested, just return the matching logs
     if (!filters.contextLines || filters.contextLines === 0) {
-      return matchingLogIndices.map(index => ({
-        ...logs[index],
-        isContextLine: false
-      }));
+      return matchingLogIndices.map(i => logs[i]);
     }
 
     // Second pass: include context lines around matching logs
@@ -347,7 +354,7 @@ const useLogsModel = () => {
       ...logs[index],
       isContextLine: !matchingIndicesSet.has(index)
     }));
-  }, [logs, searchData, filters.logLevel, filters.startTime, filters.endTime, filters.contextLines]);
+  }, [logs, filters, searchData, normalizeTimestamp]);
 
   const updateFilters = useCallback((newFilters) => {
     setFilters(prev => {

@@ -123,30 +123,27 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
   );
 
   const renderFilterInput = () => (
-    <div className="flex-1 min-w-64 flex items-center">
-      <label className="text-xs font-medium text-gray-700 dark:text-gray-300 mr-2">Filter:</label>
-      <div className="relative w-full">
-        <input
-          type="text"
-          placeholder="Filter logs... (use || to separate multiple terms)"
-          value={filters.searchText}
-          onChange={(e) => handleFilterChange('searchText', e.target.value)}
-          className="w-full h-10 px-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
-        />
-        {filters.searchText && (
-          <button
-            onClick={() => handleFilterChange('searchText', '')}
-            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-          >
-            ×
-          </button>
-        )}
-      </div>
-      {filters.searchText && filters.searchText.includes('||') && (
-        <div className="text-xs text-gray-400 dark:text-gray-500 mt-1 opacity-75">
-          Filtering for: {filters.searchText.split('||').map(t => t.trim()).filter(t => t).length} terms
+    <div className="flex-1 min-w-64 flex flex-col items-start">
+      <div className="flex items-center w-full">
+        <label className="text-xs font-medium text-gray-700 dark:text-gray-300 mr-2">Filter:</label>
+        <div className="relative w-full">
+          <input
+            type="text"
+            placeholder="use || to separate terms, ! to exclude: e.g. error || !heartbeat"
+            value={filters.searchText}
+            onChange={(e) => handleFilterChange('searchText', e.target.value)}
+            className="w-full h-10 px-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
+          />
+          {filters.searchText && (
+            <button
+              onClick={() => handleFilterChange('searchText', '')}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            >
+              ×
+            </button>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 
@@ -315,11 +312,18 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
   );
 
   const renderStats = () => (
-    <div className="mt-1 text-[10px] text-gray-600 dark:text-gray-400">
-      Showing {filteredLogsCount.toLocaleString()} of {logsCount.toLocaleString()} logs
-      {filteredLogsCount !== logsCount && (
-        <span className="ml-2 text-blue-600 dark:text-blue-400">
-          ({((filteredLogsCount / logsCount) * 100).toFixed(1)}% visible)
+    <div className="mt-1 text-[10px] text-gray-600 dark:text-gray-400 flex items-center gap-4">
+      <span>
+        Showing {filteredLogsCount.toLocaleString()} of {logsCount.toLocaleString()} logs
+        {filteredLogsCount !== logsCount && (
+          <span className="ml-2 text-blue-600 dark:text-blue-400">
+            ({((filteredLogsCount / logsCount) * 100).toFixed(1)}% visible)
+          </span>
+        )}
+      </span>
+      {filters.searchText && filters.searchText.includes('||') && (
+        <span className="text-gray-400 dark:text-gray-500 opacity-75">
+          Filtering for: {filters.searchText.split('||').map(t => t.trim()).filter(t => t).length} terms
         </span>
       )}
     </div>
