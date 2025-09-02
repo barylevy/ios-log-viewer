@@ -64,8 +64,14 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
           <img src="/cato-logo.svg" alt="Cato Networks" className="h-8 w-auto flex-shrink-0" />
           <div className="flex items-baseline space-x-3">
             <h1 className="text-xl font-semibold text-gray-900 dark:text-white whitespace-nowrap">Cato Client Log Viewer</h1>
-
-            {/* User Details - Baseline aligned with title */}
+            {/* About button */}
+            <button
+              onClick={() => setShowAbout(true)}
+              className="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-100 px-3 py-2 rounded-md text-xs font-medium border border-gray-300 dark:border-gray-600"
+            >
+              About
+            </button>
+            {/* User Details - now after About button */}
             {currentFileHeaders && Object.keys(currentFileHeaders).length > 0 && (
               <div className="flex items-baseline gap-3 text-sm text-gray-600 dark:text-gray-400">
                 {currentFileHeaders.user && (
@@ -110,13 +116,6 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
               </div>
             )}
           </div>
-          {/* About button */}
-          <button
-            onClick={() => setShowAbout(true)}
-            className="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-100 px-3 py-2 rounded-md text-xs font-medium border border-gray-300 dark:border-gray-600"
-          >
-            About
-          </button>
         </div>
 
         <div className="flex items-center space-x-3 flex-shrink-0">
