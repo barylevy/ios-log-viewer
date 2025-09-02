@@ -130,22 +130,49 @@ const useLogsModel = () => {
         return prev;
       });
       const allLines = content.split('\n'); // Keep all lines including empty ones
-      const parsedLogs = allLines
-        .map((line, originalIndex) => ({ line, originalIndex }))
-        .filter(({ line }) => line.trim()) // Filter out empty lines but keep original index
-        .filter(({ originalIndex }) => !headerLines.includes(originalIndex))
-        .map(({ line, originalIndex }, logIndex) => ({
-          id: logIndex,
-          raw: line,
-          message: line,
-          timestamp: extractTimestamp(line),
-          level: extractLogLevel(line),
-          module: extractModule(line),
-          thread: extractThread(line),
-          lineNumber: originalIndex + 1 // Use actual line number from original file
-        }));
-      setAllFileLogs(prev => ({ ...prev, [fileId]: parsedLogs }));
-      setLogs(parsedLogs);
+      // New logic: group lines by timestamp
+      const logs = [];
+      let currentLog = null;
+      allLines.forEach((line, idx) => {
+        if (!line.trim() || headerLines.includes(idx)) return;
+        const hasTimestamp = extractTimestamp(line);
+        if (hasTimestamp) {
+          // Start a new log entry
+          if (currentLog) logs.push(currentLog);
+          currentLog = {
+            id: logs.length,
+            raw: line,
+            message: line,
+            timestamp: hasTimestamp,
+            level: extractLogLevel(line),
+            module: extractModule(line),
+            thread: extractThread(line),
+            lineNumber: idx + 1,
+            originalLineNumbers: [idx + 1]
+          };
+        } else if (currentLog) {
+          // Append to previous log's message, but increment line number
+          currentLog.message += '\n' + line;
+          currentLog.raw += '\n' + line;
+          currentLog.originalLineNumbers.push(idx + 1);
+        } else {
+          // If the first line(s) have no timestamp, treat as a log
+          currentLog = {
+            id: logs.length,
+            raw: line,
+            message: line,
+            timestamp: '',
+            level: extractLogLevel(line),
+            module: extractModule(line),
+            thread: extractThread(line),
+            lineNumber: idx + 1,
+            originalLineNumbers: [idx + 1]
+          };
+        }
+      });
+      if (currentLog) logs.push(currentLog);
+      setAllFileLogs(prev => ({ ...prev, [fileId]: logs }));
+      setLogs(logs);
       setSelectedLog(null);
       setHighlightedLogId(null);
       setCurrentFileName(fileId);
