@@ -35,7 +35,7 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
     console.debug('Directory files selected:', files);
 
     // Clear previous files when loading new directory
-    if (onClearTabs && sortedLogFiles.length > 0) {
+    if (onClearTabs) {
       onClearTabs();
     }
 
