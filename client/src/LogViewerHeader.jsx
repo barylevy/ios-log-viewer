@@ -1,10 +1,12 @@
 import React, { useRef, useState } from 'react';
 import FileSelectionModal from './FileSelectionModal';
+import AboutModal from './AboutModal';
 
 const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, currentFileHeaders, onClearTabs }) => {
   const fileInputRef = useRef(null);
   const directoryInputRef = useRef(null);
   const [showFileSelectionModal, setShowFileSelectionModal] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
 
   const handleChooseFiles = () => {
     fileInputRef.current?.click();
@@ -108,6 +110,13 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
               </div>
             )}
           </div>
+          {/* About button */}
+          <button
+            onClick={() => setShowAbout(true)}
+            className="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-100 px-3 py-2 rounded-md text-xs font-medium border border-gray-300 dark:border-gray-600"
+          >
+            About
+          </button>
         </div>
 
         <div className="flex items-center space-x-3 flex-shrink-0">
@@ -155,6 +164,8 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
         onChooseFiles={handleChooseFiles}
         onChooseDirectory={handleChooseDirectory}
       />
+      {/* About Modal */}
+      <AboutModal isOpen={showAbout} onClose={() => setShowAbout(false)} />
     </header>
   );
 };
