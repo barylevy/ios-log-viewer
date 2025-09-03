@@ -133,6 +133,14 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
             value={filters.searchText}
             onChange={(e) => handleFilterChange('searchText', e.target.value)}
             className="w-full h-10 px-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
+            title={
+              `Filtering abilities:\n
+• Separate multiple terms with '||' (OR logic): error || warning\n
+• Exclude terms with '!': !heartbeat\n
+• Filter by row index: \n   #415 :: — show from record 415 and on\n   #415 :: #600 — show from record 415 to 600\n   :: #600 — show from start to row 600\n   appl || #415 :: #600 — all records between 415–600 that contain 'appl'\n
+• Filter by phrase: "connection lost"\n
+• Combine with log level, date, and context filters\n`
+            }
           />
           {filters.searchText && (
             <button

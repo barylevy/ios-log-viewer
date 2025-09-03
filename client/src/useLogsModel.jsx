@@ -272,11 +272,40 @@ const useLogsModel = () => {
   };
 
   // Pre-compile search terms and regexes for performance
+  // Parse row range filter: #start :: #end
   const searchData = useMemo(() => {
     if (!filters.searchText) return null;
 
+    // Extract row range filter if present
+    let rowStart = null, rowEnd = null;
+    let searchText = filters.searchText;
+    const rowRangeRegex = /(^|\s)::\s*#(\d+)/; // :: #600
+    const rowStartRegex = /#(\d+)\s*::/; // #415 ::
+    const rowBothRegex = /#(\d+)\s*::\s*#(\d+)/; // #415 :: #600
+
+    // #415 :: #600
+    const bothMatch = searchText.match(rowBothRegex);
+    if (bothMatch) {
+      rowStart = parseInt(bothMatch[1], 10);
+      rowEnd = parseInt(bothMatch[2], 10);
+      searchText = searchText.replace(rowBothRegex, '').replace('||', '').trim();
+    } else {
+      // #415 ::
+      const startMatch = searchText.match(rowStartRegex);
+      if (startMatch) {
+        rowStart = parseInt(startMatch[1], 10);
+        searchText = searchText.replace(rowStartRegex, '').replace('||', '').trim();
+      }
+      // :: #600
+      const endMatch = searchText.match(rowRangeRegex);
+      if (endMatch) {
+        rowEnd = parseInt(endMatch[2], 10);
+        searchText = searchText.replace(rowRangeRegex, '').replace('||', '').trim();
+      }
+    }
+
     // Split by ||, trim, and classify as include/exclude
-    const terms = filters.searchText.split('||').map(term => term.trim()).filter(Boolean);
+    const terms = searchText.split('||').map(term => term.trim()).filter(Boolean);
     const includeTerms = terms.filter(term => !term.startsWith('!'));
     const excludeTerms = terms.filter(term => term.startsWith('!')).map(term => term.slice(1));
 
@@ -296,8 +325,9 @@ const useLogsModel = () => {
       }
     });
 
-    return { includeTerms, excludeTerms, includeRegexes, excludeRegexes };
+    return { includeTerms, excludeTerms, includeRegexes, excludeRegexes, rowStart, rowEnd };
   }, [filters.searchText]);
+
 
   const filteredLogs = useMemo(() => {
     if (!logs.length) return [];
@@ -306,8 +336,12 @@ const useLogsModel = () => {
 
     logs.forEach((log, index) => {
       if (searchData) {
-        const { includeTerms, excludeTerms, includeRegexes, excludeRegexes } = searchData;
+        const { includeTerms, excludeTerms, includeRegexes, excludeRegexes, rowStart, rowEnd } = searchData;
         const message = log.message.toLowerCase();
+
+        // Row range filter (use real line number in file)
+        if (rowStart !== null && log.lineNumber < rowStart) return;
+        if (rowEnd !== null && log.lineNumber > rowEnd) return;
 
         // Exclude logic: if any exclude term matches, skip this log
         const isExcluded = excludeTerms.some((term, i) => {
