@@ -1,4 +1,5 @@
 import React from 'react';
+import { getFileDisplayName, getFileFullName } from './useLogsModel';
 
 const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCombinedView, onCombinedViewSelect, allFileLogs = {}, isFileLoading }) => {
     return (
@@ -18,9 +19,10 @@ const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCom
                                 onClick={() => {
                                     onFileSelect(index);
                                 }}
+                                title={getFileFullName(file.id)}
                             >
                                 <span className="text-sm font-medium flex items-center">
-                                    {file.name}
+                                    {getFileDisplayName(file.id)}
                                     {loading && (
                                         <svg className="ml-2 animate-spin h-4 w-4 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>

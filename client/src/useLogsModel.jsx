@@ -20,6 +20,48 @@ const getFileIdentifier = (file) => {
   return file.name;
 };
 
+// Returns a shortened display name (max 50 chars from the end, showing suffix)
+const getFileDisplayName = (fileId) => {
+  if (!fileId) return '';
+
+  // If it contains the size and timestamp pattern, extract just the filename
+  const sizeTimestampPattern = /^(.+)_\d+_\d+$/;
+  const match = fileId.match(sizeTimestampPattern);
+  let name = fileId;
+  if (match) {
+    name = match[1];
+  } else if (fileId.includes('/')) {
+    name = fileId.split('/').pop();
+  }
+
+  // Shorten to max 50 chars from the end (show suffix)
+  if (name.length > 50) {
+    return '...' + name.slice(-50);
+  }
+  return name;
+};
+
+// Returns the full file path/name for tooltip/hover, including folder if present
+const getFileFullName = (fileId) => {
+  if (!fileId) return '';
+  // If it contains the size and timestamp pattern, extract just the filename with path
+  const sizeTimestampPattern = /^(.+)_\d+_\d+$/;
+  const match = fileId.match(sizeTimestampPattern);
+  let fullPath = fileId;
+  if (match) {
+    fullPath = match[1];
+  }
+  // If it's a path, show the last two segments (folder + file)
+  if (fullPath.includes('/')) {
+    const parts = fullPath.split('/');
+    if (parts.length >= 2) {
+      return parts.slice(-2).join('/');
+    }
+    return fullPath;
+  }
+  return fullPath;
+};
+
 const useLogsModel = () => {
   const [fileLoadingState, setFileLoadingState] = useState({}); // { [fileId]: true/false }
   const [logs, setLogs] = useState([]);
@@ -533,22 +575,37 @@ const useLogsModel = () => {
   }, []);
 
   // Get display name from file identifier
+
+  // Returns a shortened display name (max 50 chars from the end, showing suffix)
   const getFileDisplayName = useCallback((fileId) => {
     if (!fileId) return '';
 
     // If it contains the size and timestamp pattern, extract just the filename
     const sizeTimestampPattern = /^(.+)_\d+_\d+$/;
     const match = fileId.match(sizeTimestampPattern);
+    let name = fileId;
     if (match) {
-      return match[1]; // Return just the filename part
+      name = match[1];
+    } else if (fileId.includes('/')) {
+      name = fileId.split('/').pop();
     }
 
-    // If it's a path, return just the filename
-    if (fileId.includes('/')) {
-      return fileId.split('/').pop();
+    // Shorten to max 50 chars from the end (show suffix)
+    if (name.length > 50) {
+      return '...' + name.slice(-50);
     }
+    return name;
+  }, []);
 
-    // Otherwise return as-is
+  // Returns the full file path/name for tooltip/hover
+  const getFileFullName = useCallback((fileId) => {
+    if (!fileId) return '';
+    // If it contains the size and timestamp pattern, extract just the filename
+    const sizeTimestampPattern = /^(.+)_\d+_\d+$/;
+    const match = fileId.match(sizeTimestampPattern);
+    if (match) {
+      return match[1];
+    }
     return fileId;
   }, []);
 
@@ -578,4 +635,4 @@ const useLogsModel = () => {
 };
 
 export default useLogsModel;
-export { getFileIdentifier };
+export { getFileIdentifier, getFileDisplayName, getFileFullName };
