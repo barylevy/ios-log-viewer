@@ -105,7 +105,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
           placeholder="Search in logs..."
           value={filters.searchQuery || ''}
           onChange={(e) => handleFilterChange('searchQuery', e.target.value)}
-          className="w-full h-8 px-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
+          className="w-full h-8 px-2 pr-28 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
         />
         {filters.searchQuery && (
           <button
@@ -153,7 +153,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
             placeholder="Search logs: text || terms, !exclude, #row::, #date:: ranges. Hover for full guide."
             value={filters.searchText}
             onChange={(e) => handleFilterChange('searchText', e.target.value)}
-            className="w-full h-8 px-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
+            className="w-full h-8 px-2 pr-8 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
             title={
               `Advanced Filtering Guide:\n
 • Multiple terms: Use '||' (OR logic): error || warning\n
@@ -330,7 +330,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
         </div>
 
         {/* Bottom row with stats only */}
-        <div className="flex items-center">
+        <div className="flex items-center mt-2">
           {renderStats()}
         </div>
       </div>
