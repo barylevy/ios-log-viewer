@@ -20,7 +20,7 @@ const getFileIdentifier = (file) => {
   return file.name;
 };
 
-// Returns a shortened display name (max 50 chars from the end, showing suffix)
+// Returns a shortened display name (max 30 chars from the end, showing suffix)
 const getFileDisplayName = (fileId) => {
   if (!fileId) return '';
 
@@ -34,9 +34,9 @@ const getFileDisplayName = (fileId) => {
     name = fileId.split('/').pop();
   }
 
-  // Shorten to max 50 chars from the end (show suffix)
-  if (name.length > 50) {
-    return '...' + name.slice(-50);
+  // Shorten to max 30 chars from the end (show suffix)
+  if (name.length > 30) {
+    return '...' + name.slice(-30);
   }
   return name;
 };
@@ -84,8 +84,6 @@ const useLogsModel = () => {
     searchText: '',
     searchQuery: '',
     logLevel: ['all'], // Array to support multiple levels
-    startTime: '',
-    endTime: '',
     contextLines: 0
   });
 
@@ -299,6 +297,9 @@ const useLogsModel = () => {
         // Log format: 2025-08-02 23:54:57:514 or 2025-08-02 23:54:57
         const cleanTimestamp = timestamp.replace(/:\d{3}$/, ''); // Remove milliseconds if present
         date = new Date(cleanTimestamp.replace(' ', 'T'));
+      } else if (timestamp.includes('-') && !timestamp.includes(' ') && !timestamp.includes(':')) {
+        // Date only format: 2025-07-04 - assume start of day (00:00:00)
+        date = new Date(`${timestamp}T00:00:00`);
       } else if (timestamp.includes(':')) {
         // Time only: 23:54:57 - use today's date
         const today = new Date().toISOString().split('T')[0];
@@ -314,35 +315,70 @@ const useLogsModel = () => {
   };
 
   // Pre-compile search terms and regexes for performance
-  // Parse row range filter: #start :: #end
+  // Parse row range filter: #start :: #end or date range filter: #date :: #date
   const searchData = useMemo(() => {
     if (!filters.searchText) return null;
 
-    // Extract row range filter if present
+    // Extract row range filter or date range filter if present
     let rowStart = null, rowEnd = null;
+    let dateStart = null, dateEnd = null;
     let searchText = filters.searchText;
-    const rowRangeRegex = /(^|\s)::\s*#(\d+)/; // :: #600
-    const rowStartRegex = /#(\d+)\s*::/; // #415 ::
-    const rowBothRegex = /#(\d+)\s*::\s*#(\d+)/; // #415 :: #600
 
-    // #415 :: #600
-    const bothMatch = searchText.match(rowBothRegex);
-    if (bothMatch) {
-      rowStart = parseInt(bothMatch[1], 10);
-      rowEnd = parseInt(bothMatch[2], 10);
-      searchText = searchText.replace(rowBothRegex, '').replace('||', '').trim();
+    // Date range patterns: Support multiple formats
+    // #2025-07-04 13:28:20:540 :: #2025-07-05 13:28:20:540 (with milliseconds)
+    // #2025-07-04 14:19:44 :: #2025-07-05 14:19:44 (without milliseconds)  
+    // #2025-07-04 :: #2025-07-05 (date only)
+    const dateRangeRegex = /(^|\s)::\s*#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?::\d{3})?)?)/; // :: #date
+    const dateStartRegex = /#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?::\d{3})?)?)\s*::/; // #date ::
+    const dateBothRegex = /#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?::\d{3})?)?)\s*::\s*#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?::\d{3})?)?)/; // #date :: #date
+
+    // Row range patterns: #415 :: #600
+    const rowRangeRegex = /(^|\s)::\s*#(\d+)(?!\d{4})/; // :: #600 (but not :: #2025...)
+    const rowStartRegex = /#(\d+)(?!\d{4})\s*::/; // #415 :: (but not #2025...)
+    const rowBothRegex = /#(\d+)(?!\d{4})\s*::\s*#(\d+)(?!\d{4})/; // #415 :: #600
+
+    // Try date ranges first
+    const dateBothMatch = searchText.match(dateBothRegex);
+    if (dateBothMatch) {
+      dateStart = dateBothMatch[1];
+      dateEnd = dateBothMatch[2];
+      searchText = searchText.replace(dateBothRegex, '').replace(/\|\|\s*$/, '').replace(/^\s*\|\|/, '').trim();
     } else {
-      // #415 ::
-      const startMatch = searchText.match(rowStartRegex);
-      if (startMatch) {
-        rowStart = parseInt(startMatch[1], 10);
-        searchText = searchText.replace(rowStartRegex, '').replace('||', '').trim();
+      // #date ::
+      const dateStartMatch = searchText.match(dateStartRegex);
+      if (dateStartMatch) {
+        dateStart = dateStartMatch[1];
+        searchText = searchText.replace(dateStartRegex, '').replace(/\|\|\s*$/, '').replace(/^\s*\|\|/, '').trim();
       }
-      // :: #600
-      const endMatch = searchText.match(rowRangeRegex);
-      if (endMatch) {
-        rowEnd = parseInt(endMatch[2], 10);
-        searchText = searchText.replace(rowRangeRegex, '').replace('||', '').trim();
+      // :: #date
+      const dateEndMatch = searchText.match(dateRangeRegex);
+      if (dateEndMatch) {
+        dateEnd = dateEndMatch[2];
+        searchText = searchText.replace(dateRangeRegex, '').replace(/\|\|\s*$/, '').replace(/^\s*\|\|/, '').trim();
+      }
+    }
+
+    // If no date ranges found, try row ranges
+    if (!dateStart && !dateEnd) {
+      // #415 :: #600
+      const rowBothMatch = searchText.match(rowBothRegex);
+      if (rowBothMatch) {
+        rowStart = parseInt(rowBothMatch[1], 10);
+        rowEnd = parseInt(rowBothMatch[2], 10);
+        searchText = searchText.replace(rowBothRegex, '').replace(/\|\|\s*$/, '').replace(/^\s*\|\|/, '').trim();
+      } else {
+        // #415 ::
+        const rowStartMatch = searchText.match(rowStartRegex);
+        if (rowStartMatch) {
+          rowStart = parseInt(rowStartMatch[1], 10);
+          searchText = searchText.replace(rowStartRegex, '').replace(/\|\|\s*$/, '').replace(/^\s*\|\|/, '').trim();
+        }
+        // :: #600
+        const rowEndMatch = searchText.match(rowRangeRegex);
+        if (rowEndMatch) {
+          rowEnd = parseInt(rowEndMatch[2], 10);
+          searchText = searchText.replace(rowRangeRegex, '').replace(/\|\|\s*$/, '').replace(/^\s*\|\|/, '').trim();
+        }
       }
     }
 
@@ -367,7 +403,16 @@ const useLogsModel = () => {
       }
     });
 
-    return { includeTerms, excludeTerms, includeRegexes, excludeRegexes, rowStart, rowEnd };
+    return {
+      includeTerms,
+      excludeTerms,
+      includeRegexes,
+      excludeRegexes,
+      rowStart,
+      rowEnd,
+      dateStart,
+      dateEnd
+    };
   }, [filters.searchText]);
 
 
@@ -378,12 +423,29 @@ const useLogsModel = () => {
 
     logs.forEach((log, index) => {
       if (searchData) {
-        const { includeTerms, excludeTerms, includeRegexes, excludeRegexes, rowStart, rowEnd } = searchData;
+        const { includeTerms, excludeTerms, includeRegexes, excludeRegexes, rowStart, rowEnd, dateStart, dateEnd } = searchData;
         const message = log.message.toLowerCase();
 
-        // Row range filter (use real line number in file)
-        if (rowStart !== null && log.lineNumber < rowStart) return;
-        if (rowEnd !== null && log.lineNumber > rowEnd) return;
+        // Date range filter (takes precedence over row range)
+        if (dateStart || dateEnd) {
+          if (log.timestamp) {
+            const logTime = normalizeTimestamp(log.timestamp);
+            if (logTime) {
+              if (dateStart) {
+                const startTime = normalizeTimestamp(dateStart);
+                if (startTime && logTime < startTime) return;
+              }
+              if (dateEnd) {
+                const endTime = normalizeTimestamp(dateEnd);
+                if (endTime && logTime > endTime) return;
+              }
+            }
+          }
+        } else {
+          // Row range filter (use real line number in file) - only if no date filter
+          if (rowStart !== null && log.lineNumber < rowStart) return;
+          if (rowEnd !== null && log.lineNumber > rowEnd) return;
+        }
 
         // Exclude logic: if any exclude term matches, skip this log
         const isExcluded = excludeTerms.some((term, i) => {
@@ -406,23 +468,6 @@ const useLogsModel = () => {
       // Log level filter - support multiple levels
       if (!filters.logLevel.includes('all') && !filters.logLevel.includes(log.level)) {
         return;
-      }
-
-      // Time range filters - convert to comparable timestamps
-      if (filters.startTime && log.timestamp) {
-        const logTime = normalizeTimestamp(log.timestamp);
-        const startTime = normalizeTimestamp(filters.startTime);
-        if (logTime && startTime && logTime < startTime) {
-          return;
-        }
-      }
-
-      if (filters.endTime && log.timestamp) {
-        const logTime = normalizeTimestamp(log.timestamp);
-        const endTime = normalizeTimestamp(filters.endTime);
-        if (logTime && endTime && logTime > endTime) {
-          return;
-        }
       }
 
       // This log matches all filters
@@ -522,14 +567,11 @@ const useLogsModel = () => {
 
       // Load filters for this file if they exist, otherwise use default filters
       const defaultFilters = {
+        searchQuery: '',
         searchText: '',
         logLevel: ['all'],
-        startTime: '',
-        endTime: '',
         contextLines: 0
-      };
-
-      const fileFilters = allFileFilters[fileName];
+      }; const fileFilters = allFileFilters[fileName];
       setFilters(fileFilters ? { ...fileFilters } : defaultFilters);
 
       setLogs(processedLogs);
@@ -551,8 +593,6 @@ const useLogsModel = () => {
     const defaultFilters = {
       searchText: '',
       logLevel: ['all'],
-      startTime: '',
-      endTime: '',
       contextLines: 0
     };
 

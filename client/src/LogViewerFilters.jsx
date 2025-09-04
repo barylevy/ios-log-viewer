@@ -150,17 +150,33 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
           <input
             ref={filterInputRef}
             type="text"
-            placeholder="use || to separate terms, ! to exclude: e.g. error || !heartbeat"
+            placeholder="Search logs: text || terms, !exclude, #row::, #date:: ranges. Hover for full guide."
             value={filters.searchText}
             onChange={(e) => handleFilterChange('searchText', e.target.value)}
             className="w-full h-10 px-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
             title={
-              `Filtering abilities:\n
-• Separate multiple terms with '||' (OR logic): error || warning\n
-• Exclude terms with '!': !heartbeat\n
-• Filter by row index: \n   #415 :: — show from record 415 and on\n   #415 :: #600 — show from record 415 to 600\n   :: #600 — show from start to row 600\n   appl || #415 :: #600 — all records between 415–600 that contain 'appl'\n
-• Filter by phrase: "connection lost"\n
-• Combine with log level, date, and context filters\n`
+              `Advanced Filtering Guide:\n
+• Multiple terms: Use '||' (OR logic): error || warning\n
+• Exclude terms: Use '!' prefix: !heartbeat\n
+• Exact phrases: Use quotes: "connection lost"\n
+\n
+• Filter by row numbers:\n
+  #415 :: — from row 415 onwards\n
+  #415 :: #600 — rows 415 to 600\n
+  :: #600 — from start to row 600\n
+\n
+• Filter by dates (supports multiple formats):\n
+  #2025-07-04 :: — from July 4th, 2025 onwards\n
+  #2025-07-04 14:19:44 :: — from specific time onwards\n
+  #2025-07-04 13:28:20:540 :: — with milliseconds\n
+  #2025-07-04 :: #2025-07-05 — date range\n
+  :: #2025-07-05 14:30:00 — until specific time\n
+\n
+• Combine filters:\n
+  error || #2025-07-04 :: #2025-07-05 — errors between dates\n
+  !debug || #100 :: #500 — exclude debug in rows 100-500\n
+\n
+• Works with log level and context line filters`
             }
           />
           {filters.searchText && (
@@ -235,81 +251,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
     );
   };
 
-  const renderTimeRangeFilter = () => (
-    <div className={`flex items-center gap-2 min-w-fit rounded-md ${(filters.startTime || filters.endTime) ? 'px-3 bg-gray-100 dark:bg-gray-600' : ''}`}>
-      <label className="text-xs font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">Date:</label>
-      <select
-        onChange={(e) => {
-          const value = e.target.value;
-          if (value === 'custom') {
-            // If no dates are set yet, set default range (today)
-            if (!filters.startTime && !filters.endTime) {
-              const today = new Date().toISOString().split('T')[0];
-              handleFilterChange('startTime', `${today}T00:00`);
-              handleFilterChange('endTime', `${today}T23:59`);
-            }
-            // If dates already exist, keep them as is
-            return;
-          } else if (value === 'today') {
-            const today = new Date().toISOString().split('T')[0];
-            handleFilterChange('startTime', `${today}T00:00`);
-            handleFilterChange('endTime', `${today}T23:59`);
-          } else if (value === 'yesterday') {
-            const yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
-            const yesterdayStr = yesterday.toISOString().split('T')[0];
-            handleFilterChange('startTime', `${yesterdayStr}T00:00`);
-            handleFilterChange('endTime', `${yesterdayStr}T23:59`);
-          } else if (value === 'week') {
-            const weekAgo = new Date();
-            weekAgo.setDate(weekAgo.getDate() - 7);
-            const today = new Date();
-            handleFilterChange('startTime', weekAgo.toISOString().slice(0, 16));
-            handleFilterChange('endTime', today.toISOString().slice(0, 16));
-          }
-        }}
-        value={filters.startTime || filters.endTime ? 'custom' : ''}
-        className="px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs"
-      >
-        <option value="">All time</option>
-        <option value="today">Today</option>
-        <option value="yesterday">Yesterday</option>
-        <option value="week">Last 7 days</option>
-        <option value="custom">Custom range...</option>
-      </select>
 
-      {/* Show custom inputs only when custom range is selected or dates are set */}
-      {(filters.startTime || filters.endTime) && (
-        <>
-          <input
-            type="datetime-local"
-            value={filters.startTime}
-            onChange={(e) => handleFilterChange('startTime', e.target.value)}
-            className="px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs"
-            placeholder="From"
-          />
-          <span className="text-gray-400 dark:text-gray-500 text-xs">—</span>
-          <input
-            type="datetime-local"
-            value={filters.endTime}
-            onChange={(e) => handleFilterChange('endTime', e.target.value)}
-            className="px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-r-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs"
-            placeholder="To"
-          />
-          <button
-            onClick={() => {
-              handleFilterChange('startTime', '');
-              handleFilterChange('endTime', '');
-            }}
-            className="ml-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-sm"
-            title="Clear dates"
-          >
-            ×
-          </button>
-        </>
-      )}
-    </div>
-  );
 
   const renderContextLines = () => (
     <div className="flex items-center gap-1">
@@ -329,9 +271,9 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
 
   const renderClearFiltersButton = () => (
     <button
-      onClick={() => onFiltersChange({ searchText: '', logLevel: ['all'], startTime: '', endTime: '', contextLines: 0 })}
-      disabled={!filters.searchText && filters.logLevel.includes('all') && !filters.startTime && !filters.endTime && !filters.contextLines}
-      className={`px-2 py-1.5 rounded-md transition-colors text-xs ${!filters.searchText && filters.logLevel.includes('all') && !filters.startTime && !filters.endTime && !filters.contextLines
+      onClick={() => onFiltersChange({ searchText: '', logLevel: ['all'], contextLines: 0 })}
+      disabled={!filters.searchText && filters.logLevel.includes('all') && !filters.contextLines}
+      className={`px-2 py-1.5 rounded-md transition-colors text-xs ${!filters.searchText && filters.logLevel.includes('all') && !filters.contextLines
         ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
         : 'bg-gray-500 text-white hover:bg-gray-600 dark:bg-gray-600 dark:hover:bg-gray-500'
         }`}
@@ -366,7 +308,6 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
           {renderSearchNavigationInput()}
           {renderFilterInput()}
           {renderLogLevelFilter()}
-          {renderTimeRangeFilter()}
           {renderContextLines()}
           {renderClearFiltersButton()}
         </div>
