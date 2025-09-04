@@ -5,6 +5,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
   const [isLevelDropdownOpen, setIsLevelDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
   const portalRef = useRef(null);
+  const filterInputRef = useRef(null);
   // For portal positioning
   const buttonRef = useRef(null);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
@@ -30,6 +31,25 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
       document.removeEventListener('click', handleClickOutside);
     };
   }, [dropdownRef, portalRef]);
+
+  // Handle Cmd+F to focus filter input
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      // Check for Cmd+F (Mac)
+      if (event.metaKey && event.key === 'f') {
+        event.preventDefault();
+        if (filterInputRef.current) {
+          filterInputRef.current.focus();
+          filterInputRef.current.select();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   const handleLogLevelToggle = (level) => {
     const currentLevels = filters.logLevel;
@@ -128,6 +148,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
         <label className="text-xs font-medium text-gray-700 dark:text-gray-300 mr-2">Filter:</label>
         <div className="relative w-full">
           <input
+            ref={filterInputRef}
             type="text"
             placeholder="use || to separate terms, ! to exclude: e.g. error || !heartbeat"
             value={filters.searchText}
