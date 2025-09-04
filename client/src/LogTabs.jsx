@@ -13,15 +13,15 @@ const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCom
                             <div
                                 key={index}
                                 className={`flex items-center gap-2 px-4 py-1 mx-1 rounded-t-lg border border-b-0 cursor-pointer whitespace-nowrap transition-all duration-200 ${activeFileIndex === index && !showingCombinedView
-                                    ? 'bg-white dark:bg-gray-800 text-blue-700 dark:text-blue-200 border-blue-300 dark:border-blue-600 shadow-sm'
-                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                                    ? 'bg-white dark:bg-gray-800 border-blue-300 dark:border-blue-600 shadow-sm'
+                                    : 'hover:bg-gray-100 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
                                     }`}
                                 onClick={() => {
                                     onFileSelect(index);
                                 }}
                                 title={getFileFullName(file.id)}
                             >
-                                <span className="text-sm font-medium flex items-center">
+                                <span className="text-xs flex items-center">
                                     {getFileDisplayName(file.id)}
                                     {loading && (
                                         <svg className="ml-2 animate-spin h-4 w-4 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -48,14 +48,14 @@ const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCom
                     {files.length > 1 && (
                         <div
                             className={`flex items-center gap-2 px-4 py-1 mx-1 rounded-t-lg border border-b-0 cursor-pointer whitespace-nowrap transition-all duration-200 ${showingCombinedView
-                                ? 'bg-green-50 dark:bg-green-800 text-green-700 dark:text-green-200 border-green-300 dark:border-green-600 shadow-sm'
-                                : 'text-gray-600 dark:text-gray-400 hover:text-green-700 dark:hover:text-green-200 hover:bg-green-50 dark:hover:bg-green-800 border-gray-200 dark:border-gray-600 hover:border-green-300 dark:hover:border-green-600'
+                                ? 'bg-green-50 dark:bg-green-800 border-green-300 dark:border-green-600 shadow-sm'
+                                : 'hover:bg-green-50 dark:hover:bg-green-800 border-gray-200 dark:border-gray-600 hover:border-green-300 dark:hover:border-green-600'
                                 }`}
                             onClick={() => {
                                 onCombinedViewSelect();
                             }}
                         >
-                            <span className="text-sm font-medium">All Files</span>
+                            <span className="text-xs">All Files</span>
                         </div>
                     )}
                 </div>
