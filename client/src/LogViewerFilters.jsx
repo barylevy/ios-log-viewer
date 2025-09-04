@@ -271,14 +271,17 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
 
   const renderClearFiltersButton = () => (
     <button
-      onClick={() => onFiltersChange({ searchText: '', logLevel: ['all'], contextLines: 0 })}
-      disabled={!filters.searchText && filters.logLevel.includes('all') && !filters.contextLines}
-      className={`px-2 h-8 rounded-md transition-colors text-xs border ${!filters.searchText && filters.logLevel.includes('all') && !filters.contextLines
-        ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 border-gray-300 dark:border-gray-600 cursor-not-allowed'
-        : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-200'
+      onClick={() => onFiltersChange({ searchText: '', searchQuery: '', logLevel: ['all'], contextLines: 0 })}
+      disabled={!filters.searchText && !filters.searchQuery && filters.logLevel.includes('all') && !filters.contextLines}
+      title="Clear all filters - Reset search text, search query, log level to 'All', and context lines to 0"
+      className={`w-8 h-8 rounded-md transition-colors flex items-center justify-center ${!filters.searchText && !filters.searchQuery && filters.logLevel.includes('all') && !filters.contextLines
+        ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+        : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
         }`}
     >
-      Clear Filters
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+      </svg>
     </button>
   );
 
