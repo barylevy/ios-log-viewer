@@ -20,7 +20,7 @@ const getFileIdentifier = (file) => {
   return file.name;
 };
 
-// Returns a shortened display name (max 30 chars from the end, showing suffix)
+// Returns a shortened display name (max 50 chars from the end, showing suffix)
 const getFileDisplayName = (fileId) => {
   if (!fileId) return '';
 
@@ -34,9 +34,9 @@ const getFileDisplayName = (fileId) => {
     name = fileId.split('/').pop();
   }
 
-  // Shorten to max 30 chars from the end (show suffix)
-  if (name.length > 30) {
-    return '...' + name.slice(-30);
+  // Shorten to max 50 chars from the end (show suffix)
+  if (name.length > 50) {
+    return '...' + name.slice(-50);
   }
   return name;
 };
@@ -576,7 +576,7 @@ const useLogsModel = () => {
 
   // Get display name from file identifier
 
-  // Returns a shortened display name (max 30 chars from the end, showing suffix)
+  // Returns a shortened display name (max 50 chars from the end, showing suffix)
   const getFileDisplayName = useCallback((fileId) => {
     if (!fileId) return '';
 
@@ -590,9 +590,9 @@ const useLogsModel = () => {
       name = fileId.split('/').pop();
     }
 
-    // Shorten to max 30 chars from the end (show suffix)
-    if (name.length > 30) {
-      return '...' + name.slice(-30);
+    // Shorten to max 50 chars from the end (show suffix)
+    if (name.length > 50) {
+      return '...' + name.slice(-50);
     }
     return name;
   }, []);
