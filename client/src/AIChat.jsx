@@ -39,46 +39,21 @@ const retrieveApiKey = () => {
     return '';
 };
 
-const ApiKeyInput = ({ onSubmit }) => {
-    const [tempKey, setTempKey] = useState('');
-
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        if (tempKey.trim()) {
-            onSubmit(tempKey.trim());
-        }
-    };
-
-    return (
-        <div className="p-4 bg-yellow-50 dark:bg-yellow-900 border border-yellow-300 dark:border-yellow-700 rounded">
-            <h3 className="font-semibold mb-2 text-yellow-800 dark:text-yellow-200">OpenAI API Key Required</h3>
-            <p className="text-sm text-yellow-700 dark:text-yellow-300 mb-3">
-                To use AI chat, please enter your OpenAI API key.
-            </p>
-            <form onSubmit={handleSubmit} className="space-y-2">
-                <input
-                    type="password"
-                    value={tempKey}
-                    onChange={(e) => setTempKey(e.target.value)}
-                    placeholder="sk-..."
-                    className="w-full p-2 border rounded text-sm bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
-                />
-                <button type="submit" className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600">
-                    Save
-                </button>
-            </form>
-        </div>
-    );
-};
-
 const AIChat = ({ logs, fileName, isOpen, onClose, isFullWidth, onToggleFullWidth }) => {
     const [messages, setMessages] = useState([]);
     const [inputMessage, setInputMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
-    const [apiKey, setApiKey] = useState(retrieveApiKey());
-    const [showApiKeyInput, setShowApiKeyInput] = useState(!apiKey);
+    const [apiKey, setApiKey] = useState('');
     const messagesEndRef = useRef(null);
+
+    // Check for API key on component mount and when panel opens
+    useEffect(() => {
+        if (isOpen) {
+            const currentKey = retrieveApiKey();
+            setApiKey(currentKey);
+        }
+    }, [isOpen]);
 
     // Scroll to the latest message when messages change
     useEffect(() => {
@@ -88,12 +63,6 @@ const AIChat = ({ logs, fileName, isOpen, onClose, isFullWidth, onToggleFullWidt
     }, [messages]);
 
     if (!isOpen) return null;
-
-    const handleApiKeySubmit = (key) => {
-        storeApiKey(key);
-        setApiKey(key);
-        setShowApiKeyInput(false);
-    };
 
     const sendMessage = async () => {
         if (!inputMessage.trim() || isLoading) return;
@@ -229,14 +198,27 @@ const AIChat = ({ logs, fileName, isOpen, onClose, isFullWidth, onToggleFullWidt
                 </div>
             </div>
 
-            {showApiKeyInput && (
-                <div className="p-4">
-                    <ApiKeyInput onSubmit={handleApiKeySubmit} />
+            {!apiKey && (
+                <div className="p-4 bg-yellow-50 dark:bg-yellow-900 border border-yellow-300 dark:border-yellow-700 rounded mx-4">
+                    <div className="flex items-center">
+                        <div className="flex-shrink-0">
+                            <span className="text-yellow-400">⚠️</span>
+                        </div>
+                        <div className="ml-3">
+                            <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                                OpenAI API Key Required
+                            </h3>
+                            <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
+                                <p>To use AI chat, please configure your OpenAI API key in Settings.</p>
+                                <p className="mt-1 text-xs">Click the "Settings" button in the top toolbar to get started.</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
 
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {messages.length === 0 && !showApiKeyInput && (
+                {messages.length === 0 && apiKey && (
                     <div className="text-center text-gray-500 dark:text-gray-400 py-8">
                         <p>Start a conversation about your logs!</p>
                     </div>
@@ -277,7 +259,7 @@ const AIChat = ({ logs, fileName, isOpen, onClose, isFullWidth, onToggleFullWidt
                 <div ref={messagesEndRef} />
             </div>
 
-            {!showApiKeyInput && (
+            {apiKey && (
                 <div className="p-4 border-t border-gray-200 dark:border-gray-700">
                     {error && (
                         <div className="mb-2 p-2 bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 rounded text-sm">
