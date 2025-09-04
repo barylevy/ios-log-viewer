@@ -20,6 +20,12 @@ const LogModal = ({ log, onClose, onHighlight, onClearHighlight }) => {
     navigator.clipboard.writeText(log.raw);
   };
 
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return timestamp;
+    // Convert milliseconds format from HH:MM:SS:mmm to HH:MM:SS.mmm
+    return timestamp.replace(/(\d{2}:\d{2}:\d{2}):(\d{3})/, '$1.$2');
+  };
+
   const getLevelColor = (level) => {
     switch (level) {
       case 'error': return 'text-red-600 dark:text-red-400';
@@ -62,7 +68,7 @@ const LogModal = ({ log, onClose, onHighlight, onClearHighlight }) => {
               {log.timestamp && (
                 <div>
                   <span className="font-medium text-gray-600 dark:text-gray-400">Timestamp:</span>
-                  <span className="ml-2 font-mono text-gray-900 dark:text-white">{log.timestamp}</span>
+                  <span className="ml-2 font-mono text-gray-900 dark:text-white">{formatTimestamp(log.timestamp)}</span>
                 </div>
               )}
               {log.module && (

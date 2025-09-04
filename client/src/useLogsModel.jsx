@@ -295,8 +295,15 @@ const useLogsModel = () => {
         date = new Date(timestamp);
       } else if (timestamp.includes('-') && timestamp.includes(' ')) {
         // Log format: 2025-08-02 23:54:57:514 or 2025-08-02 23:54:57
-        const cleanTimestamp = timestamp.replace(/:\d{3}$/, ''); // Remove milliseconds if present
-        date = new Date(cleanTimestamp.replace(' ', 'T'));
+        // Handle milliseconds properly by converting to ISO format
+        let isoTimestamp = timestamp.replace(' ', 'T');
+
+        // If it has milliseconds in format HH:MM:SS:mmm, convert to HH:MM:SS.mmm
+        if (isoTimestamp.match(/\d{2}:\d{2}:\d{2}:\d{3}$/)) {
+          isoTimestamp = isoTimestamp.replace(/(\d{2}:\d{2}:\d{2}):(\d{3})$/, '$1.$2');
+        }
+
+        date = new Date(isoTimestamp);
       } else if (timestamp.includes('-') && !timestamp.includes(' ') && !timestamp.includes(':')) {
         // Date only format: 2025-07-04 - assume start of day (00:00:00)
         date = new Date(`${timestamp}T00:00:00`);
@@ -324,13 +331,14 @@ const useLogsModel = () => {
     let dateStart = null, dateEnd = null;
     let searchText = filters.searchText;
 
-    // Date range patterns: Support multiple formats
-    // #2025-07-04 13:28:20:540 :: #2025-07-05 13:28:20:540 (with milliseconds)
+    // Date range patterns: Support multiple formats (both dot and colon for milliseconds)
+    // #2025-07-04 13:28:20.540 :: #2025-07-05 13:28:20.540 (with milliseconds - dot format)
+    // #2025-07-04 13:28:20:540 :: #2025-07-05 13:28:20:540 (with milliseconds - colon format, legacy)
     // #2025-07-04 14:19:44 :: #2025-07-05 14:19:44 (without milliseconds)  
     // #2025-07-04 :: #2025-07-05 (date only)
-    const dateRangeRegex = /(^|\s)::\s*#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?::\d{3})?)?)/; // :: #date
-    const dateStartRegex = /#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?::\d{3})?)?)\s*::/; // #date ::
-    const dateBothRegex = /#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?::\d{3})?)?)\s*::\s*#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?::\d{3})?)?)/; // #date :: #date
+    const dateRangeRegex = /(^|\s)::\s*#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)/; // :: #date
+    const dateStartRegex = /#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)\s*::/; // #date ::
+    const dateBothRegex = /#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)\s*::\s*#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)/; // #date :: #date
 
     // Row range patterns: #415 :: #600
     const rowRangeRegex = /(^|\s)::\s*#(\d+)(?!\d{4})/; // :: #600 (but not :: #2025...)

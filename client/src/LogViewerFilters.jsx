@@ -168,7 +168,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
 • Filter by dates (supports multiple formats):\n
   #2025-07-04 :: — from July 4th, 2025 onwards\n
   #2025-07-04 14:19:44 :: — from specific time onwards\n
-  #2025-07-04 13:28:20:540 :: — with milliseconds\n
+  #2025-07-04 13:28:20.540 :: — with milliseconds\n
   #2025-07-04 :: #2025-07-05 — date range\n
   :: #2025-07-05 14:30:00 — until specific time\n
 \n
