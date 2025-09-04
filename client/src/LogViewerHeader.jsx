@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import FileSelectionModal from './FileSelectionModal';
 import AboutModal from './AboutModal';
-import Settings from './Settings';
+import AIConfigSettings from './Settings';
 
 const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, currentFileHeaders, onClearTabs }) => {
   const fileInputRef = useRef(null);
@@ -251,8 +251,8 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
       {/* About Modal */}
       <AboutModal isOpen={showAbout} onClose={() => setShowAbout(false)} />
 
-      {/* Settings Modal */}
-      <Settings isOpen={showSettings} onClose={() => setShowSettings(false)} />
+      {/* AI Config Settings Modal */}
+      <AIConfigSettings isOpen={showSettings} onClose={() => setShowSettings(false)} />
     </header>
   );
 };

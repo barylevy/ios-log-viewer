@@ -39,7 +39,7 @@ const retrieveApiKey = () => {
     return '';
 };
 
-const Settings = ({ isOpen, onClose }) => {
+const AIConfigSettings = ({ isOpen, onClose }) => {
     const [apiKey, setApiKey] = useState('');
     const [tempKey, setTempKey] = useState('');
     const [showKey, setShowKey] = useState(false);
@@ -84,7 +84,7 @@ const Settings = ({ isOpen, onClose }) => {
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4">
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Settings</h2>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">AI Configuration Settings</h2>
                     <button
                         onClick={onClose}
                         className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
@@ -180,4 +180,4 @@ const Settings = ({ isOpen, onClose }) => {
     );
 };
 
-export default Settings;
+export default AIConfigSettings;
