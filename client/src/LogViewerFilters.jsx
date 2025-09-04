@@ -98,14 +98,14 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
   // Extracted UI sections as render functions
   const renderSearchNavigationInput = () => (
     <div className="flex-1 min-w-64 flex items-center">
-      <label className="text-xs font-medium text-gray-400 dark:text-gray-500 mr-2">Search:</label>
+      <label className="text-xs font-medium text-gray-700 dark:text-gray-300 mr-2">Search:</label>
       <div className="relative w-full">
         <input
           type="text"
           placeholder="Search in logs..."
           value={filters.searchQuery || ''}
           onChange={(e) => handleFilterChange('searchQuery', e.target.value)}
-          className="w-full h-10 px-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
+          className="w-full h-8 px-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
         />
         {filters.searchQuery && (
           <button
@@ -153,7 +153,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
             placeholder="Search logs: text || terms, !exclude, #row::, #date:: ranges. Hover for full guide."
             value={filters.searchText}
             onChange={(e) => handleFilterChange('searchText', e.target.value)}
-            className="w-full h-10 px-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
+            className="w-full h-8 px-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
             title={
               `Advanced Filtering Guide:\n
 • Multiple terms: Use '||' (OR logic): error || warning\n
@@ -207,7 +207,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
         <button
           ref={buttonRef}
           onClick={() => setIsLevelDropdownOpen(o => !o)}
-          className="flex items-center justify-between px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs min-w-28"
+          className="flex items-center justify-between px-2 h-8 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs min-w-28"
         >
           <span>{getSelectedLevelsText()}</span>
           <svg className={`w-3 h-3 ml-1 transition-transform ${isLevelDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -262,7 +262,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
         max="50"
         value={filters.contextLines || 0}
         onChange={(e) => handleFilterChange('contextLines', parseInt(e.target.value) || 0)}
-        className="w-16 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs"
+        className="w-16 px-2 h-8 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs"
         placeholder="0"
       />
       <span className="text-xs text-gray-500 dark:text-gray-400">lines</span>
@@ -273,9 +273,9 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
     <button
       onClick={() => onFiltersChange({ searchText: '', logLevel: ['all'], contextLines: 0 })}
       disabled={!filters.searchText && filters.logLevel.includes('all') && !filters.contextLines}
-      className={`px-2 py-1.5 rounded-md transition-colors text-xs ${!filters.searchText && filters.logLevel.includes('all') && !filters.contextLines
-        ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-        : 'bg-gray-500 text-white hover:bg-gray-600 dark:bg-gray-600 dark:hover:bg-gray-500'
+      className={`px-2 h-8 rounded-md transition-colors text-xs border ${!filters.searchText && filters.logLevel.includes('all') && !filters.contextLines
+        ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 border-gray-300 dark:border-gray-600 cursor-not-allowed'
+        : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-200'
         }`}
     >
       Clear Filters
@@ -283,7 +283,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
   );
 
   const renderStats = () => (
-    <div className="mt-1 text-[10px] text-gray-600 dark:text-gray-400 flex items-center gap-4">
+    <div className="text-[10px] text-gray-600 dark:text-gray-400 flex items-center gap-4">
       <span>
         Showing {filteredLogsCount.toLocaleString()} of {logsCount.toLocaleString()} logs
         {filteredLogsCount !== logsCount && (
@@ -301,19 +301,36 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
   );
 
   return (
-    <div className="overflow-visible bg-white/50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700 px-2 py-4">
-      {/* Main filter row - no-wrap with horizontal scroll to keep all controls on one line */}
+    <div className="overflow-visible bg-white/50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700 px-2 py-2">
+      {/* 2x2 Grid Layout */}
       <div className="relative z-10 overflow-visible">
-        <div className="flex items-center gap-6 flex-nowrap overflow-x-auto overflow-y-visible h-14">
-          {renderSearchNavigationInput()}
-          {renderFilterInput()}
-          {renderLogLevelFilter()}
-          {renderContextLines()}
-          {renderClearFiltersButton()}
+        <div className="grid grid-cols-[1fr,auto] gap-4">
+          {/* Left side - takes remaining space */}
+          <div className="space-y-2">
+            {/* Filter Input */}
+            {renderFilterInput()}
+            {/* Search Navigation Input */}
+            {renderSearchNavigationInput()}
+          </div>
+
+          {/* Right side - auto width, aligned to right */}
+          <div className="flex items-center gap-4">
+            <div className="space-y-2 flex flex-col items-end">
+              {/* Log Level Filter */}
+              {renderLogLevelFilter()}
+              {/* Context Lines */}
+              {renderContextLines()}
+            </div>
+            {/* Clear Filters Button */}
+            {renderClearFiltersButton()}
+          </div>
+        </div>
+
+        {/* Bottom row with stats only */}
+        <div className="flex items-center">
+          {renderStats()}
         </div>
       </div>
-
-      {renderStats()}
     </div>
   );
 };
