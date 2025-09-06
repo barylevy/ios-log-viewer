@@ -1,6 +1,31 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 
+// Extract tooltip text to avoid inline strings
+const FILTER_TOOLTIP = `Advanced Filtering Guide:
+
+• Multiple terms: Use '||' (OR logic): error || warning
+• Exclude terms: Use '!' prefix: !heartbeat
+• Exact phrases: Use quotes: "connection lost"
+
+• Filter by row numbers:
+  #415 :: — from row 415 onwards
+  #415 :: #600 — rows 415 to 600
+  :: #600 — from start to row 600
+
+• Filter by dates (supports multiple formats):
+  #2025-07-04 :: — from July 4th, 2025 onwards
+  #2025-07-04 14:19:44 :: — from specific time onwards
+  #2025-07-04 13:28:20.540 :: — with milliseconds
+  #2025-07-04 :: #2025-07-05 — date range
+  :: #2025-07-05 14:30:00 — until specific time
+
+• Combine filters:
+  error || #2025-07-04 :: #2025-07-05 — errors between dates
+  !debug || #100 :: #500 — exclude debug in rows 100-500
+
+• Works with log level and context line filters`;
+
 const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCount, searchMatchCount, searchMatchPos }) => {
   const [isLevelDropdownOpen, setIsLevelDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -154,30 +179,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
             value={filters.searchText}
             onChange={(e) => handleFilterChange('searchText', e.target.value)}
             className="w-full h-6 px-2 pr-8 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
-            title={
-              `Advanced Filtering Guide:\n
-• Multiple terms: Use '||' (OR logic): error || warning\n
-• Exclude terms: Use '!' prefix: !heartbeat\n
-• Exact phrases: Use quotes: "connection lost"\n
-\n
-• Filter by row numbers:\n
-  #415 :: — from row 415 onwards\n
-  #415 :: #600 — rows 415 to 600\n
-  :: #600 — from start to row 600\n
-\n
-• Filter by dates (supports multiple formats):\n
-  #2025-07-04 :: — from July 4th, 2025 onwards\n
-  #2025-07-04 14:19:44 :: — from specific time onwards\n
-  #2025-07-04 13:28:20.540 :: — with milliseconds\n
-  #2025-07-04 :: #2025-07-05 — date range\n
-  :: #2025-07-05 14:30:00 — until specific time\n
-\n
-• Combine filters:\n
-  error || #2025-07-04 :: #2025-07-05 — errors between dates\n
-  !debug || #100 :: #500 — exclude debug in rows 100-500\n
-\n
-• Works with log level and context line filters`
-            }
+            title={FILTER_TOOLTIP}
           />
           {filters.searchText && (
             <button

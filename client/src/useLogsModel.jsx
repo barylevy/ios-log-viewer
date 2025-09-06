@@ -1,5 +1,24 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 
+// Regex patterns - moved outside to avoid recreation on every render
+const DATE_RANGE_REGEX = /(^|\s)::\s*#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)/; // :: #date
+const DATE_START_REGEX = /#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)\s*::/; // #date ::
+const DATE_BOTH_REGEX = /#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)\s*::\s*#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)/; // #date :: #date
+
+const ROW_RANGE_REGEX = /(^|\s)::\s*#(\d+)(?!\d{4})/; // :: #600 (but not :: #2025...)
+const ROW_START_REGEX = /#(\d+)(?!\d{4})\s*::/; // #415 :: (but not #2025...)
+const ROW_BOTH_REGEX = /#(\d+)(?!\d{4})\s*::\s*#(\d+)(?!\d{4})/; // #415 :: #600
+
+// Log level matrix - moved outside for performance
+const LOG_LEVEL_MATRIX = [
+  ['error', '[Error]', ' E ', '[E]', '[err]', 'ERROR:', 'Error:'],
+  ['warning', '[Warning]', ' W ', '[W]', '[warn]', 'WARNING:', 'Warning:'],
+  ['info', '[Info]', ' I ', '[I]', 'INFO:', 'Info:'],
+  ['debug', '[Debug]', ' D ', '[D]', 'DEBUG:', 'Debug:'],
+  ['trace', '[Trace]', ' T ', '[T]', '[verbose]'],
+  ['activity', 'Activity']
+];
+
 // Generate unique file identifier
 const getFileIdentifier = (file) => {
   // Priority order for file identification:
@@ -253,22 +272,12 @@ const useLogsModel = () => {
   };
 
   const extractLogLevel = (line) => {
-    const LOG_LEVEL_MATRIX = [
-      ['error', '[Error]', ' E ', '[E]'],
-      ['warning', '[Warn]', ' W ', '[W]'],
-      ['info', '[Info]', ' I ', '[I]'],
-      ['debug', '[Debug]', ' D ', '[D]'],
-      ['trace', '[Trace]', ' T ', '[T]', '[verbose]'],
-      ['activity', 'Activity']
-    ];
-
     for (const [level, ...patterns] of LOG_LEVEL_MATRIX) {
       for (const pattern of patterns) {
         if (line.includes(pattern)) return level;
       }
     }
     return 'info';
-
   };
 
   const extractModule = (line) => {
@@ -336,56 +345,48 @@ const useLogsModel = () => {
     // #2025-07-04 13:28:20:540 :: #2025-07-05 13:28:20:540 (with milliseconds - colon format, legacy)
     // #2025-07-04 14:19:44 :: #2025-07-05 14:19:44 (without milliseconds)  
     // #2025-07-04 :: #2025-07-05 (date only)
-    const dateRangeRegex = /(^|\s)::\s*#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)/; // :: #date
-    const dateStartRegex = /#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)\s*::/; // #date ::
-    const dateBothRegex = /#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)\s*::\s*#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)/; // #date :: #date
-
-    // Row range patterns: #415 :: #600
-    const rowRangeRegex = /(^|\s)::\s*#(\d+)(?!\d{4})/; // :: #600 (but not :: #2025...)
-    const rowStartRegex = /#(\d+)(?!\d{4})\s*::/; // #415 :: (but not #2025...)
-    const rowBothRegex = /#(\d+)(?!\d{4})\s*::\s*#(\d+)(?!\d{4})/; // #415 :: #600
 
     // Try date ranges first
-    const dateBothMatch = searchText.match(dateBothRegex);
+    const dateBothMatch = searchText.match(DATE_BOTH_REGEX);
     if (dateBothMatch) {
       dateStart = dateBothMatch[1];
       dateEnd = dateBothMatch[2];
-      searchText = searchText.replace(dateBothRegex, '').replace(/\|\|\s*$/, '').replace(/^\s*\|\|/, '').trim();
+      searchText = searchText.replace(DATE_BOTH_REGEX, '').replace(/\|\|\s*$/, '').replace(/^\s*\|\|/, '').trim();
     } else {
       // #date ::
-      const dateStartMatch = searchText.match(dateStartRegex);
+      const dateStartMatch = searchText.match(DATE_START_REGEX);
       if (dateStartMatch) {
         dateStart = dateStartMatch[1];
-        searchText = searchText.replace(dateStartRegex, '').replace(/\|\|\s*$/, '').replace(/^\s*\|\|/, '').trim();
+        searchText = searchText.replace(DATE_START_REGEX, '').replace(/\|\|\s*$/, '').replace(/^\s*\|\|/, '').trim();
       }
       // :: #date
-      const dateEndMatch = searchText.match(dateRangeRegex);
+      const dateEndMatch = searchText.match(DATE_RANGE_REGEX);
       if (dateEndMatch) {
         dateEnd = dateEndMatch[2];
-        searchText = searchText.replace(dateRangeRegex, '').replace(/\|\|\s*$/, '').replace(/^\s*\|\|/, '').trim();
+        searchText = searchText.replace(DATE_RANGE_REGEX, '').replace(/\|\|\s*$/, '').replace(/^\s*\|\|/, '').trim();
       }
     }
 
     // If no date ranges found, try row ranges
     if (!dateStart && !dateEnd) {
       // #415 :: #600
-      const rowBothMatch = searchText.match(rowBothRegex);
+      const rowBothMatch = searchText.match(ROW_BOTH_REGEX);
       if (rowBothMatch) {
         rowStart = parseInt(rowBothMatch[1], 10);
         rowEnd = parseInt(rowBothMatch[2], 10);
-        searchText = searchText.replace(rowBothRegex, '').replace(/\|\|\s*$/, '').replace(/^\s*\|\|/, '').trim();
+        searchText = searchText.replace(ROW_BOTH_REGEX, '').replace(/\|\|\s*$/, '').replace(/^\s*\|\|/, '').trim();
       } else {
         // #415 ::
-        const rowStartMatch = searchText.match(rowStartRegex);
+        const rowStartMatch = searchText.match(ROW_START_REGEX);
         if (rowStartMatch) {
           rowStart = parseInt(rowStartMatch[1], 10);
-          searchText = searchText.replace(rowStartRegex, '').replace(/\|\|\s*$/, '').replace(/^\s*\|\|/, '').trim();
+          searchText = searchText.replace(ROW_START_REGEX, '').replace(/\|\|\s*$/, '').replace(/^\s*\|\|/, '').trim();
         }
         // :: #600
-        const rowEndMatch = searchText.match(rowRangeRegex);
+        const rowEndMatch = searchText.match(ROW_RANGE_REGEX);
         if (rowEndMatch) {
           rowEnd = parseInt(rowEndMatch[2], 10);
-          searchText = searchText.replace(rowRangeRegex, '').replace(/\|\|\s*$/, '').replace(/^\s*\|\|/, '').trim();
+          searchText = searchText.replace(ROW_RANGE_REGEX, '').replace(/\|\|\s*$/, '').replace(/^\s*\|\|/, '').trim();
         }
       }
     }
