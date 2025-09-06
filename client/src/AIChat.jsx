@@ -39,6 +39,26 @@ const retrieveApiKey = () => {
     return '';
 };
 
+// Helper function to format file name for display
+const formatFileNameForDisplay = (fileName) => {
+    if (!fileName) return '';
+
+    let displayName = fileName;
+
+    // If the filename doesn't contain spaces, show only the suffix (last part after the last slash or backslash)
+    if (!fileName.includes(' ')) {
+        const parts = fileName.split(/[/\\]/);
+        displayName = parts[parts.length - 1];
+    }
+
+    // Show only the last 30 characters
+    if (displayName.length > 30) {
+        displayName = '...' + displayName.slice(-27);
+    }
+
+    return displayName;
+};
+
 const AIChat = ({ logs, fileName, isOpen, onClose, isFullWidth, onToggleFullWidth }) => {
     const [messages, setMessages] = useState([]);
     const [inputMessage, setInputMessage] = useState('');
@@ -168,10 +188,14 @@ const AIChat = ({ logs, fileName, isOpen, onClose, isFullWidth, onToggleFullWidt
 
     return (
         <div className="h-full flex flex-col bg-white dark:bg-gray-900">
-            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+            <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
                 <div>
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">AI Chat</h2>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Analyzing: {fileName}</p>
+                    <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+                        AI Chat
+                        <span className="text-xs font-normal text-gray-600 dark:text-gray-400 ml-2">
+                            - {formatFileNameForDisplay(fileName)}
+                        </span>
+                    </h2>
                 </div>
                 <div className="flex items-center gap-2">
                     <button
