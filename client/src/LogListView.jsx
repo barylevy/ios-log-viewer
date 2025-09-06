@@ -557,14 +557,14 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, filters, onFiltersCha
     <div className="h-full flex flex-col bg-white dark:bg-gray-900">
       {/* Fixed Date Header with Navigation - Outside of scroll container */}
       {currentStickyDate && (
-        <div className="flex-shrink-0 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-1">
+        <div className="flex-shrink-0 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-0.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               {/* Previous Date Button */}
               <button
                 onClick={goToPreviousDate}
                 disabled={currentDateIndex <= 0}
-                className={`p-1.5 rounded-md transition-colors ${currentDateIndex <= 0
+                className={`p-1 rounded-md transition-colors ${currentDateIndex <= 0
                   ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
                   : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200'
                   }`}
@@ -576,7 +576,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, filters, onFiltersCha
               </button>
 
               {/* Current Date */}
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              <span className="text-sm text-gray-700 dark:text-gray-300">
                 {currentStickyDate}
               </span>
 
@@ -584,7 +584,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, filters, onFiltersCha
               <button
                 onClick={goToNextDate}
                 disabled={currentDateIndex >= allDates.length - 1}
-                className={`p-1.5 rounded-md transition-colors ${currentDateIndex >= allDates.length - 1
+                className={`p-1 rounded-md transition-colors ${currentDateIndex >= allDates.length - 1
                   ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
                   : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200'
                   }`}

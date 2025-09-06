@@ -105,7 +105,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
           placeholder="Search in logs..."
           value={filters.searchQuery || ''}
           onChange={(e) => handleFilterChange('searchQuery', e.target.value)}
-          className="w-full h-8 px-2 pr-28 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
+          className="w-full h-6 px-2 pr-28 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
         />
         {filters.searchQuery && (
           <button
@@ -153,7 +153,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
             placeholder="Search logs: text || terms, !exclude, #row::, #date:: ranges. Hover for full guide."
             value={filters.searchText}
             onChange={(e) => handleFilterChange('searchText', e.target.value)}
-            className="w-full h-8 px-2 pr-8 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
+            className="w-full h-6 px-2 pr-8 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
             title={
               `Advanced Filtering Guide:\n
 • Multiple terms: Use '||' (OR logic): error || warning\n
@@ -207,7 +207,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
         <button
           ref={buttonRef}
           onClick={() => setIsLevelDropdownOpen(o => !o)}
-          className="flex items-center justify-between px-2 h-8 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs min-w-28"
+          className="flex items-center justify-between px-2 h-6 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs min-w-28"
         >
           <span>{getSelectedLevelsText()}</span>
           <svg className={`w-3 h-3 ml-1 transition-transform ${isLevelDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -262,7 +262,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
         max="50"
         value={filters.contextLines || 0}
         onChange={(e) => handleFilterChange('contextLines', parseInt(e.target.value) || 0)}
-        className="w-16 px-2 h-8 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs"
+        className="w-16 px-2 h-6 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs"
         placeholder="0"
       />
       <span className="text-xs text-gray-500 dark:text-gray-400">lines</span>
@@ -274,7 +274,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
       onClick={() => onFiltersChange({ searchText: '', searchQuery: '', logLevel: ['all'], contextLines: 0 })}
       disabled={!filters.searchText && !filters.searchQuery && filters.logLevel.includes('all') && !filters.contextLines}
       title="Clear all filters - Reset search text, search query, log level to 'All', and context lines to 0"
-      className={`w-8 h-8 rounded-md transition-colors flex items-center justify-center ${!filters.searchText && !filters.searchQuery && filters.logLevel.includes('all') && !filters.contextLines
+      className={`w-6 h-6 rounded-md transition-colors flex items-center justify-center ${!filters.searchText && !filters.searchQuery && filters.logLevel.includes('all') && !filters.contextLines
         ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
         : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
         }`}
