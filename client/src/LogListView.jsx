@@ -435,10 +435,10 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, filters, onFiltersCha
       return acc;
     }, []);
   }, [filters.searchQuery, flatLogs]);
-  // Reset on filter change
+  // Reset on search query change (not on every matchIndices recalculation)
   useEffect(() => {
     setCurrentMatchIndex(matchIndices.length ? 0 : -1);
-  }, [matchIndices]);
+  }, [filters.searchQuery]); // Only reset when search query changes
   // Next/Prev navigation
   const goToNextMatch = useCallback(() => {
     if (!virtuosoRef.current || !matchIndices.length) return;
@@ -450,7 +450,6 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, filters, onFiltersCha
     virtuosoRef.current.scrollToIndex({ index: target, align: 'start' });
     setCurrentMatchIndex(next);
     // Focus the target item after scrolling
-    // Focus the matched item without opening the modal
     setTimeout(() => {
       const wrapper = itemRefs.current[target];
       if (wrapper) wrapper.focus();
@@ -465,8 +464,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, filters, onFiltersCha
     // Scroll to match without opening modal
     virtuosoRef.current.scrollToIndex({ index: target, align: 'start' });
     setCurrentMatchIndex(prev);
-    // Focus the target item
-    // Focus the matched item without opening the modal
+    // Focus the target item after scrolling
     setTimeout(() => {
       const wrapper = itemRefs.current[target];
       if (wrapper) wrapper.focus();

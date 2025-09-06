@@ -424,7 +424,6 @@ const useLogsModel = () => {
     };
   }, [filters.searchText]);
 
-
   const filteredLogs = useMemo(() => {
     if (!logs.length) return [];
 
