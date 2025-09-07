@@ -245,18 +245,38 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters, index, onFiltersCh
 
   // Set as from filter
   const setAsFromFilter = () => {
-    const formattedTime = formatTimestampForInput(log.timestamp);
-    if (formattedTime && onFiltersChange) {
-      onFiltersChange({ startTime: formattedTime });
+    if (onFiltersChange) {
+      const currentFilter = filters.searchText || '';
+      const fromFilter = `#${log.lineNumber} ::`;
+      // Regex to find any #number ::
+      const fromRegex = /#\d+ ::/g;
+      let newFilter;
+      if (fromRegex.test(currentFilter)) {
+        // Replace existing from filter
+        newFilter = currentFilter.replace(fromRegex, fromFilter);
+      } else {
+        newFilter = currentFilter ? `${currentFilter} || ${fromFilter}` : fromFilter;
+      }
+      onFiltersChange({ searchText: newFilter });
     }
     setContextMenu(null);
   };
 
   // Set as to filter
   const setAsToFilter = () => {
-    const formattedTime = formatTimestampForInput(log.timestamp);
-    if (formattedTime && onFiltersChange) {
-      onFiltersChange({ endTime: formattedTime });
+    if (onFiltersChange) {
+      const currentFilter = filters.searchText || '';
+      const toFilter = `:: #${log.lineNumber}`;
+      // Regex to find any :: #number
+      const toRegex = /:: #\d+/g;
+      let newFilter;
+      if (toRegex.test(currentFilter)) {
+        // Replace existing to filter
+        newFilter = currentFilter.replace(toRegex, toFilter);
+      } else {
+        newFilter = currentFilter ? `${currentFilter} || ${toFilter}` : toFilter;
+      }
+      onFiltersChange({ searchText: newFilter });
     }
     setContextMenu(null);
   };
@@ -325,13 +345,13 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters, index, onFiltersCh
             onClick={setAsFromFilter}
             className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
           >
-            Set as "From" time filter
+            Set as "From" row filter
           </button>
           <button
             onClick={setAsToFilter}
             className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
           >
-            Set as "To" time filter
+            Set as "To" row filter
           </button>
         </div>
       )}
