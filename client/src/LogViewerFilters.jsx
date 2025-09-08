@@ -127,7 +127,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
       <div className="relative w-full">
         <input
           type="text"
-          placeholder="Search in logs..."
+          placeholder="Search in record logs..."
           value={filters.searchQuery || ''}
           onChange={(e) => handleFilterChange('searchQuery', e.target.value)}
           className="w-full h-6 px-2 pr-28 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
@@ -175,7 +175,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
           <input
             ref={filterInputRef}
             type="text"
-            placeholder="Search logs: text || terms, !exclude, #row::, #date:: ranges. Hover for full guide."
+            placeholder="Filter-in/out record logs: text || terms, !exclude, #row::, #date:: ranges. Hover for full guide."
             value={filters.searchText}
             onChange={(e) => handleFilterChange('searchText', e.target.value)}
             className="w-full h-6 px-2 pr-8 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
