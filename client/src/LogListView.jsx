@@ -109,7 +109,131 @@ const cleanMessage = (message) => {
   return cleaned.trim();
 };
 
+// Helper function to clean and organize filters
+const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) => {
+  if (!currentFilter) return newFilterValue;
+
+  // Split by || and clean each part
+  const parts = currentFilter.split('||').map(part => part.trim()).filter(part => part);
+
+  // Extract existing filters
+  let rowFromFilter = null;
+  let rowToFilter = null;
+  let dateFromFilter = null;
+  let dateToFilter = null;
+  let otherFilters = [];
+
+  parts.forEach(part => {
+    if (part.match(/^#\d+ ::$/)) {
+      rowFromFilter = part;
+    } else if (part.match(/^:: #\d+$/)) {
+      rowToFilter = part;
+    } else if (part.match(/^#\d+ :: #\d+$/)) {
+      // Combined row filter
+      const match = part.match(/^#(\d+) :: #(\d+)$/);
+      if (match) {
+        rowFromFilter = `#${match[1]} ::`;
+        rowToFilter = `:: #${match[2]}`;
+      }
+    } else if (part.match(/^#\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}:\d{2}:\d{3})? ::$/)) {
+      dateFromFilter = part;
+    } else if (part.match(/^:: #\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}:\d{2}:\d{3})?$/)) {
+      dateToFilter = part;
+    } else if (part.match(/^#\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}:\d{2}:\d{3})? :: #\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}:\d{2}:\d{3})?$/)) {
+      // Combined date filter
+      const match = part.match(/^#(\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}:\d{2}:\d{3})?) :: #(\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}:\d{2}:\d{3})?)$/);
+      if (match) {
+        dateFromFilter = `#${match[1]} ::`;
+        dateToFilter = `:: #${match[3]}`;
+      }
+    } else {
+      // Other filters (text search, etc.)
+      otherFilters.push(part);
+    }
+  });
+
+  // Apply the new filter
+  if (newFilterType === 'rowFrom') {
+    rowFromFilter = newFilterValue;
+  } else if (newFilterType === 'rowTo') {
+    rowToFilter = newFilterValue;
+  } else if (newFilterType === 'dateFrom') {
+    dateFromFilter = newFilterValue;
+  } else if (newFilterType === 'dateTo') {
+    dateToFilter = newFilterValue;
+  }
+
+  // Build the result
+  const result = [];
+
+  // Add other filters first
+  if (otherFilters.length > 0) {
+    result.push(...otherFilters);
+  }
+
+  // Add row filter (combined if both exist)
+  if (rowFromFilter && rowToFilter) {
+    const fromNum = rowFromFilter.replace('#', '').replace(' ::', '');
+    const toNum = rowToFilter.replace(':: #', '');
+    result.push(`#${fromNum} :: #${toNum}`);
+  } else if (rowFromFilter) {
+    result.push(rowFromFilter);
+  } else if (rowToFilter) {
+    result.push(rowToFilter);
+  }
+
+  // Add date filter (combined if both exist)
+  if (dateFromFilter && dateToFilter) {
+    const fromDate = dateFromFilter.replace('#', '').replace(' ::', '');
+    const toDate = dateToFilter.replace(':: #', '');
+    result.push(`#${fromDate} :: #${toDate}`);
+  } else if (dateFromFilter) {
+    result.push(dateFromFilter);
+  } else if (dateToFilter) {
+    result.push(dateToFilter);
+  }
+
+  return result.join(' || ');
+};
+
 const LogItem = memo(({ log, onClick, isHighlighted, filters, index, onFiltersChange }) => {
+  // Extract full timestamp for filter (e.g. 2025-07-11 08:11:48:078)
+  const extractFullTimestampForFilter = (timestamp) => {
+    if (!timestamp) return '';
+    // Match YYYY-MM-DD HH:MM:SS:MS
+    const match = timestamp.match(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}:\d{3}/);
+    if (match) return match[0];
+    // If not matched, fallback to just the date
+    const dateMatch = timestamp.match(/\d{4}-\d{2}-\d{2}/);
+    return dateMatch ? dateMatch[0] : timestamp;
+  };
+
+  // Set as from date filter
+  const setAsFromDateFilter = () => {
+    if (onFiltersChange) {
+      const currentFilter = filters.searchText || '';
+      const fullTimestamp = extractFullTimestampForFilter(log.timestamp);
+      if (!fullTimestamp) return setContextMenu(null);
+
+      const newFilter = cleanAndCombineFilters(currentFilter, 'dateFrom', `#${fullTimestamp} ::`);
+      onFiltersChange({ searchText: newFilter });
+    }
+    setContextMenu(null);
+  };
+
+  // Set as to date filter
+  const setAsToDateFilter = () => {
+    if (onFiltersChange) {
+      const currentFilter = filters.searchText || '';
+      const fullTimestamp = extractFullTimestampForFilter(log.timestamp);
+      if (!fullTimestamp) return setContextMenu(null);
+
+      const newFilter = cleanAndCombineFilters(currentFilter, 'dateTo', `:: #${fullTimestamp}`);
+      onFiltersChange({ searchText: newFilter });
+    }
+    setContextMenu(null);
+  };
+
   const [contextMenu, setContextMenu] = useState(null);
 
   // Process the log message and extract file info - memoized by log.id to prevent recalculation
@@ -131,7 +255,8 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters, index, onFiltersCh
 
       filterTerms.forEach(term => {
         const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(`(${escaped})`, 'gi');
+        // Use negative lookahead to avoid matching inside href attributes
+        const regex = new RegExp(`(?<!href="[^"]*)(${escaped})(?![^<]*<\/a>)`, 'gi');
         messageHtml = messageHtml.replace(
           regex,
           '<mark class="bg-blue-200 dark:bg-blue-600">$1</mark>'
@@ -148,7 +273,8 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters, index, onFiltersCh
 
       searchTerms.forEach(term => {
         const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(`(${escaped})`, 'gi');
+        // Use negative lookahead to avoid matching inside href attributes
+        const regex = new RegExp(`(?<!href="[^"]*)(${escaped})(?![^<]*<\/a>)`, 'gi');
         messageHtml = messageHtml.replace(
           regex,
           '<mark class="bg-green-200 dark:bg-green-600 font-bold">$1</mark>'
@@ -247,16 +373,7 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters, index, onFiltersCh
   const setAsFromFilter = () => {
     if (onFiltersChange) {
       const currentFilter = filters.searchText || '';
-      const fromFilter = `#${log.lineNumber} ::`;
-      // Regex to find any #number ::
-      const fromRegex = /#\d+ ::/g;
-      let newFilter;
-      if (fromRegex.test(currentFilter)) {
-        // Replace existing from filter
-        newFilter = currentFilter.replace(fromRegex, fromFilter);
-      } else {
-        newFilter = currentFilter ? `${currentFilter} || ${fromFilter}` : fromFilter;
-      }
+      const newFilter = cleanAndCombineFilters(currentFilter, 'rowFrom', `#${log.lineNumber} ::`);
       onFiltersChange({ searchText: newFilter });
     }
     setContextMenu(null);
@@ -266,16 +383,7 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters, index, onFiltersCh
   const setAsToFilter = () => {
     if (onFiltersChange) {
       const currentFilter = filters.searchText || '';
-      const toFilter = `:: #${log.lineNumber}`;
-      // Regex to find any :: #number
-      const toRegex = /:: #\d+/g;
-      let newFilter;
-      if (toRegex.test(currentFilter)) {
-        // Replace existing to filter
-        newFilter = currentFilter.replace(toRegex, toFilter);
-      } else {
-        newFilter = currentFilter ? `${currentFilter} || ${toFilter}` : toFilter;
-      }
+      const newFilter = cleanAndCombineFilters(currentFilter, 'rowTo', `:: #${log.lineNumber}`);
       onFiltersChange({ searchText: newFilter });
     }
     setContextMenu(null);
@@ -352,6 +460,18 @@ const LogItem = memo(({ log, onClick, isHighlighted, filters, index, onFiltersCh
             className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
           >
             Set as "To" row filter
+          </button>
+          <button
+            onClick={setAsFromDateFilter}
+            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+          >
+            Set "From" date
+          </button>
+          <button
+            onClick={setAsToDateFilter}
+            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+          >
+            Set "To" date
           </button>
         </div>
       )}
