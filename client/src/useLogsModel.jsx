@@ -9,6 +9,10 @@ const ROW_RANGE_REGEX = /(^|\s)::\s*#(\d+)(?!\d{4})/; // :: #600 (but not :: #20
 const ROW_START_REGEX = /#(\d+)(?!\d{4})\s*::/; // #415 :: (but not #2025...)
 const ROW_BOTH_REGEX = /#(\d+)(?!\d{4})\s*::\s*#(\d+)(?!\d{4})/; // #415 :: #600
 
+// Mixed range patterns: row to date or date to row
+const ROW_TO_DATE_REGEX = /#(\d+)(?!\d{4})\s*::\s*#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)/; // #9 :: #2025-07-04 13:29:11:645
+const DATE_TO_ROW_REGEX = /#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)\s*::\s*#(\d+)(?!\d{4})/; // #2025-07-04 13:29:11:645 :: #500
+
 // Log level matrix - moved outside for performance
 const LOG_LEVEL_MATRIX = [
   ['error', '[Error]', ' E ', '[E]', '[err]', 'ERROR:', 'Error:'],
@@ -331,7 +335,7 @@ const useLogsModel = () => {
   };
 
   // Pre-compile search terms and regexes for performance
-  // Parse row range filter: #start :: #end or date range filter: #date :: #date
+  // Parse row range filter or date range filter if present
   const searchData = useMemo(() => {
     if (!filters.searchText) return null;
 
@@ -340,35 +344,52 @@ const useLogsModel = () => {
     let dateStart = null, dateEnd = null;
     let searchText = filters.searchText;
 
-    // Date range patterns: Support multiple formats (both dot and colon for milliseconds)
-    // #2025-07-04 13:28:20.540 :: #2025-07-05 13:28:20.540 (with milliseconds - dot format)
-    // #2025-07-04 13:28:20:540 :: #2025-07-05 13:28:20:540 (with milliseconds - colon format, legacy)
-    // #2025-07-04 14:19:44 :: #2025-07-05 14:19:44 (without milliseconds)  
-    // #2025-07-04 :: #2025-07-05 (date only)
+    // First, check for mixed ranges: row to date or date to row
+    const rowToDateMatch = searchText.match(ROW_TO_DATE_REGEX);
+    if (rowToDateMatch) {
+      rowStart = parseInt(rowToDateMatch[1], 10);
+      dateEnd = rowToDateMatch[2];
+      searchText = searchText.replace(ROW_TO_DATE_REGEX, '').replace(/\|\|\s*$/, '').replace(/^\s*\|\|/, '').trim();
+    }
 
-    // Try date ranges first
-    const dateBothMatch = searchText.match(DATE_BOTH_REGEX);
-    if (dateBothMatch) {
-      dateStart = dateBothMatch[1];
-      dateEnd = dateBothMatch[2];
-      searchText = searchText.replace(DATE_BOTH_REGEX, '').replace(/\|\|\s*$/, '').replace(/^\s*\|\|/, '').trim();
-    } else {
-      // #date ::
-      const dateStartMatch = searchText.match(DATE_START_REGEX);
-      if (dateStartMatch) {
-        dateStart = dateStartMatch[1];
-        searchText = searchText.replace(DATE_START_REGEX, '').replace(/\|\|\s*$/, '').replace(/^\s*\|\|/, '').trim();
-      }
-      // :: #date
-      const dateEndMatch = searchText.match(DATE_RANGE_REGEX);
-      if (dateEndMatch) {
-        dateEnd = dateEndMatch[2];
-        searchText = searchText.replace(DATE_RANGE_REGEX, '').replace(/\|\|\s*$/, '').replace(/^\s*\|\|/, '').trim();
+    const dateToRowMatch = searchText.match(DATE_TO_ROW_REGEX);
+    if (dateToRowMatch) {
+      dateStart = dateToRowMatch[1];
+      rowEnd = parseInt(dateToRowMatch[2], 10);
+      searchText = searchText.replace(DATE_TO_ROW_REGEX, '').replace(/\|\|\s*$/, '').replace(/^\s*\|\|/, '').trim();
+    }
+
+    // If no mixed ranges found, try pure date ranges
+    if (!rowStart && !dateEnd && !dateStart && !rowEnd) {
+      // Date range patterns: Support multiple formats (both dot and colon for milliseconds)
+      // #2025-07-04 13:28:20.540 :: #2025-07-05 13:28:20.540 (with milliseconds - dot format)
+      // #2025-07-04 13:28:20:540 :: #2025-07-05 13:28:20:540 (with milliseconds - colon format, legacy)
+      // #2025-07-04 14:19:44 :: #2025-07-05 14:19:44 (without milliseconds)  
+      // #2025-07-04 :: #2025-07-05 (date only)
+
+      const dateBothMatch = searchText.match(DATE_BOTH_REGEX);
+      if (dateBothMatch) {
+        dateStart = dateBothMatch[1];
+        dateEnd = dateBothMatch[2];
+        searchText = searchText.replace(DATE_BOTH_REGEX, '').replace(/\|\|\s*$/, '').replace(/^\s*\|\|/, '').trim();
+      } else {
+        // #date ::
+        const dateStartMatch = searchText.match(DATE_START_REGEX);
+        if (dateStartMatch) {
+          dateStart = dateStartMatch[1];
+          searchText = searchText.replace(DATE_START_REGEX, '').replace(/\|\|\s*$/, '').replace(/^\s*\|\|/, '').trim();
+        }
+        // :: #date
+        const dateEndMatch = searchText.match(DATE_RANGE_REGEX);
+        if (dateEndMatch) {
+          dateEnd = dateEndMatch[2];
+          searchText = searchText.replace(DATE_RANGE_REGEX, '').replace(/\|\|\s*$/, '').replace(/^\s*\|\|/, '').trim();
+        }
       }
     }
 
-    // If no date ranges found, try row ranges
-    if (!dateStart && !dateEnd) {
+    // If no date ranges found (pure or mixed), try pure row ranges
+    if (!dateStart && !dateEnd && !rowStart && !rowEnd) {
       // #415 :: #600
       const rowBothMatch = searchText.match(ROW_BOTH_REGEX);
       if (rowBothMatch) {
@@ -434,25 +455,29 @@ const useLogsModel = () => {
         const { includeTerms, excludeTerms, includeRegexes, excludeRegexes, rowStart, rowEnd, dateStart, dateEnd } = searchData;
         const message = log.message.toLowerCase();
 
-        // Date range filter (takes precedence over row range)
-        if (dateStart || dateEnd) {
-          if (log.timestamp) {
-            const logTime = normalizeTimestamp(log.timestamp);
-            if (logTime) {
-              if (dateStart) {
-                const startTime = normalizeTimestamp(dateStart);
-                if (startTime && logTime < startTime) return;
-              }
-              if (dateEnd) {
-                const endTime = normalizeTimestamp(dateEnd);
-                if (endTime && logTime > endTime) return;
-              }
-            }
+        // Range filtering: handle date, row, and mixed ranges
+        // Row start filter: check if log line number is >= rowStart
+        if (rowStart !== null && log.lineNumber < rowStart) return;
+
+        // Row end filter: check if log line number is <= rowEnd
+        if (rowEnd !== null && log.lineNumber > rowEnd) return;
+
+        // Date start filter: check if log timestamp is >= dateStart
+        if (dateStart && log.timestamp) {
+          const logTime = normalizeTimestamp(log.timestamp);
+          if (logTime) {
+            const startTime = normalizeTimestamp(dateStart);
+            if (startTime && logTime < startTime) return;
           }
-        } else {
-          // Row range filter (use real line number in file) - only if no date filter
-          if (rowStart !== null && log.lineNumber < rowStart) return;
-          if (rowEnd !== null && log.lineNumber > rowEnd) return;
+        }
+
+        // Date end filter: check if log timestamp is <= dateEnd
+        if (dateEnd && log.timestamp) {
+          const logTime = normalizeTimestamp(log.timestamp);
+          if (logTime) {
+            const endTime = normalizeTimestamp(dateEnd);
+            if (endTime && logTime > endTime) return;
+          }
         }
 
         // Exclude logic: if any exclude term matches, skip this log
