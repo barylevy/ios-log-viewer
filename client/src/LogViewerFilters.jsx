@@ -135,6 +135,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
           value={filters.searchQuery || ''}
           onChange={(e) => handleFilterChange('searchQuery', e.target.value)}
           className="w-full h-6 px-2 pr-28 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
+          title="Search in logs. Add #gap=5 to show visual separators between records with 5+ second gaps."
         />
         {filters.searchQuery && (
           <button
