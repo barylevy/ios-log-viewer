@@ -540,7 +540,9 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
           {/* Timestamp */}
           <div className={`flex-shrink-0 text-xs font-mono min-w-14 ${timeInfo === '--:--:--.---'
             ? 'text-gray-300 dark:text-gray-600 opacity-50'
-            : 'text-gray-500 dark:text-gray-400'
+            : timeGapInfo.hasGap
+              ? 'text-orange-600 dark:text-orange-400 font-semibold'
+              : 'text-gray-500 dark:text-gray-400'
             }`}>
             {timeInfo}
           </div>
