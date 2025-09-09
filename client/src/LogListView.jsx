@@ -525,8 +525,14 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
   return (
     <>
       <div
-        className={`border-b border-gray-100 dark:border-gray-800 px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors ${isHighlighted ? 'bg-blue-50 dark:bg-blue-900 border-blue-200 dark:border-blue-700' : ''
-          } ${log.isContextLine ? 'bg-gray-50 dark:bg-gray-850 opacity-75' : ''}`}
+        className={`border-b border-gray-100 dark:border-gray-800 px-3 py-1.5 hover:bg-blue-50 dark:hover:bg-blue-900 hover:bg-opacity-50 cursor-pointer transition-colors ${isHighlighted
+          ? 'bg-blue-50 dark:bg-blue-900 border-blue-200 dark:border-blue-700'
+          : log.isContextLine
+            ? 'bg-gray-50 dark:bg-gray-850 opacity-75'
+            : index % 2 === 1
+              ? 'bg-gray-50 dark:bg-gray-850'
+              : 'bg-white dark:bg-gray-900'
+          }`}
         onClick={() => onClick(log)}
         onContextMenu={handleContextMenu}
       >
@@ -568,7 +574,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
 
             {/* File info with gap time at the end */}
             {(fileInfo || timeGapInfo.hasGap) && (
-              <div className="flex-shrink-0 flex items-center gap-1 pr-16">
+              <div className="flex-shrink-0 flex items-center gap-3 pr-2">
                 {/* Time Gap Indicator */}
                 {timeGapInfo.hasGap && (
                   <div className="text-xs text-orange-600 dark:text-orange-400 font-mono bg-orange-100 dark:bg-orange-900/30 px-1 rounded">
