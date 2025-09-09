@@ -13,6 +13,9 @@ const ROW_BOTH_REGEX = /#(\d+)(?!\d{4})\s*::\s*#(\d+)(?!\d{4})/; // #415 :: #600
 const ROW_TO_DATE_REGEX = /#(\d+)(?!\d{4})\s*::\s*#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)/; // #9 :: #2025-07-04 13:29:11:645
 const DATE_TO_ROW_REGEX = /#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)\s*::\s*#(\d+)(?!\d{4})/; // #2025-07-04 13:29:11:645 :: #500
 
+// Gap pattern for time filtering
+const GAP_PATTERN = /#gap=(\d+(?:\.\d+)?)/i;
+
 // Log level matrix - moved outside for performance
 const LOG_LEVEL_MATRIX = [
   ['error', '[Error]', ' E ', '[E]', '[err]', 'ERROR:', 'Error:'],
@@ -83,6 +86,43 @@ const getFileFullName = (fileId) => {
     return fullPath;
   }
   return fullPath;
+};
+
+// Helper function to parse timestamp into milliseconds for time gap calculations
+const parseTimestampToMs = (timestamp) => {
+  if (!timestamp) return null;
+
+  // Try to extract full timestamp: 2025-08-26 11:05:21:299 or 2025-08-26 11:05:21.299
+  const fullMatch = timestamp.match(/(\d{4})-(\d{2})-(\d{2})\s(\d{2}):(\d{2}):(\d{2})[:.](\d{3})/);
+  if (fullMatch) {
+    const [, year, month, day, hours, minutes, seconds, ms] = fullMatch;
+    return new Date(year, month - 1, day, hours, minutes, seconds, parseInt(ms)).getTime();
+  }
+
+  // Fallback: Extract date and time separately and combine
+  const dateTimeMatch = timestamp.match(/(\d{4}-\d{2}-\d{2}).*?(\d{2}:\d{2}:\d{2})/);
+  if (dateTimeMatch) {
+    const [, datePart, timePart] = dateTimeMatch;
+    const [year, month, day] = datePart.split('-');
+    const [hours, minutes, seconds] = timePart.split(':');
+    return new Date(year, month - 1, day, hours, minutes, seconds).getTime();
+  }
+
+  return null;
+};
+
+// Helper function to extract time gap value from search text
+const extractTimeGapFromSearch = (searchText) => {
+  if (!searchText) return 0;
+
+  // Look for #gap=X pattern using compiled regex
+  const gapMatch = searchText.match(GAP_PATTERN);
+  if (gapMatch) {
+    const gapValue = parseFloat(gapMatch[1]);
+    return isNaN(gapValue) ? 0 : gapValue;
+  }
+
+  return 0;
 };
 
 const useLogsModel = () => {
@@ -412,6 +452,15 @@ const useLogsModel = () => {
       }
     }
 
+    // Extract gap filter if present
+    let gapThreshold = 0;
+    const gapMatch = filters.searchText.match(GAP_PATTERN);
+    if (gapMatch) {
+      gapThreshold = parseFloat(gapMatch[1]) || 0;
+      // Remove gap pattern from search text
+      searchText = searchText.replace(GAP_PATTERN, '').replace(/\|\|\s*\|\|/g, '||').replace(/^\s*\|\|/, '').replace(/\|\|\s*$/, '').trim();
+    }
+
     // Split by ||, trim, and classify as include/exclude
     const terms = searchText.split('||').map(term => term.trim()).filter(Boolean);
     const includeTerms = terms.filter(term => !term.startsWith('!'));
@@ -441,7 +490,8 @@ const useLogsModel = () => {
       rowStart,
       rowEnd,
       dateStart,
-      dateEnd
+      dateEnd,
+      gapThreshold
     };
   }, [filters.searchText]);
 
@@ -452,7 +502,7 @@ const useLogsModel = () => {
 
     logs.forEach((log, index) => {
       if (searchData) {
-        const { includeTerms, excludeTerms, includeRegexes, excludeRegexes, rowStart, rowEnd, dateStart, dateEnd } = searchData;
+        const { includeTerms, excludeTerms, includeRegexes, excludeRegexes, rowStart, rowEnd, dateStart, dateEnd, gapThreshold } = searchData;
         const message = log.message.toLowerCase();
 
         // Range filtering: handle date, row, and mixed ranges
@@ -477,6 +527,19 @@ const useLogsModel = () => {
           if (logTime) {
             const endTime = normalizeTimestamp(dateEnd);
             if (endTime && logTime > endTime) return;
+          }
+        }
+
+        // Gap filter: check if this log has the required time gap from previous log
+        if (gapThreshold > 0 && index > 0) {
+          const currentTime = parseTimestampToMs(log.timestamp || log.message);
+          const previousTime = parseTimestampToMs(logs[index - 1].timestamp || logs[index - 1].message);
+
+          if (currentTime && previousTime) {
+            const gapSeconds = Math.abs(currentTime - previousTime) / 1000;
+            if (gapSeconds < gapThreshold) return; // Skip if gap is less than threshold
+          } else {
+            return; // Skip if we can't parse timestamps
           }
         }
 

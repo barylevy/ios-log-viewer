@@ -190,9 +190,16 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
   let rowToFilter = null;
   let dateFromFilter = null;
   let dateToFilter = null;
+  let gapFilter = null;
   let otherFilters = [];
 
   parts.forEach(part => {
+    // Check for gap filter first
+    if (GAP_PATTERN.test(part)) {
+      gapFilter = part;
+      return;
+    }
+
     // Check for mixed ranges first
     const rowToDateMatch = part.match(/^#(\d+) :: #(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}:\d{3})?)$/);
     if (rowToDateMatch) {
@@ -312,6 +319,11 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
     if (hasDateTo) {
       result.push(dateToFilter);
     }
+  }
+
+  // Add gap filter if exists
+  if (gapFilter) {
+    result.push(gapFilter);
   }
 
   const finalResult = result.join(' || ');

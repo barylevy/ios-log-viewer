@@ -20,9 +20,13 @@ const FILTER_TOOLTIP = `Advanced Filtering Guide:
   #2025-07-04 :: #2025-07-05 — date range
   :: #2025-07-05 14:30:00 — until specific time
 
+• Filter by time gaps:
+  #gap=5 — show only records with 5+ second gaps from previous record
+
 • Combine filters:
   error || #2025-07-04 :: #2025-07-05 — errors between dates
   !debug || #100 :: #500 — exclude debug in rows 100-500
+  #gap=3 || error — records with 3+ second gaps OR containing 'error'
 
 • Works with log level and context line filters`;
 
@@ -131,11 +135,11 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
       <div className="relative w-full">
         <input
           type="text"
-          placeholder="Search in record logs..."
+          placeholder="Search in record logs. Add #gap=5 for time gap indicators..."
           value={filters.searchQuery || ''}
           onChange={(e) => handleFilterChange('searchQuery', e.target.value)}
           className="w-full h-6 px-2 pr-28 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
-          title="Search in logs. Add #gap=5 to show visual separators between records with 5+ second gaps."
+          title="Search in logs. Add #gap=5 to show visual separators between records with 5+ second gaps. Combine with search terms: 'error #gap=3' shows errors with gap indicators."
         />
         {filters.searchQuery && (
           <button
@@ -180,7 +184,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
           <input
             ref={filterInputRef}
             type="text"
-            placeholder="Filter-in/out record logs: text || terms, !exclude, #row::, #date:: ranges. Hover for full guide."
+            placeholder="Filter logs: text || terms, !exclude, #gap=5, #row::, #date:: ranges. Hover for full guide."
             value={filters.searchText}
             onChange={(e) => handleFilterChange('searchText', e.target.value)}
             className="w-full h-6 px-2 pr-8 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
