@@ -316,46 +316,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
 
   const finalResult = result.join(' || ');
   return finalResult;
-}; const LogItem = memo(({ log, onClick, isHighlighted, filters, index, onFiltersChange, previousLog }) => {
-  // Extract full timestamp for filter (e.g. 2025-07-11 08:11:48:078)
-  const extractFullTimestampForFilter = (timestamp) => {
-    if (!timestamp) return '';
-    // Match YYYY-MM-DD HH:MM:SS:MS
-    const match = timestamp.match(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}:\d{3}/);
-    if (match) return match[0];
-    // If not matched, fallback to just the date
-    const dateMatch = timestamp.match(/\d{4}-\d{2}-\d{2}/);
-    return dateMatch ? dateMatch[0] : timestamp;
-  };
-
-  // Set as from date filter
-  const setAsFromDateFilter = () => {
-    if (onFiltersChange) {
-      const currentFilter = filters.searchText || '';
-      const fullTimestamp = extractFullTimestampForFilter(log.timestamp);
-      if (!fullTimestamp) return setContextMenu(null);
-
-      const newFilter = cleanAndCombineFilters(currentFilter, 'dateFrom', `#${fullTimestamp} ::`);
-      onFiltersChange({ searchText: newFilter });
-    }
-    setContextMenu(null);
-  };
-
-  // Set as to date filter
-  const setAsToDateFilter = () => {
-    if (onFiltersChange) {
-      const currentFilter = filters.searchText || '';
-      const fullTimestamp = extractFullTimestampForFilter(log.timestamp);
-      if (!fullTimestamp) return setContextMenu(null);
-
-      const newFilter = cleanAndCombineFilters(currentFilter, 'dateTo', `:: #${fullTimestamp}`);
-      onFiltersChange({ searchText: newFilter });
-    }
-    setContextMenu(null);
-  };
-
-  const [contextMenu, setContextMenu] = useState(null);
-
+}; const LogItem = memo(({ log, onClick, isHighlighted, filters, index, onFiltersChange, previousLog, contextMenu, setContextMenu }) => {
   // Process the log message and extract file info - memoized by log.id to prevent recalculation
   const cleanedMessage = useMemo(() => cleanMessage(log.message), [log.message]);
   const fileInfo = useMemo(() => extractFileInfo(log), [log.message, log.timestamp]);
@@ -450,22 +411,41 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
   const handleContextMenu = useCallback((e) => {
     e.preventDefault();
     if (log.timestamp) {
+      // Calculate menu dimensions (approximate)
+      const menuHeight = 160; // Approximate height for 4 menu items
+      const menuWidth = 192; // min-w-48 = 12rem = 192px
+
+      // Get viewport dimensions
+      const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
+
+      // Calculate initial position
+      let x = e.clientX;
+      let y = e.clientY;
+
+      // Adjust horizontal position if menu would go off-screen
+      if (x + menuWidth > viewportWidth) {
+        x = viewportWidth - menuWidth - 10; // 10px margin from edge
+      }
+
+      // Adjust vertical position if menu would go off-screen
+      if (y + menuHeight > viewportHeight) {
+        y = y - menuHeight; // Position above the cursor
+        // Ensure it doesn't go above the top of the screen
+        if (y < 10) {
+          y = 10; // 10px margin from top
+        }
+      }
+
       setContextMenu({
-        x: e.clientX,
-        y: e.clientY,
-        timestamp: log.timestamp
+        x: x,
+        y: y,
+        timestamp: log.timestamp,
+        lineNumber: log.lineNumber,
+        log: log
       });
     }
   }, [log.timestamp]);
-
-  // Close context menu when clicking elsewhere
-  useEffect(() => {
-    const handleClickOutside = () => setContextMenu(null);
-    if (contextMenu) {
-      document.addEventListener('click', handleClickOutside);
-      return () => document.removeEventListener('click', handleClickOutside);
-    }
-  }, [contextMenu]);
 
   // Convert timestamp to datetime-local format
   const formatTimestampForInput = (timestamp) => {
@@ -500,26 +480,6 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
     const seconds = String(date.getSeconds()).padStart(2, '0');
 
     return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
-  };
-
-  // Set as from filter
-  const setAsFromFilter = () => {
-    if (onFiltersChange) {
-      const currentFilter = filters.searchText || '';
-      const newFilter = cleanAndCombineFilters(currentFilter, 'rowFrom', `#${log.lineNumber} ::`);
-      onFiltersChange({ searchText: newFilter });
-    }
-    setContextMenu(null);
-  };
-
-  // Set as to filter
-  const setAsToFilter = () => {
-    if (onFiltersChange) {
-      const currentFilter = filters.searchText || '';
-      const newFilter = cleanAndCombineFilters(currentFilter, 'rowTo', `:: #${log.lineNumber}`);
-      onFiltersChange({ searchText: newFilter });
-    }
-    setContextMenu(null);
   };
 
   return (
@@ -598,39 +558,6 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
           </div>
         </div>
       </div>
-
-      {/* Context Menu */}
-      {contextMenu && (
-        <div
-          className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1 min-w-48"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-        >
-          <button
-            onClick={setAsFromFilter}
-            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
-          >
-            Set as "From" row filter
-          </button>
-          <button
-            onClick={setAsToFilter}
-            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
-          >
-            Set as "To" row filter
-          </button>
-          <button
-            onClick={setAsFromDateFilter}
-            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
-          >
-            Set "From" date
-          </button>
-          <button
-            onClick={setAsToDateFilter}
-            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
-          >
-            Set "To" date
-          </button>
-        </div>
-      )}
     </>
   );
 });
@@ -644,6 +571,8 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, filters, onFiltersCha
   const [currentStickyDate, setCurrentStickyDate] = useState(null);
   // Search navigation state
   const [currentMatchIndex, setCurrentMatchIndex] = useState(-1);
+  // Shared context menu state for all log items
+  const [contextMenu, setContextMenu] = useState(null);
 
   // Group logs by date for sticky headers
   const groupedLogs = useMemo(() => {
@@ -799,6 +728,75 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, filters, onFiltersCha
     };
   }, [goToNextMatch, goToPreviousMatch]);
 
+  // Close context menu when clicking elsewhere
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      // Check if the click is outside the context menu
+      if (contextMenu && !e.target.closest('.context-menu')) {
+        e.stopPropagation();
+        e.preventDefault();
+        setContextMenu(null);
+      }
+    };
+    if (contextMenu) {
+      document.addEventListener('click', handleClickOutside, true);
+      return () => document.removeEventListener('click', handleClickOutside, true);
+    }
+  }, [contextMenu]);
+
+  // Context menu filter functions
+  const extractFullTimestampForFilter = (timestamp) => {
+    if (!timestamp) return '';
+    // Match YYYY-MM-DD HH:MM:SS:MS
+    const match = timestamp.match(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}:\d{3}/);
+    if (match) return match[0];
+    // If not matched, fallback to just the date
+    const dateMatch = timestamp.match(/\d{4}-\d{2}-\d{2}/);
+    return dateMatch ? dateMatch[0] : timestamp;
+  };
+
+  const setAsFromFilter = useCallback(() => {
+    if (onFiltersChange && contextMenu) {
+      const currentFilter = filters.searchText || '';
+      const newFilter = cleanAndCombineFilters(currentFilter, 'rowFrom', `#${contextMenu.lineNumber} ::`);
+      onFiltersChange({ searchText: newFilter });
+    }
+    setContextMenu(null);
+  }, [onFiltersChange, contextMenu, filters.searchText]);
+
+  const setAsToFilter = useCallback(() => {
+    if (onFiltersChange && contextMenu) {
+      const currentFilter = filters.searchText || '';
+      const newFilter = cleanAndCombineFilters(currentFilter, 'rowTo', `:: #${contextMenu.lineNumber}`);
+      onFiltersChange({ searchText: newFilter });
+    }
+    setContextMenu(null);
+  }, [onFiltersChange, contextMenu, filters.searchText]);
+
+  const setAsFromDateFilter = useCallback(() => {
+    if (onFiltersChange && contextMenu) {
+      const currentFilter = filters.searchText || '';
+      const fullTimestamp = extractFullTimestampForFilter(contextMenu.timestamp);
+      if (!fullTimestamp) return setContextMenu(null);
+
+      const newFilter = cleanAndCombineFilters(currentFilter, 'dateFrom', `#${fullTimestamp} ::`);
+      onFiltersChange({ searchText: newFilter });
+    }
+    setContextMenu(null);
+  }, [onFiltersChange, contextMenu, filters.searchText]);
+
+  const setAsToDateFilter = useCallback(() => {
+    if (onFiltersChange && contextMenu) {
+      const currentFilter = filters.searchText || '';
+      const fullTimestamp = extractFullTimestampForFilter(contextMenu.timestamp);
+      if (!fullTimestamp) return setContextMenu(null);
+
+      const newFilter = cleanAndCombineFilters(currentFilter, 'dateTo', `:: #${fullTimestamp}`);
+      onFiltersChange({ searchText: newFilter });
+    }
+    setContextMenu(null);
+  }, [onFiltersChange, contextMenu, filters.searchText]);
+
   // Get all unique dates in chronological order
   const allDates = useMemo(() => {
     const uniqueDates = new Set();
@@ -883,7 +881,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, filters, onFiltersCha
               </button>
 
               {/* Current Date */}
-              <span className="text-sm text-gray-700 dark:text-gray-300">
+              <span className="text-xs text-gray-700 dark:text-gray-300">
                 {currentStickyDate}
               </span>
 
@@ -933,6 +931,8 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, filters, onFiltersCha
                 index={index}
                 onFiltersChange={onFiltersChange}
                 previousLog={index > 0 ? flatLogs[index - 1] : null}
+                contextMenu={contextMenu}
+                setContextMenu={setContextMenu}
               />
             </div>
           )}
@@ -940,6 +940,40 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, filters, onFiltersCha
           style={{ height: '100%' }}
         />
       </div>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          className="context-menu fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1 min-w-48"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={setAsFromFilter}
+            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+          >
+            Set as "From" row filter
+          </button>
+          <button
+            onClick={setAsToFilter}
+            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+          >
+            Set as "To" row filter
+          </button>
+          <button
+            onClick={setAsFromDateFilter}
+            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+          >
+            Set "From" date
+          </button>
+          <button
+            onClick={setAsToDateFilter}
+            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+          >
+            Set "To" date
+          </button>
+        </div>
+      )}
     </div>
   );
 };

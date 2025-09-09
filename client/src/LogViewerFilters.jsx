@@ -48,14 +48,18 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
       ) {
         return;
       }
-      setIsLevelDropdownOpen(false);
+      if (isLevelDropdownOpen) {
+        event.stopPropagation();
+        event.preventDefault();
+        setIsLevelDropdownOpen(false);
+      }
     };
 
-    document.addEventListener('click', handleClickOutside);
+    document.addEventListener('click', handleClickOutside, true);
     return () => {
-      document.removeEventListener('click', handleClickOutside);
+      document.removeEventListener('click', handleClickOutside, true);
     };
-  }, [dropdownRef, portalRef]);
+  }, [dropdownRef, portalRef, isLevelDropdownOpen]);
 
   // Handle Cmd+F to focus filter input
   useEffect(() => {
