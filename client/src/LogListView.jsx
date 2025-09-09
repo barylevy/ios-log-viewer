@@ -539,16 +539,6 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
             {timeInfo}
           </div>
 
-          {/* Time Gap Indicator */}
-          {timeGapInfo.hasGap && (
-            <div className="flex-shrink-0 text-xs text-orange-600 dark:text-orange-400 font-mono bg-orange-100 dark:bg-orange-900/30 px-1 rounded">
-              +{timeGapInfo.gapSeconds >= 60
-                ? `${Math.floor(timeGapInfo.gapSeconds / 60)}m${Math.floor(timeGapInfo.gapSeconds % 60)}s`
-                : `${Math.floor(timeGapInfo.gapSeconds)}s`
-              }
-            </div>
-          )}
-
           {/* Line Number */}
           <div className="flex-shrink-0 text-xs text-gray-400 dark:text-gray-500 font-mono min-w-12 text-right mr-3">
             {log.lineNumber ? `#${log.lineNumber}` : ''}
@@ -576,10 +566,25 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
               dangerouslySetInnerHTML={{ __html: highlightedMessage }}
             />
 
-            {/* File info at the end */}
-            {fileInfo && (
-              <div className="flex-shrink-0 text-xs text-gray-400 dark:text-gray-500 font-mono">
-                {fileInfo}
+            {/* File info with gap time at the end */}
+            {(fileInfo || timeGapInfo.hasGap) && (
+              <div className="flex-shrink-0 flex items-center gap-1 pr-16">
+                {/* Time Gap Indicator */}
+                {timeGapInfo.hasGap && (
+                  <div className="text-xs text-orange-600 dark:text-orange-400 font-mono bg-orange-100 dark:bg-orange-900/30 px-1 rounded">
+                    +{timeGapInfo.gapSeconds >= 60
+                      ? `${Math.floor(timeGapInfo.gapSeconds / 60)}m${Math.floor(timeGapInfo.gapSeconds % 60)}s`
+                      : `${Math.floor(timeGapInfo.gapSeconds)}s`
+                    }
+                  </div>
+                )}
+
+                {/* File info */}
+                {fileInfo && (
+                  <div className="text-xs text-gray-400 dark:text-gray-500 font-mono">
+                    {fileInfo}
+                  </div>
+                )}
               </div>
             )}
           </div>
