@@ -328,7 +328,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
 
   const finalResult = result.join(' || ');
   return finalResult;
-}; const LogItem = memo(({ log, onClick, isHighlighted, filters, index, onFiltersChange, previousLog, contextMenu, setContextMenu }) => {
+}; const LogItem = memo(({ log, onClick, isHighlighted, filters, index, onFiltersChange, previousLog, contextMenu, setContextMenu, onHover }) => {
   // Process the log message and extract file info - memoized by log.id to prevent recalculation
   const cleanedMessage = useMemo(() => cleanMessage(log.message), [log.message]);
   const fileInfo = useMemo(() => extractFileInfo(log), [log.message, log.timestamp]);
@@ -507,6 +507,8 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
           }`}
         onClick={() => onClick(log)}
         onContextMenu={handleContextMenu}
+        onMouseEnter={() => onHover(log.id)}
+        onMouseLeave={() => onHover(null)}
       >
         <div className="flex items-start gap-2">
           {/* Timestamp */}
@@ -576,7 +578,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
 
 LogItem.displayName = 'LogItem';
 
-const LogListView = ({ logs, onLogClick, highlightedLogId, filters, onFiltersChange, onSearchMatchUpdate }) => {
+const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filters, onFiltersChange, onSearchMatchUpdate }) => {
   const virtuosoRef = useRef(null);
   // Refs for each item element to allow focus
   const itemRefs = useRef({});
@@ -585,6 +587,8 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, filters, onFiltersCha
   const [currentMatchIndex, setCurrentMatchIndex] = useState(-1);
   // Shared context menu state for all log items
   const [contextMenu, setContextMenu] = useState(null);
+  // Track which log item is currently being hovered
+  const [hoveredLogId, setHoveredLogId] = useState(null);
 
   // Group logs by date for sticky headers
   const groupedLogs = useMemo(() => {
@@ -755,6 +759,41 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, filters, onFiltersCha
       return () => document.removeEventListener('click', handleClickOutside, true);
     }
   }, [contextMenu]);
+
+  // Handle space key for hovered items
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === ' ' || e.key === 'Spacebar') {
+        e.preventDefault(); // Prevent page scroll
+        e.stopPropagation();
+        
+        let targetLog = null;
+        
+        // Priority 1: Use hovered log if available
+        if (hoveredLogId !== null) {
+          targetLog = logs.find(log => log.id === hoveredLogId);
+          console.log('Space key triggered for hovered log:', hoveredLogId);
+        }
+        // Priority 2: If no hovered log but there's a selected log (modal open), use that
+        else if (selectedLogId !== null) {
+          targetLog = logs.find(log => log.id === selectedLogId);
+          console.log('Space key triggered for selected log:', selectedLogId);
+        }
+        // Priority 3: If no hovered or selected log but there's a highlighted log, use that
+        else if (highlightedLogId !== null) {
+          targetLog = logs.find(log => log.id === highlightedLogId);
+          console.log('Space key triggered for highlighted log:', highlightedLogId);
+        }
+        
+        if (targetLog && onLogClick) {
+          onLogClick(targetLog);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [hoveredLogId, selectedLogId, highlightedLogId, logs, onLogClick]);
 
   // Context menu filter functions
   const extractFullTimestampForFilter = (timestamp) => {
@@ -945,6 +984,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, filters, onFiltersCha
                 previousLog={index > 0 ? flatLogs[index - 1] : null}
                 contextMenu={contextMenu}
                 setContextMenu={setContextMenu}
+                onHover={setHoveredLogId}
               />
             </div>
           )}

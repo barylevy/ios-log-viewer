@@ -295,6 +295,17 @@ const LogViewer = () => {
     return { logs: [], fileName: 'No File' };
   }, [files, activeFileIndex, showingCombinedView, allFileLogs, logs]);
 
+  // Toggle log selection - if same log is clicked, close it; if different log, open it
+  const handleLogClick = useCallback((log) => {
+    if (selectedLog && selectedLog.id === log.id) {
+      // Same log clicked - close the modal
+      setSelectedLog(null);
+    } else {
+      // Different log clicked - open the modal
+      setSelectedLog(log);
+    }
+  }, [selectedLog, setSelectedLog]);
+
   const memoizedContent = useMemo(() => {
     if (!hasUserInteracted) {
       return (
@@ -320,8 +331,9 @@ const LogViewer = () => {
     return (
       <LogListView
         logs={filteredLogs}
-        onLogClick={setSelectedLog}
+        onLogClick={handleLogClick}
         highlightedLogId={highlightedLogId}
+        selectedLogId={selectedLog?.id || null}
         filters={filters}
         onFiltersChange={updateFilters}
         onSearchMatchUpdate={(pos, total) => {
@@ -330,7 +342,7 @@ const LogViewer = () => {
         }}
       />
     );
-  }, [hasUserInteracted, files.length, filteredLogs, setSelectedLog, highlightedLogId, filters]);
+  }, [hasUserInteracted, files.length, filteredLogs, handleLogClick, highlightedLogId, filters]);
 
   // Remove old currentFileHeaders logic - now using headerState
 
