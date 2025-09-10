@@ -764,6 +764,17 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === ' ' || e.key === 'Spacebar') {
+        // Don't intercept space key if user is typing in an input field
+        const activeElement = document.activeElement;
+        if (activeElement && (
+          activeElement.tagName === 'INPUT' || 
+          activeElement.tagName === 'TEXTAREA' || 
+          activeElement.contentEditable === 'true' ||
+          activeElement.isContentEditable
+        )) {
+          return; // Let the input field handle the space key normally
+        }
+
         e.preventDefault(); // Prevent page scroll
         e.stopPropagation();
 
