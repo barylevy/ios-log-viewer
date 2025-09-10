@@ -5,7 +5,8 @@ import { Virtuoso } from 'react-virtuoso';
 const DATE_PATTERNS = {
   ISO_DATE: /(\d{4}-\d{2}-\d{2})/,
   BRACKET_DATE: /\[(\d{2})\/(\d{2})\/(\d{2})/,
-  ALT_DATE: /(\d{2}\/\d{2}\/\d{4})/
+  ALT_DATE: /(\d{2}\/\d{2}\/\d{4})/,
+  SHORT_DATE: /(\d{2}\/\d{2}\/\d{2})/
 };
 
 const TIME_PATTERNS = {
@@ -15,7 +16,9 @@ const TIME_PATTERNS = {
 
 const TIMESTAMP_PATTERNS = {
   FULL_TIMESTAMP: /(\d{4})-(\d{2})-(\d{2})\s(\d{2}):(\d{2}):(\d{2})[:.](\d{3})/,
-  DATE_TIME: /(\d{4}-\d{2}-\d{2}).*?(\d{2}:\d{2}:\d{2})/
+  DATE_TIME: /(\d{4}-\d{2}-\d{2}).*?(\d{2}:\d{2}:\d{2})/,
+  DD_MM_YY: /(\d{2})\/(\d{2})\/(\d{2})\s(\d{2}):(\d{2}):(\d{2})\.(\d{3})/,
+  DD_MM_YYYY: /(\d{2})\/(\d{2})\/(\d{4})\s(\d{2}):(\d{2}):(\d{2})\.(\d{3})/
 };
 
 const GAP_PATTERN = /#gap=(\d+(?:\.\d+)?)/i;
@@ -23,6 +26,8 @@ const GAP_PATTERN = /#gap=(\d+(?:\.\d+)?)/i;
 // Compiled patterns for cleanMessage function
 const CLEAN_PATTERNS = {
   DATE_TIME_PREFIX: /^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}[:\.]?\d*\s*/,
+  DD_MM_YY_PREFIX: /^\d{2}\/\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3}\s*/,
+  DD_MM_YYYY_PREFIX: /^\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}:\d{2}\.\d{3}\s*/,
   BRACKET_TIME: /^\[\d{2}\/\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2}\.\d+\]\s*/,
   PID: /\[\d+\]\s*/,
   DOUBLE_BRACKET: /\[.*?\]\s*\[.*?\]\s*/,
@@ -116,6 +121,22 @@ const parseTimestampToMs = (timestamp) => {
     return new Date(year, month - 1, day, hours, minutes, seconds, parseInt(ms)).getTime();
   }
 
+  // Try DD/MM/YY format: 19/08/25 08:38:58.203
+  const ddmmyyMatch = timestamp.match(TIMESTAMP_PATTERNS.DD_MM_YY);
+  if (ddmmyyMatch) {
+    const [, day, month, year, hours, minutes, seconds, ms] = ddmmyyMatch;
+    // Assume 20XX for years 00-29, 19XX for years 30-99
+    const fullYear = parseInt(year) <= 29 ? 2000 + parseInt(year) : 1900 + parseInt(year);
+    return new Date(fullYear, month - 1, day, hours, minutes, seconds, parseInt(ms)).getTime();
+  }
+
+  // Try DD/MM/YYYY format: 19/08/2025 08:38:58.203
+  const ddmmyyyyMatch = timestamp.match(TIMESTAMP_PATTERNS.DD_MM_YYYY);
+  if (ddmmyyyyMatch) {
+    const [, day, month, year, hours, minutes, seconds, ms] = ddmmyyyyMatch;
+    return new Date(year, month - 1, day, hours, minutes, seconds, parseInt(ms)).getTime();
+  }
+
   // Fallback: Extract date and time separately and combine
   const dateTimeMatch = timestamp.match(TIMESTAMP_PATTERNS.DATE_TIME);
   if (dateTimeMatch) {
@@ -167,7 +188,9 @@ const cleanMessage = (message) => {
 
   // Remove timestamp prefixes using compiled patterns
   let cleaned = message
-    .replace(CLEAN_PATTERNS.DATE_TIME_PREFIX, '') // Remove date-time prefix
+    .replace(CLEAN_PATTERNS.DATE_TIME_PREFIX, '') // Remove date-time prefix (YYYY-MM-DD HH:mm:ss)
+    .replace(CLEAN_PATTERNS.DD_MM_YY_PREFIX, '') // Remove DD/MM/YY HH:mm:ss.SSS prefix
+    .replace(CLEAN_PATTERNS.DD_MM_YYYY_PREFIX, '') // Remove DD/MM/YYYY HH:mm:ss.SSS prefix
     .replace(CLEAN_PATTERNS.BRACKET_TIME, '') // Remove [MM/dd/yy HH:mm:ss.fff]
     .replace(CLEAN_PATTERNS.PID, '') // Remove [PID]
     .replace(CLEAN_PATTERNS.DOUBLE_BRACKET, ''); // Remove other bracketed info at start
