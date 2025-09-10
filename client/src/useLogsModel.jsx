@@ -245,7 +245,7 @@ const useLogsModel = () => {
           currentLog = {
             id: logs.length,
             raw: line,
-            message: cleanLogMessage(line),
+            message: line,
             timestamp: hasTimestamp,
             level: extractLogLevel(line),
             module: extractModule(line),
@@ -255,7 +255,7 @@ const useLogsModel = () => {
           };
         } else if (currentLog) {
           // Append to previous log's message, but increment line number
-          currentLog.message += '\n' + cleanLogMessage(line);
+          currentLog.message += '\n' + line;
           currentLog.raw += '\n' + line;
           currentLog.originalLineNumbers.push(idx + 1);
         } else {
@@ -263,7 +263,7 @@ const useLogsModel = () => {
           currentLog = {
             id: logs.length,
             raw: line,
-            message: cleanLogMessage(line),
+            message: line,
             timestamp: '',
             level: extractLogLevel(line),
             module: extractModule(line),
@@ -322,25 +322,6 @@ const useLogsModel = () => {
       }
     }
     return 'info';
-  };
-
-  const cleanLogMessage = (line) => {
-    // Remove log level indicators from the message for cleaner display
-    let cleanedLine = line;
-    
-    for (const [level, ...patterns] of LOG_LEVEL_MATRIX) {
-      for (const pattern of patterns) {
-        if (line.includes(pattern)) {
-          // Remove the pattern from the line
-          cleanedLine = line.replace(pattern, '').trim();
-          // If the replacement resulted in multiple spaces, normalize to single space
-          cleanedLine = cleanedLine.replace(/\s+/g, ' ');
-          return cleanedLine;
-        }
-      }
-    }
-    
-    return cleanedLine;
   };
 
   const extractModule = (line) => {

@@ -33,6 +33,16 @@ const CLEAN_PATTERNS = {
   FILE_LINE: /\[[\w\.]+:\d+\]/g
 };
 
+// Log level matrix for comprehensive pattern matching - same as useLogsModel.jsx
+const LOG_LEVEL_MATRIX = [
+  ['error', '[Error]', ' E ', '[E]', '[err]', 'ERROR:', 'Error:', '] E ', '] E', 'E ', ']E ', 'E ssl:'],
+  ['warning', '[Warning]', ' W ', '[W]', '[warn]', 'WARNING:', 'Warning:', '] W ', '] W', 'W ', ']W '],
+  ['info', '[Info]', ' I ', '[I]', 'INFO:', 'Info:', '] I ', '] I', 'I ', ']I '],
+  ['debug', '[Debug]', ' D ', '[D]', 'DEBUG:', 'Debug:', '] D ', '] D', 'D ', ']D '],
+  ['trace', '[Trace]', ' T ', '[T]', '[verbose]', '] T ', '] T', 'T ', ']T '],
+  ['activity', 'Activity']
+];
+
 // Helper functions for date handling - memoized for performance
 const extractDateFromTimestamp = (timestamp) => {
   if (!timestamp) return null;
@@ -168,14 +178,27 @@ const cleanMessage = (message) => {
     cleaned = iosMatch[1];
   }
 
-  // Remove log level indicators using compiled patterns
+  // Remove comprehensive log level indicators using LOG_LEVEL_MATRIX
+  for (const [level, ...patterns] of LOG_LEVEL_MATRIX) {
+    for (const pattern of patterns) {
+      if (cleaned.includes(pattern)) {
+        // Remove the pattern from the line
+        cleaned = cleaned.replace(pattern, '');
+      }
+    }
+  }
+
+  // Remove basic log level indicators using compiled patterns (fallback)
   cleaned = cleaned
     .replace(CLEAN_PATTERNS.LOG_LEVEL_SPACE, '') // Remove single letter + space at start
     .replace(CLEAN_PATTERNS.LOG_LEVEL_COLON, '') // Remove single letter + colon + space at start
     .replace(CLEAN_PATTERNS.LOG_LEVEL_WORD, '$1') // Remove "D " before "catoapi:"
     .replace(CLEAN_PATTERNS.FILE_LINE, ''); // Remove [file:line] patterns
 
-  return cleaned.trim();
+  // Clean up whitespace: trim and normalize multiple spaces to single space
+  cleaned = cleaned.trim().replace(/\s+/g, ' ');
+
+  return cleaned;
 };
 
 // Helper function to clean and organize filters
@@ -395,10 +418,10 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
   const logLevel = useMemo(() => {
     const message = (log.message || '');//.toLowerCase();
     const LOG_LEVEL_MATRIX = [
-      ['error', '[Error]', ' E ', '[E]'],
-      ['warning', '[Warn]', ' W ', '[W]'],
-      ['info', '[Info]', ' I ', '[I]'],
-      ['debug', '[Debug]', ' D ', '[D]'],
+      ['error', '[Error]', ' E ', '[E]', '[err]', 'ERROR:', 'Error:'],
+      ['warning', '[Warning]', ' W ', '[W]', '[warn]', 'WARNING:', 'Warning:'],
+      ['info', '[Info]', ' I ', '[I]', 'INFO:', 'Info:'],
+      ['debug', '[Debug]', ' D ', '[D]', 'DEBUG:', 'Debug:'],
       ['trace', '[Trace]', ' T ', '[T]', '[verbose]'],
       ['activity', 'Activity']
     ];
@@ -767,8 +790,8 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
         // Don't intercept space key if user is typing in an input field
         const activeElement = document.activeElement;
         if (activeElement && (
-          activeElement.tagName === 'INPUT' || 
-          activeElement.tagName === 'TEXTAREA' || 
+          activeElement.tagName === 'INPUT' ||
+          activeElement.tagName === 'TEXTAREA' ||
           activeElement.contentEditable === 'true' ||
           activeElement.isContentEditable
         )) {
