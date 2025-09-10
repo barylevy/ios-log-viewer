@@ -62,9 +62,15 @@ const LogModal = ({ log, onClose, onHighlight, onClearHighlight }) => {
         </div>
 
         {/* Metadata */}
-        {(log.timestamp || log.module || log.thread || log.sourceFile) && (
+        {(log.timestamp || log.module || log.thread || log.sourceFile || log.lineIndex) && (
           <div className="p-4 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
             <div className="grid grid-cols-2 gap-4 text-sm">
+              {log.lineIndex && (
+                <div>
+                  <span className="font-medium text-gray-600 dark:text-gray-400">Line:</span>
+                  <span className="ml-2 font-mono text-gray-900 dark:text-white">#{log.lineIndex}</span>
+                </div>
+              )}
               {log.timestamp && (
                 <div>
                   <span className="font-medium text-gray-600 dark:text-gray-400">Timestamp:</span>

@@ -528,7 +528,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
               ? 'bg-gray-50 dark:bg-gray-800'
               : 'bg-white dark:bg-gray-900'
           }`}
-        onClick={() => onClick(log)}
+        onClick={() => onClick({ ...log, lineIndex: index + 1 })}
         onContextMenu={handleContextMenu}
         onMouseEnter={() => onHover(log.id)}
         onMouseLeave={() => onHover(null)}
@@ -546,7 +546,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
 
           {/* Line Number */}
           <div className="flex-shrink-0 text-xs text-gray-400 dark:text-gray-500 font-mono min-w-12 text-right mr-3">
-            {log.lineNumber ? `#${log.lineNumber}` : ''}
+            #{index + 1}
           </div>
 
           {/* Log Level Indicator */}
@@ -820,14 +820,20 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
         }
 
         if (targetLog && onLogClick) {
-          onLogClick(targetLog);
+          // Find the index of the target log in flatLogs to get the correct line number
+          const logIndex = flatLogs.findIndex(log => log.id === targetLog.id);
+          if (logIndex !== -1) {
+            onLogClick({ ...targetLog, lineIndex: logIndex + 1 });
+          } else {
+            onLogClick(targetLog);
+          }
         }
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [hoveredLogId, selectedLogId, highlightedLogId, logs, onLogClick]);
+  }, [hoveredLogId, selectedLogId, highlightedLogId, logs, onLogClick, flatLogs]);
 
   // Context menu filter functions
   const extractFullTimestampForFilter = (timestamp) => {
