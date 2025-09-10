@@ -500,9 +500,9 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
         className={`border-b border-gray-100 dark:border-gray-800 px-3 py-1.5 hover:bg-blue-50 dark:hover:bg-blue-900 hover:bg-opacity-50 cursor-pointer transition-colors ${isHighlighted
           ? 'bg-blue-50 dark:bg-blue-900 border-blue-200 dark:border-blue-700'
           : log.isContextLine
-            ? 'bg-gray-50 dark:bg-gray-850 opacity-75'
+            ? 'bg-gray-50 dark:bg-gray-800 opacity-75'
             : index % 2 === 1
-              ? 'bg-gray-50 dark:bg-gray-850'
+              ? 'bg-gray-50 dark:bg-gray-800'
               : 'bg-white dark:bg-gray-900'
           }`}
         onClick={() => onClick(log)}
@@ -766,9 +766,9 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
       if (e.key === ' ' || e.key === 'Spacebar') {
         e.preventDefault(); // Prevent page scroll
         e.stopPropagation();
-        
+
         let targetLog = null;
-        
+
         // Priority 1: Use hovered log if available
         if (hoveredLogId !== null) {
           targetLog = logs.find(log => log.id === hoveredLogId);
@@ -784,7 +784,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
           targetLog = logs.find(log => log.id === highlightedLogId);
           console.log('Space key triggered for highlighted log:', highlightedLogId);
         }
-        
+
         if (targetLog && onLogClick) {
           onLogClick(targetLog);
         }

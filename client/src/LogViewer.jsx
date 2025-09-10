@@ -312,7 +312,7 @@ const LogViewer = () => {
         <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
           <div className="text-center">
             <p className="text-xl mb-2">Cato Client Log Viewer</p>
-            <p>Drop log files here or click "Load Files" to get started</p>
+            <p>Drop log files here or click "Open Files" to get started</p>
             <p className="text-sm mt-2">Supports multiple files and AI-powered analysis</p>
           </div>
         </div>
