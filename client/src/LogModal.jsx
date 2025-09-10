@@ -1,14 +1,22 @@
 import React, { useEffect } from 'react';
 
-const LogModal = ({ log, onClose, onHighlight, onClearHighlight }) => {
+const LogModal = ({ log, onClose, onHighlight, onClearHighlight, onNext, onPrev, hasNext, hasPrev }) => {
   // Close modal when Escape key is pressed
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') onClose();
+      if (e.key === 'ArrowLeft' && hasPrev && onPrev) {
+        e.preventDefault();
+        onPrev();
+      }
+      if (e.key === 'ArrowRight' && hasNext && onNext) {
+        e.preventDefault();
+        onNext();
+      }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [onClose, onNext, onPrev, hasNext, hasPrev]);
   if (!log) return null;
 
   const handleHighlight = () => {
@@ -53,12 +61,47 @@ const LogModal = ({ log, onClose, onHighlight, onClearHighlight }) => {
               </span>
             )}
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-xl"
-          >
-            ×
-          </button>
+
+          {/* Navigation and Close buttons */}
+          <div className="flex items-center gap-2">
+            {/* Previous button */}
+            <button
+              onClick={onPrev}
+              disabled={!hasPrev}
+              className={`p-1 rounded-md transition-colors ${!hasPrev
+                  ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+              title="Previous log (←)"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+
+            {/* Next button */}
+            <button
+              onClick={onNext}
+              disabled={!hasNext}
+              className={`p-1 rounded-md transition-colors ${!hasNext
+                  ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+              title="Next log (→)"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+
+            {/* Close button */}
+            <button
+              onClick={onClose}
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-xl ml-2"
+            >
+              ×
+            </button>
+          </div>
         </div>
 
         {/* Metadata */}

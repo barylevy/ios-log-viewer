@@ -306,6 +306,40 @@ const LogViewer = () => {
     }
   }, [selectedLog, setSelectedLog]);
 
+  // Navigation functions for modal
+  const navigateToNextLog = useCallback(() => {
+    if (!selectedLog || !currentDisplayContext.logs.length) return;
+
+    const currentIndex = currentDisplayContext.logs.findIndex(log => log.id === selectedLog.id);
+    if (currentIndex >= 0 && currentIndex < currentDisplayContext.logs.length - 1) {
+      const nextLog = currentDisplayContext.logs[currentIndex + 1];
+      setSelectedLog({ ...nextLog, lineIndex: currentIndex + 2 }); // +2 because next index + 1-based indexing
+    }
+  }, [selectedLog, currentDisplayContext.logs, setSelectedLog]);
+
+  const navigateToPrevLog = useCallback(() => {
+    if (!selectedLog || !currentDisplayContext.logs.length) return;
+
+    const currentIndex = currentDisplayContext.logs.findIndex(log => log.id === selectedLog.id);
+    if (currentIndex > 0) {
+      const prevLog = currentDisplayContext.logs[currentIndex - 1];
+      setSelectedLog({ ...prevLog, lineIndex: currentIndex }); // currentIndex is already 1-based for prev
+    }
+  }, [selectedLog, currentDisplayContext.logs, setSelectedLog]);
+
+  // Check if next/prev navigation is available
+  const hasNextLog = useMemo(() => {
+    if (!selectedLog || !currentDisplayContext.logs.length) return false;
+    const currentIndex = currentDisplayContext.logs.findIndex(log => log.id === selectedLog.id);
+    return currentIndex >= 0 && currentIndex < currentDisplayContext.logs.length - 1;
+  }, [selectedLog, currentDisplayContext.logs]);
+
+  const hasPrevLog = useMemo(() => {
+    if (!selectedLog || !currentDisplayContext.logs.length) return false;
+    const currentIndex = currentDisplayContext.logs.findIndex(log => log.id === selectedLog.id);
+    return currentIndex > 0;
+  }, [selectedLog, currentDisplayContext.logs]);
+
   const memoizedContent = useMemo(() => {
     if (!hasUserInteracted) {
       return (
@@ -457,6 +491,10 @@ const LogViewer = () => {
           onClose={() => setSelectedLog(null)}
           onHighlight={highlightLog}
           onClearHighlight={clearHighlight}
+          onNext={navigateToNextLog}
+          onPrev={navigateToPrevLog}
+          hasNext={hasNextLog}
+          hasPrev={hasPrevLog}
         />
       )}
 
