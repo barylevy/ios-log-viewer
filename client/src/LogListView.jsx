@@ -920,6 +920,10 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
           >
             Set as "To" log line index
           </button>
+          
+          {/* Separator */}
+          <div className="border-t border-gray-200 dark:border-gray-600 my-1"></div>
+          
           <button
             onClick={setAsFromDateFilter}
             className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
