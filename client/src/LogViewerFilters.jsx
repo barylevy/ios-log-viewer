@@ -32,15 +32,72 @@ const FILTER_TOOLTIP = `Advanced Filtering Guide:
 
 const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCount, searchMatchCount, searchMatchPos, pivotGap }) => {
   const [isLevelDropdownOpen, setIsLevelDropdownOpen] = useState(false);
+  const [isFilterHistoryOpen, setIsFilterHistoryOpen] = useState(false);
+  const [filterHistory, setFilterHistory] = useState(() => {
+    // Load filter history from localStorage
+    const saved = localStorage.getItem('logViewer_filterHistory');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   const dropdownRef = useRef(null);
   const portalRef = useRef(null);
   const filterInputRef = useRef(null);
+  const filterHistoryRef = useRef(null);
   // For portal positioning
   const buttonRef = useRef(null);
+  const filterChevronRef = useRef(null);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
+  const [filterDropdownPos, setFilterDropdownPos] = useState({ top: 0, left: 0 });
 
   const handleFilterChange = (key, value) => {
     onFiltersChange({ [key]: value });
+  };
+
+  // Save phrases to history when user finishes typing
+  const handleFilterBlur = () => {
+    const value = filters.searchText;
+    if (value && value.trim()) {
+      // Split by || and save each phrase individually
+      const phrases = value.split('||').map(phrase => phrase.trim()).filter(phrase => phrase.length > 0);
+      phrases.forEach(phrase => saveToFilterHistory(phrase));
+    }
+  };
+
+  // Handle Enter key to also save phrases
+  const handleFilterKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleFilterBlur();
+    }
+  };
+
+  // Save filter phrase to history
+  const saveToFilterHistory = (phrase) => {
+    setFilterHistory(prevHistory => {
+      // Remove if already exists
+      const filtered = prevHistory.filter(item => item !== phrase);
+      // Add to beginning
+      const newHistory = [phrase, ...filtered].slice(0, 50); // Keep max 50 items
+
+      // Save to localStorage
+      localStorage.setItem('logViewer_filterHistory', JSON.stringify(newHistory));
+
+      return newHistory;
+    });
+  };
+
+  // Add phrase to current filter
+  const addPhraseToFilter = (phrase) => {
+    const currentFilter = filters.searchText || '';
+    const newFilter = currentFilter ? `${currentFilter} || ${phrase}` : phrase;
+    handleFilterChange('searchText', newFilter);
+    setIsFilterHistoryOpen(false);
+  };
+
+  // Clear filter history
+  const clearFilterHistory = () => {
+    setFilterHistory([]);
+    localStorage.removeItem('logViewer_filterHistory');
+    setIsFilterHistoryOpen(false);
   };
 
   // Close dropdown when clicking outside (using click event to allow checkbox selection)
@@ -48,22 +105,47 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
     const handleClickOutside = (event) => {
       if (
         (dropdownRef.current && dropdownRef.current.contains(event.target)) ||
-        (portalRef.current && portalRef.current.contains(event.target))
+        (buttonRef.current && buttonRef.current.contains(event.target))
       ) {
-        return;
+        return; // Click is inside the level dropdown, do nothing
       }
-      if (isLevelDropdownOpen) {
-        event.stopPropagation();
-        event.preventDefault();
-        setIsLevelDropdownOpen(false);
+
+      if (
+        (filterHistoryRef.current && filterHistoryRef.current.contains(event.target)) ||
+        (filterChevronRef.current && filterChevronRef.current.contains(event.target))
+      ) {
+        return; // Click is inside the filter history dropdown, do nothing
       }
+
+      // Close both dropdowns
+      setIsLevelDropdownOpen(false);
+      setIsFilterHistoryOpen(false);
     };
 
-    document.addEventListener('click', handleClickOutside, true);
+    document.addEventListener('click', handleClickOutside);
     return () => {
-      document.removeEventListener('click', handleClickOutside, true);
+      document.removeEventListener('click', handleClickOutside);
     };
-  }, [dropdownRef, portalRef, isLevelDropdownOpen]);
+  }, []);
+
+  // Compute filter dropdown position when opening
+  useEffect(() => {
+    if (isFilterHistoryOpen && filterChevronRef.current) {
+      const rect = filterChevronRef.current.getBoundingClientRect();
+      setFilterDropdownPos({
+        top: rect.bottom + window.scrollY,
+        left: rect.right + window.scrollX - 300 // Align to right edge, adjust for dropdown width
+      });
+    }
+  }, [isFilterHistoryOpen]);
+
+  // Compute log level dropdown position when opening
+  useEffect(() => {
+    if (isLevelDropdownOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX });
+    }
+  }, [isLevelDropdownOpen]);
 
   // Handle Cmd+F to focus filter input
   useEffect(() => {
@@ -176,42 +258,91 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
     </div>
   );
 
-  const renderFilterInput = () => (
-    <div className="flex-1 min-w-64 flex flex-col items-start">
-      <div className="flex items-center w-full">
-        <label className="text-xs font-medium text-gray-700 dark:text-gray-300 mr-2">Filter:</label>
-        <div className="relative w-full">
-          <input
-            ref={filterInputRef}
-            type="text"
-            placeholder="Filter logs: text || terms, !exclude, #gap=5, #row::, #date:: ranges. Hover for full guide."
-            value={filters.searchText}
-            onChange={(e) => handleFilterChange('searchText', e.target.value)}
-            className="w-full h-6 px-2 pr-8 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
-            title={FILTER_TOOLTIP}
-          />
-          {filters.searchText && (
+  const renderFilterInput = () => {
+    return (
+      <div className="flex-1 min-w-64 flex flex-col items-start">
+        <div className="flex items-center w-full">
+          <label className="text-xs font-medium text-gray-700 dark:text-gray-300 mr-2">Filter:</label>
+          <div className="relative w-full flex border border-gray-300 dark:border-gray-600 rounded-md focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 bg-white dark:bg-gray-700">
+            <input
+              ref={filterInputRef}
+              type="text"
+              placeholder="Filter logs: text || terms, !exclude, #gap=5, #row::, #date:: ranges. Hover for full guide."
+              value={filters.searchText}
+              onChange={(e) => handleFilterChange('searchText', e.target.value)}
+              onBlur={handleFilterBlur}
+              onKeyDown={handleFilterKeyDown}
+              className="w-full h-6 px-2 pr-16 border-none rounded-l-md focus:outline-none bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
+              title={FILTER_TOOLTIP}
+            />
+            {filters.searchText && (
+              <button
+                onClick={() => handleFilterChange('searchText', '')}
+                className="absolute right-8 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 z-10"
+              >
+                ×
+              </button>
+            )}
+            {filters.searchText && (
+              <div className="absolute right-6 top-0 bottom-0 w-px bg-gray-300 dark:bg-gray-600 z-10"></div>
+            )}
             <button
-              onClick={() => handleFilterChange('searchText', '')}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              ref={filterChevronRef}
+              onClick={() => setIsFilterHistoryOpen(!isFilterHistoryOpen)}
+              className="px-2 h-6 border-none rounded-r-md bg-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none"
+              title="Filter history"
             >
-              ×
+              <svg className={`w-3 h-3 transition-transform ${isFilterHistoryOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
             </button>
-          )}
+          </div>
         </div>
+
+        {/* Filter History Dropdown */}
+        {isFilterHistoryOpen && filterHistory.length > 0 && ReactDOM.createPortal(
+          <div
+            ref={filterHistoryRef}
+            style={{
+              position: 'absolute',
+              top: filterDropdownPos.top,
+              left: filterDropdownPos.left,
+              zIndex: 9999,
+              width: '300px'
+            }}
+            className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg"
+          >
+            <div className="py-1 max-h-80 overflow-y-auto">
+              {/* History Items */}
+              {filterHistory.slice(0, 10).map((phrase, index) => (
+                <button
+                  key={index}
+                  onClick={() => addPhraseToFilter(phrase)}
+                  className="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 border-b border-gray-100 dark:border-gray-600 last:border-b-0"
+                  title={`Add "${phrase}" to filter`}
+                >
+                  <div className="truncate">{phrase}</div>
+                </button>
+              ))}
+
+              {/* Clear History Button */}
+              <div className="border-t border-gray-200 dark:border-gray-600 mt-1">
+                <button
+                  onClick={clearFilterHistory}
+                  className="w-full px-3 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 text-center"
+                >
+                  Clear History
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderLogLevelFilter = () => {
-    // Compute dropdown position when opening
-    useEffect(() => {
-      if (isLevelDropdownOpen && buttonRef.current) {
-        const rect = buttonRef.current.getBoundingClientRect();
-        setDropdownPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX });
-      }
-    }, [isLevelDropdownOpen]);
-
     return (
       <div className="flex items-center gap-1" ref={dropdownRef}>
         <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Level:</label>
