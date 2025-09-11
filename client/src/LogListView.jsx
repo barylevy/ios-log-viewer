@@ -427,7 +427,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
 
           {/* Line Number */}
           <div className="flex-shrink-0 text-xs text-gray-400 dark:text-gray-500 font-mono min-w-12 text-right mr-3">
-            #{index + 1}
+            {log.lineNumber}
           </div>
 
           {/* Log Level Indicator */}
