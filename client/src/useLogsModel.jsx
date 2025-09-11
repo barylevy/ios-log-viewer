@@ -1,6 +1,12 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-
-// Regex patterns - moved outside to avoid recreation on every render
+import { LOG_LEVEL_MATRIX } from './constants';
+import {
+  extractTimestamp,
+  parseTimestampToMs,
+  extractTimeGapFromSearch,
+  extractDateFromTimestamp,
+  GAP_PATTERN
+} from './dateTimeUtils';
 const DATE_RANGE_REGEX = /(^|\s)::\s*#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)/; // :: #date
 const DATE_START_REGEX = /#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)\s*::/; // #date ::
 const DATE_BOTH_REGEX = /#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)\s*::\s*#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)/; // #date :: #date
@@ -12,19 +18,6 @@ const ROW_BOTH_REGEX = /#(\d+)(?!\d{4})\s*::\s*#(\d+)(?!\d{4})/; // #415 :: #600
 // Mixed range patterns: row to date or date to row
 const ROW_TO_DATE_REGEX = /#(\d+)(?!\d{4})\s*::\s*#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)/; // #9 :: #2025-07-04 13:29:11:645
 const DATE_TO_ROW_REGEX = /#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)\s*::\s*#(\d+)(?!\d{4})/; // #2025-07-04 13:29:11:645 :: #500
-
-// Gap pattern for time filtering
-const GAP_PATTERN = /#gap=(\d+(?:\.\d+)?)/i;
-
-// Log level matrix - moved outside for performance
-const LOG_LEVEL_MATRIX = [
-  ['error', '[Error]', ' E ', '[E]', '[err]', 'ERROR:', 'Error:'],
-  ['warning', '[Warning]', ' W ', '[W]', '[warn]', 'WARNING:', 'Warning:'],
-  ['info', '[Info]', ' I ', '[I]', 'INFO:', 'Info:'],
-  ['debug', '[Debug]', ' D ', '[D]', 'DEBUG:', 'Debug:'],
-  ['trace', '[Trace]', ' T ', '[T]', '[verbose]'],
-  ['activity', 'Activity']
-];
 
 // Generate unique file identifier
 const getFileIdentifier = (file) => {
@@ -86,59 +79,6 @@ const getFileFullName = (fileId) => {
     return fullPath;
   }
   return fullPath;
-};
-
-// Helper function to parse timestamp into milliseconds for time gap calculations
-const parseTimestampToMs = (timestamp) => {
-  if (!timestamp) return null;
-
-  // Try to extract full timestamp: 2025-08-26 11:05:21:299 or 2025-08-26 11:05:21.299
-  const fullMatch = timestamp.match(/(\d{4})-(\d{2})-(\d{2})\s(\d{2}):(\d{2}):(\d{2})[:.](\d{3})/);
-  if (fullMatch) {
-    const [, year, month, day, hours, minutes, seconds, ms] = fullMatch;
-    return new Date(year, month - 1, day, hours, minutes, seconds, parseInt(ms)).getTime();
-  }
-
-  // Try DD/MM/YY format: 19/08/25 08:38:58.203
-  const ddmmyyMatch = timestamp.match(/(\d{2})\/(\d{2})\/(\d{2})\s(\d{2}):(\d{2}):(\d{2})\.(\d{3})/);
-  if (ddmmyyMatch) {
-    const [, day, month, year, hours, minutes, seconds, ms] = ddmmyyMatch;
-    // Assume 20XX for years 00-29, 19XX for years 30-99
-    const fullYear = parseInt(year) <= 29 ? 2000 + parseInt(year) : 1900 + parseInt(year);
-    return new Date(fullYear, month - 1, day, hours, minutes, seconds, parseInt(ms)).getTime();
-  }
-
-  // Try DD/MM/YYYY format: 19/08/2025 08:38:58.203
-  const ddmmyyyyMatch = timestamp.match(/(\d{2})\/(\d{2})\/(\d{4})\s(\d{2}):(\d{2}):(\d{2})\.(\d{3})/);
-  if (ddmmyyyyMatch) {
-    const [, day, month, year, hours, minutes, seconds, ms] = ddmmyyyyMatch;
-    return new Date(year, month - 1, day, hours, minutes, seconds, parseInt(ms)).getTime();
-  }
-
-  // Fallback: Extract date and time separately and combine
-  const dateTimeMatch = timestamp.match(/(\d{4}-\d{2}-\d{2}).*?(\d{2}:\d{2}:\d{2})/);
-  if (dateTimeMatch) {
-    const [, datePart, timePart] = dateTimeMatch;
-    const [year, month, day] = datePart.split('-');
-    const [hours, minutes, seconds] = timePart.split(':');
-    return new Date(year, month - 1, day, hours, minutes, seconds).getTime();
-  }
-
-  return null;
-};
-
-// Helper function to extract time gap value from search text
-const extractTimeGapFromSearch = (searchText) => {
-  if (!searchText) return 0;
-
-  // Look for #gap=X pattern using compiled regex
-  const gapMatch = searchText.match(GAP_PATTERN);
-  if (gapMatch) {
-    const gapValue = parseFloat(gapMatch[1]);
-    return isNaN(gapValue) ? 0 : gapValue;
-  }
-
-  return 0;
 };
 
 const useLogsModel = () => {
@@ -311,27 +251,6 @@ const useLogsModel = () => {
   const isFileLoading = useCallback((fileId) => {
     return !!fileLoadingState[fileId];
   }, [fileLoadingState]);
-
-  const extractTimestamp = (line) => {
-    // Try to extract timestamp from common log formats with milliseconds
-    const timestampPatterns = [
-      /(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}:\d{3})/,  // 2025-08-02 23:54:57:514
-      /(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3,6})/,  // 2025-08-02 23:54:57.514 or .514123
-      /(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})/,        // 2025-08-02 23:54:57 (fallback without ms)
-      /(\d{2}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})/,  // 19/08/25 08:38:58.203
-      /(\d{2}\/\d{2}\/\d{4}\s\d{2}:\d{2}:\d{2}\.\d{3})/,  // 19/08/2025 08:38:58.203
-      /(\d{2}:\d{2}:\d{2}:\d{3})/,                      // 23:54:57:514
-      /(\d{2}:\d{2}:\d{2}\.\d{3,6})/,                   // 23:54:57.514 or .514123
-      /(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3,6})/,  // 2025-08-02T23:54:57.514
-      /(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/          // 2025-08-02T23:54:57 (fallback without ms)
-    ];
-
-    for (const pattern of timestampPatterns) {
-      const match = line.match(pattern);
-      if (match) return match[1];
-    }
-    return '';
-  };
 
   const extractLogLevel = (line) => {
     for (const [level, ...patterns] of LOG_LEVEL_MATRIX) {
