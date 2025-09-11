@@ -316,7 +316,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
         <button
           ref={searchChevronRef}
           onClick={() => setIsSearchHistoryOpen(!isSearchHistoryOpen)}
-          className="px-2 h-6 border-none rounded-r-md bg-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none"
+          className="w-8 h-6 border-none rounded-r-md bg-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none flex items-center justify-center"
           title="Search history"
         >
           <svg className={`w-3 h-3 transition-transform ${isSearchHistoryOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -324,7 +324,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
           </svg>
         </button>
         {filters.searchQuery && (
-          <div className="absolute right-36 top-1/2 transform -translate-y-1/2 flex items-center space-x-1">
+          <div className="absolute right-12 top-1/2 transform -translate-y-1/2 flex items-center space-x-1">
             <button
               onClick={() => window.dispatchEvent(new Event('prevSearchMatch'))}
               title="Previous match"
@@ -404,24 +404,24 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
               onChange={(e) => handleFilterChange('searchText', e.target.value)}
               onBlur={handleFilterBlur}
               onKeyDown={handleFilterKeyDown}
-              className="w-full h-6 px-2 pr-16 border-none rounded-l-md focus:outline-none bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
+              className="w-full h-6 px-2 pr-28 border-none rounded-l-md focus:outline-none bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
               title={FILTER_TOOLTIP}
             />
             {filters.searchText && (
               <button
                 onClick={() => handleFilterChange('searchText', '')}
-                className="absolute right-8 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 z-10"
+                className="absolute right-10 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 z-10"
               >
                 ×
               </button>
             )}
             {filters.searchText && (
-              <div className="absolute right-6 top-0 bottom-0 w-px bg-gray-300 dark:bg-gray-600 z-10"></div>
+              <div className="absolute right-8 top-0 bottom-0 w-px bg-gray-300 dark:bg-gray-600 z-10"></div>
             )}
             <button
               ref={filterChevronRef}
               onClick={() => setIsFilterHistoryOpen(!isFilterHistoryOpen)}
-              className="px-2 h-6 border-none rounded-r-md bg-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none"
+              className="w-8 h-6 border-none rounded-r-md bg-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none flex items-center justify-center"
               title="Filter history"
             >
               <svg className={`w-3 h-3 transition-transform ${isFilterHistoryOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
