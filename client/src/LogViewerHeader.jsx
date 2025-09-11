@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import FileSelectionModal from './FileSelectionModal';
 import AboutModal from './AboutModal';
 import AIConfigSettings from './Settings';
+import { CATO_COLORS } from './constants';
 
 const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, currentFileHeaders, onClearTabs }) => {
   const fileInputRef = useRef(null);
@@ -181,8 +182,11 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
               onClick={onToggleAIChat}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${showAIChat
                 ? 'bg-red-600 hover:bg-red-700 text-white'
-                : 'bg-green-600 hover:bg-green-700 text-white'
+                : 'text-white hover:opacity-90'
                 }`}
+              style={{
+                backgroundColor: showAIChat ? undefined : CATO_COLORS.PRIMARY
+              }}
             >
               {showAIChat ? 'Hide AI Chat' : 'Show AI Chat'}
             </button>
