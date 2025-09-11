@@ -493,6 +493,8 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
   const [contextMenu, setContextMenu] = useState(null);
   // Track which log item is currently being hovered
   const [hoveredLogId, setHoveredLogId] = useState(null);
+  // Track visible range for smart scrolling
+  const [visibleRange, setVisibleRange] = useState(null);
 
   // Group logs by date for sticky headers
   const groupedLogs = useMemo(() => {
@@ -597,6 +599,28 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
   useEffect(() => {
     setCurrentMatchIndex(matchIndices.length ? 0 : -1);
   }, [filters.searchQuery]); // Only reset when search query changes
+
+  // Auto-scroll to selected log when it changes (for modal navigation)
+  useEffect(() => {
+    if (selectedLogId && virtuosoRef.current && flatLogs.length > 0) {
+      const selectedIndex = flatLogs.findIndex(log => log.id === selectedLogId);
+      if (selectedIndex >= 0) {
+        // Only scroll if the item is not currently visible
+        const isVisible = visibleRange &&
+          selectedIndex >= visibleRange.startIndex &&
+          selectedIndex <= visibleRange.endIndex;
+
+        if (!isVisible) {
+          virtuosoRef.current.scrollToIndex({
+            index: selectedIndex,
+            align: 'center',
+            behavior: 'smooth'
+          });
+        }
+      }
+    }
+  }, [selectedLogId, flatLogs, visibleRange]);
+
   // Next/Prev navigation
   const goToNextMatch = useCallback(() => {
     if (!virtuosoRef.current || !matchIndices.length) return;
@@ -605,7 +629,11 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
     const next = currentMatchIndex + 1;
     const target = matchIndices[next];
     // Scroll to match without opening modal
-    virtuosoRef.current.scrollToIndex({ index: target, align: 'start' });
+    virtuosoRef.current.scrollToIndex({
+      index: target,
+      align: 'start',
+      behavior: 'smooth'
+    });
     setCurrentMatchIndex(next);
     // Focus the target item after scrolling
     setTimeout(() => {
@@ -620,7 +648,11 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
     const prev = currentMatchIndex - 1;
     const target = matchIndices[prev];
     // Scroll to match without opening modal
-    virtuosoRef.current.scrollToIndex({ index: target, align: 'start' });
+    virtuosoRef.current.scrollToIndex({
+      index: target,
+      align: 'start',
+      behavior: 'smooth'
+    });
     setCurrentMatchIndex(prev);
     // Focus the target item after scrolling
     setTimeout(() => {
@@ -682,7 +714,11 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
       if ((e.metaKey || e.ctrlKey) && e.key === 'ArrowUp') {
         e.preventDefault();
         if (virtuosoRef.current) {
-          virtuosoRef.current.scrollToIndex({ index: 0, align: 'start' });
+          virtuosoRef.current.scrollToIndex({
+            index: 0,
+            align: 'start',
+            behavior: 'smooth'
+          });
         }
         return;
       }
@@ -691,7 +727,11 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
       if ((e.metaKey || e.ctrlKey) && e.key === 'ArrowDown') {
         e.preventDefault();
         if (virtuosoRef.current && flatLogs.length > 0) {
-          virtuosoRef.current.scrollToIndex({ index: flatLogs.length - 1, align: 'end' });
+          virtuosoRef.current.scrollToIndex({
+            index: flatLogs.length - 1,
+            align: 'end',
+            behavior: 'smooth'
+          });
         }
         return;
       }
@@ -812,7 +852,11 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
     // Find the first log with this date
     const targetIndex = flatLogs.findIndex(log => log.date === targetDate);
     if (targetIndex >= 0) {
-      virtuosoRef.current.scrollToIndex({ index: targetIndex, align: 'start' });
+      virtuosoRef.current.scrollToIndex({
+        index: targetIndex,
+        align: 'start',
+        behavior: 'smooth'
+      });
     }
   }, [flatLogs]);
 
@@ -830,8 +874,9 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
     }
   }, [currentDateIndex, allDates, scrollToDate]);
 
-  // Handle range changes to update sticky date
+  // Handle range changes to update sticky date and track visible range
   const handleRangeChanged = useCallback((range) => {
+    setVisibleRange(range);
     if (range && range.startIndex < flatLogs.length) {
       const firstVisibleLog = flatLogs[range.startIndex];
       if (firstVisibleLog?.date) {
