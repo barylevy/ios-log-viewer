@@ -33,9 +33,15 @@ const FILTER_TOOLTIP = `Advanced Filtering Guide:
 const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCount, searchMatchCount, searchMatchPos, pivotGap }) => {
   const [isLevelDropdownOpen, setIsLevelDropdownOpen] = useState(false);
   const [isFilterHistoryOpen, setIsFilterHistoryOpen] = useState(false);
+  const [isSearchHistoryOpen, setIsSearchHistoryOpen] = useState(false);
   const [filterHistory, setFilterHistory] = useState(() => {
     // Load filter history from localStorage
     const saved = localStorage.getItem('logViewer_filterHistory');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [searchHistory, setSearchHistory] = useState(() => {
+    // Load search history from localStorage
+    const saved = localStorage.getItem('logViewer_searchHistory');
     return saved ? JSON.parse(saved) : [];
   });
 
@@ -43,11 +49,15 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
   const portalRef = useRef(null);
   const filterInputRef = useRef(null);
   const filterHistoryRef = useRef(null);
+  const searchInputRef = useRef(null);
+  const searchHistoryRef = useRef(null);
   // For portal positioning
   const buttonRef = useRef(null);
   const filterChevronRef = useRef(null);
+  const searchChevronRef = useRef(null);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
   const [filterDropdownPos, setFilterDropdownPos] = useState({ top: 0, left: 0 });
+  const [searchDropdownPos, setSearchDropdownPos] = useState({ top: 0, left: 0 });
 
   const handleFilterChange = (key, value) => {
     onFiltersChange({ [key]: value });
@@ -67,6 +77,23 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
   const handleFilterKeyDown = (e) => {
     if (e.key === 'Enter') {
       handleFilterBlur();
+    }
+  };
+
+  // Save search phrases to history when user finishes typing
+  const handleSearchBlur = () => {
+    const value = filters.searchQuery;
+    if (value && value.trim()) {
+      // Split by || and save each phrase individually
+      const phrases = value.split('||').map(phrase => phrase.trim()).filter(phrase => phrase.length > 0);
+      phrases.forEach(phrase => saveToSearchHistory(phrase));
+    }
+  };
+
+  // Handle Enter key to also save search phrases
+  const handleSearchKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleSearchBlur();
     }
   };
 
@@ -100,6 +127,36 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
     setIsFilterHistoryOpen(false);
   };
 
+  // Save search phrase to history
+  const saveToSearchHistory = (phrase) => {
+    setSearchHistory(prevHistory => {
+      // Remove if already exists
+      const filtered = prevHistory.filter(item => item !== phrase);
+      // Add to beginning
+      const newHistory = [phrase, ...filtered].slice(0, 50); // Keep max 50 items
+
+      // Save to localStorage
+      localStorage.setItem('logViewer_searchHistory', JSON.stringify(newHistory));
+
+      return newHistory;
+    });
+  };
+
+  // Add phrase to current search
+  const addPhraseToSearch = (phrase) => {
+    const currentSearch = filters.searchQuery || '';
+    const newSearch = currentSearch ? `${currentSearch} || ${phrase}` : phrase;
+    handleFilterChange('searchQuery', newSearch);
+    setIsSearchHistoryOpen(false);
+  };
+
+  // Clear search history
+  const clearSearchHistory = () => {
+    setSearchHistory([]);
+    localStorage.removeItem('logViewer_searchHistory');
+    setIsSearchHistoryOpen(false);
+  };
+
   // Close dropdown when clicking outside (using click event to allow checkbox selection)
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -117,9 +174,17 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
         return; // Click is inside the filter history dropdown, do nothing
       }
 
-      // Close both dropdowns
+      if (
+        (searchHistoryRef.current && searchHistoryRef.current.contains(event.target)) ||
+        (searchChevronRef.current && searchChevronRef.current.contains(event.target))
+      ) {
+        return; // Click is inside the search history dropdown, do nothing
+      }
+
+      // Close all dropdowns
       setIsLevelDropdownOpen(false);
       setIsFilterHistoryOpen(false);
+      setIsSearchHistoryOpen(false);
     };
 
     document.addEventListener('click', handleClickOutside);
@@ -146,6 +211,17 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
       setDropdownPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX });
     }
   }, [isLevelDropdownOpen]);
+
+  // Compute search dropdown position when opening
+  useEffect(() => {
+    if (isSearchHistoryOpen && searchChevronRef.current) {
+      const rect = searchChevronRef.current.getBoundingClientRect();
+      setSearchDropdownPos({
+        top: rect.bottom + window.scrollY,
+        left: rect.right + window.scrollX - 300 // Align to right edge, adjust for dropdown width
+      });
+    }
+  }, [isSearchHistoryOpen]);
 
   // Handle Cmd+F to focus filter input
   useEffect(() => {
@@ -214,25 +290,41 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
   const renderSearchNavigationInput = () => (
     <div className="flex-1 min-w-64 flex items-center">
       <label className="text-xs font-medium text-gray-700 dark:text-gray-300 mr-2">Search:</label>
-      <div className="relative w-full">
+      <div className="relative w-full flex border border-gray-300 dark:border-gray-600 rounded-md focus-within:ring-2 focus-within:ring-green-500 focus-within:border-green-500 bg-white dark:bg-gray-700">
         <input
+          ref={searchInputRef}
           type="text"
           placeholder="Search in record logs. Add #gap=5 for time gap indicators..."
           value={filters.searchQuery || ''}
           onChange={(e) => handleFilterChange('searchQuery', e.target.value)}
-          className="w-full h-6 px-2 pr-28 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
+          onBlur={handleSearchBlur}
+          onKeyDown={handleSearchKeyDown}
+          className="w-full h-6 px-2 pr-28 border-none rounded-l-md focus:outline-none bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
           title="Search in logs. Add #gap=5 to show visual separators between records with 5+ second gaps. Combine with search terms: 'error #gap=3' shows errors with gap indicators."
         />
         {filters.searchQuery && (
           <button
             onClick={() => handleFilterChange('searchQuery', '')}
-            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            className="absolute right-10 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 z-10"
           >
             ×
           </button>
         )}
         {filters.searchQuery && (
-          <div className="absolute right-10 top-1/2 transform -translate-y-1/2 flex items-center space-x-1">
+          <div className="absolute right-8 top-0 bottom-0 w-px bg-gray-300 dark:bg-gray-600 z-10"></div>
+        )}
+        <button
+          ref={searchChevronRef}
+          onClick={() => setIsSearchHistoryOpen(!isSearchHistoryOpen)}
+          className="px-2 h-6 border-none rounded-r-md bg-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none"
+          title="Search history"
+        >
+          <svg className={`w-3 h-3 transition-transform ${isSearchHistoryOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {filters.searchQuery && (
+          <div className="absolute right-36 top-1/2 transform -translate-y-1/2 flex items-center space-x-1">
             <button
               onClick={() => window.dispatchEvent(new Event('prevSearchMatch'))}
               title="Previous match"
@@ -255,6 +347,46 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
           </div>
         )}
       </div>
+
+      {/* Search History Dropdown */}
+      {isSearchHistoryOpen && searchHistory.length > 0 && ReactDOM.createPortal(
+        <div
+          ref={searchHistoryRef}
+          style={{
+            position: 'absolute',
+            top: searchDropdownPos.top,
+            left: searchDropdownPos.left,
+            zIndex: 9999,
+            width: '300px'
+          }}
+          className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg"
+        >
+          <div className="py-1 max-h-80 overflow-y-auto">
+            {/* History Items */}
+            {searchHistory.slice(0, 10).map((phrase, index) => (
+              <button
+                key={index}
+                onClick={() => addPhraseToSearch(phrase)}
+                className="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 border-b border-gray-100 dark:border-gray-600 last:border-b-0"
+                title={`Add "${phrase}" to search`}
+              >
+                <div className="truncate">{phrase}</div>
+              </button>
+            ))}
+
+            {/* Clear History Button */}
+            <div className="border-t border-gray-200 dark:border-gray-600 mt-1">
+              <button
+                onClick={clearSearchHistory}
+                className="w-full px-3 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 text-center"
+              >
+                Clear History
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 
