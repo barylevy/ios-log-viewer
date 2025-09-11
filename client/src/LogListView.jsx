@@ -664,21 +664,40 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
     }
   }, [contextMenu]);
 
-  // Handle space key for hovered items
+  // Handle keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === ' ' || e.key === 'Spacebar') {
-        // Don't intercept space key if user is typing in an input field
-        const activeElement = document.activeElement;
-        if (activeElement && (
-          activeElement.tagName === 'INPUT' ||
-          activeElement.tagName === 'TEXTAREA' ||
-          activeElement.contentEditable === 'true' ||
-          activeElement.isContentEditable
-        )) {
-          return; // Let the input field handle the space key normally
-        }
+      // Don't intercept keys if user is typing in an input field
+      const activeElement = document.activeElement;
+      if (activeElement && (
+        activeElement.tagName === 'INPUT' ||
+        activeElement.tagName === 'TEXTAREA' ||
+        activeElement.contentEditable === 'true' ||
+        activeElement.isContentEditable
+      )) {
+        return; // Let the input field handle the key normally
+      }
 
+      // Command+Up: Scroll to top
+      if ((e.metaKey || e.ctrlKey) && e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (virtuosoRef.current) {
+          virtuosoRef.current.scrollToIndex({ index: 0, align: 'start' });
+        }
+        return;
+      }
+
+      // Command+Down: Scroll to bottom
+      if ((e.metaKey || e.ctrlKey) && e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (virtuosoRef.current && flatLogs.length > 0) {
+          virtuosoRef.current.scrollToIndex({ index: flatLogs.length - 1, align: 'end' });
+        }
+        return;
+      }
+
+      // Space key for hovered items
+      if (e.key === ' ' || e.key === 'Spacebar') {
         e.preventDefault(); // Prevent page scroll
         e.stopPropagation();
 
