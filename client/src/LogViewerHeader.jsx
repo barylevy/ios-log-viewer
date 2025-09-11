@@ -55,8 +55,11 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
     const files = Array.from(event.target.files);
     console.debug('Files selected:', files);
 
-    // Load all files without filtering by name
-    files.forEach(file => {
+    // Sort files by name before loading
+    const sortedFiles = files.sort((a, b) => a.name.localeCompare(b.name));
+
+    // Load all files
+    sortedFiles.forEach(file => {
       console.debug('Loading file:', file.name);
       onFileLoad(file);
     });
@@ -73,8 +76,11 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
       onClearTabs();
     }
 
-    // Load all files without filtering by name
-    files.forEach(file => {
+    // Sort files by name before loading
+    const sortedFiles = files.sort((a, b) => a.name.localeCompare(b.name));
+
+    // Load all files
+    sortedFiles.forEach(file => {
       console.debug('Loading file:', file.name);
       onFileLoad(file);
     });
