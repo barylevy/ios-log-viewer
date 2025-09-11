@@ -28,6 +28,105 @@ const LogViewer = () => {
     switchToFile
   } = useLogsModel();
 
+  // Pivot time tracking
+  const [pivotLog, setPivotLog] = useState(null);
+  const [hoveredLog, setHoveredLog] = useState(null);
+
+  // Utility function to parse timestamp to milliseconds
+  const parseTimestampToMs = useCallback((timestamp) => {
+    if (!timestamp) return null;
+
+    try {
+      // Handle different timestamp formats
+      if (timestamp.includes('T')) {
+        // ISO format: 2025-08-02T23:54:57
+        return new Date(timestamp).getTime();
+      } else if (timestamp.includes('-') && timestamp.includes(' ')) {
+        // Format: 2025-08-02 23:54:57:514
+        const cleanTimestamp = timestamp.replace(/:\d{3}$/, ''); // Remove milliseconds
+        return new Date(cleanTimestamp.replace(' ', 'T')).getTime();
+      } else if (timestamp.match(/^\d{2}:\d{2}:\d{2}/)) {
+        // Time only: 23:54:57 - use today's date
+        const today = new Date().toISOString().split('T')[0];
+        return new Date(`${today}T${timestamp}`).getTime();
+      }
+    } catch (e) {
+      console.warn('Failed to parse timestamp:', timestamp, e);
+    }
+    return null;
+  }, []);
+
+  // Calculate pivot time gap in DD Days, HH:MM:SS format (or just HH:MM:SS if no days)
+  const calculatePivotGap = useCallback((pivotTimestamp, currentTimestamp) => {
+    const pivotMs = parseTimestampToMs(pivotTimestamp);
+    const currentMs = parseTimestampToMs(currentTimestamp);
+
+    if (!pivotMs || !currentMs) return null;
+
+    const diffMs = Math.abs(currentMs - pivotMs);
+    const totalSeconds = Math.floor(diffMs / 1000);
+
+    const days = Math.floor(totalSeconds / (24 * 3600));
+    const hours = Math.floor((totalSeconds % (24 * 3600)) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (days > 0) {
+      return `${String(days).padStart(2, '0')} Days, ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    } else {
+      return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+  }, [parseTimestampToMs]);
+
+  // Calculate current pivot gap for display
+  const currentPivotGap = useMemo(() => {
+    if (!pivotLog) return null;
+
+    if (hoveredLog) {
+      // Show gap to hovered log
+      return calculatePivotGap(pivotLog.timestamp, hoveredLog.timestamp);
+    } else {
+      // Show that pivot is set (no specific gap)
+      return "Set";
+    }
+  }, [pivotLog, hoveredLog, calculatePivotGap]);
+
+  // Pivot control functions
+  const setPivotTime = useCallback((log) => {
+    setPivotLog(log);
+    // Save to localStorage for persistence
+    localStorage.setItem('logViewer_pivotLog', JSON.stringify({
+      id: log.id,
+      timestamp: log.timestamp,
+      lineNumber: log.lineNumber
+    }));
+  }, []);
+
+  const clearPivotTime = useCallback(() => {
+    setPivotLog(null);
+    localStorage.removeItem('logViewer_pivotLog');
+  }, []);
+
+  // Restore pivot from localStorage on mount
+  useEffect(() => {
+    const savedPivot = localStorage.getItem('logViewer_pivotLog');
+    if (savedPivot) {
+      try {
+        const pivotData = JSON.parse(savedPivot);
+        // Verify the pivot log still exists in current logs
+        const foundLog = filteredLogs.find(log => log.id === pivotData.id);
+        if (foundLog) {
+          setPivotLog(foundLog);
+        } else {
+          // Clear invalid pivot
+          localStorage.removeItem('logViewer_pivotLog');
+        }
+      } catch (e) {
+        localStorage.removeItem('logViewer_pivotLog');
+      }
+    }
+  }, [filteredLogs]);
+
   const [isFileDropActive, setIsFileDropActive] = useState(false);
   // Track current search match position and total
   const [searchPos, setSearchPos] = useState(0);
@@ -374,6 +473,10 @@ const LogViewer = () => {
           setSearchPos(pos);
           setSearchTotal(total);
         }}
+        onHover={setHoveredLog}
+        pivotLog={pivotLog}
+        onSetPivot={setPivotTime}
+        onClearPivot={clearPivotTime}
       />
     );
   }, [hasUserInteracted, files.length, filteredLogs, handleLogClick, highlightedLogId, filters]);
@@ -437,6 +540,7 @@ const LogViewer = () => {
                   filteredLogsCount={filteredLogs.length}
                   searchMatchCount={searchMatchCount}
                   searchMatchPos={searchPos}
+                  pivotGap={currentPivotGap}
                 />
                 <div className="flex-1 overflow-hidden">
                   {memoizedContent}

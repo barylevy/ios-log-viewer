@@ -224,7 +224,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
 
   const finalResult = result.join(' || ');
   return finalResult;
-}; const LogItem = memo(({ log, onClick, isHighlighted, isSelected, filters, index, onFiltersChange, previousLog, contextMenu, setContextMenu, onHover }) => {
+}; const LogItem = memo(({ log, onClick, isHighlighted, isSelected, filters, index, onFiltersChange, previousLog, contextMenu, setContextMenu, onHover, pivotLog }) => {
   // Process the log message and extract file info - memoized by log.id to prevent recalculation
   const cleanedMessage = useMemo(() => cleanMessage(log.message), [log.message]);
   const fileInfo = useMemo(() => extractFileInfo(log), [log.message, log.timestamp]);
@@ -312,8 +312,8 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
     e.preventDefault();
     if (log.timestamp) {
       // Calculate menu dimensions (approximate)
-      const menuHeight = 160; // Approximate height for 4 menu items
-      const menuWidth = 192; // min-w-48 = 12rem = 192px
+      const menuHeight = 160; // Updated height for smaller padding (py-1 instead of py-2)
+      const menuWidth = 144; // min-w-36 = 9rem = 144px
 
       // Get viewport dimensions
       const viewportHeight = window.innerHeight;
@@ -390,25 +390,29 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
           : index % 2 === 1
             ? 'bg-gray-50 dark:bg-gray-800'
             : 'bg-white dark:bg-gray-900'
-          }`}
+          } ${pivotLog && pivotLog.id === log.id ? 'ring-2 ring-orange-400 dark:ring-orange-500' : ''}`}
         style={{
-          backgroundColor: isHighlighted
-            ? (document.documentElement.classList.contains('dark') ? CATO_COLORS.DARK_HIGHLIGHT_BG : CATO_COLORS.LIGHT_HIGHLIGHT_BG)
-            : isSelected
-              ? (document.documentElement.classList.contains('dark') ? CATO_COLORS.DARK_BG : CATO_COLORS.LIGHT_BG)
-              : undefined,
+          backgroundColor: pivotLog && pivotLog.id === log.id
+            ? (document.documentElement.classList.contains('dark') ? '#FED7AA' : '#FFF7ED')
+            : isHighlighted
+              ? (document.documentElement.classList.contains('dark') ? CATO_COLORS.DARK_HIGHLIGHT_BG : CATO_COLORS.LIGHT_HIGHLIGHT_BG)
+              : isSelected
+                ? (document.documentElement.classList.contains('dark') ? CATO_COLORS.DARK_BG : CATO_COLORS.LIGHT_BG)
+                : undefined,
         }}
         onMouseEnter={(e) => {
-          if (!isHighlighted && !isSelected) {
+          if (!isHighlighted && !isSelected && !(pivotLog && pivotLog.id === log.id)) {
             // Check if dark mode is active
             const isDarkMode = document.documentElement.classList.contains('dark');
             e.currentTarget.style.backgroundColor = isDarkMode ? CATO_COLORS.PRIMARY_DARK : CATO_COLORS.LIGHT_BG;
           }
-          onHover(log.id);
+          onHover(log);
         }}
         onMouseLeave={(e) => {
-          // Always reset inline styles on mouse leave
-          e.currentTarget.style.backgroundColor = '';
+          // Always reset inline styles on mouse leave unless it's a pivot log
+          if (!(pivotLog && pivotLog.id === log.id)) {
+            e.currentTarget.style.backgroundColor = '';
+          }
           onHover(null);
         }}
         onClick={() => onClick({ ...log, lineIndex: index + 1 })}
@@ -482,7 +486,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
 
 LogItem.displayName = 'LogItem';
 
-const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filters, onFiltersChange, onSearchMatchUpdate }) => {
+const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filters, onFiltersChange, onSearchMatchUpdate, onHover, pivotLog, onSetPivot, onClearPivot }) => {
   const virtuosoRef = useRef(null);
   // Refs for each item element to allow focus
   const itemRefs = useRef({});
@@ -495,6 +499,19 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
   const [hoveredLogId, setHoveredLogId] = useState(null);
   // Track visible range for smart scrolling
   const [visibleRange, setVisibleRange] = useState(null);
+  // Go to line dialog state
+  const [showGoToLineDialog, setShowGoToLineDialog] = useState(false);
+  const [goToLineValue, setGoToLineValue] = useState('');
+  const [isGoToLineValid, setIsGoToLineValid] = useState(true);
+
+  // Handle hover with both internal ID tracking and parent callback
+  const handleHover = useCallback((log) => {
+    const logId = log ? log.id : null;
+    setHoveredLogId(logId);
+    if (onHover) {
+      onHover(log); // Pass full log object to parent
+    }
+  }, [onHover]);
 
   // Group logs by date for sticky headers
   const groupedLogs = useMemo(() => {
@@ -736,6 +753,14 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
         return;
       }
 
+      // Command+L: Go to line
+      if ((e.metaKey || e.ctrlKey) && e.key === 'l') {
+        e.preventDefault();
+        setShowGoToLineDialog(true);
+        setIsGoToLineValid(true); // Reset validation state when opening dialog
+        return;
+      }
+
       // Space key for hovered items
       if (e.key === ' ' || e.key === 'Spacebar') {
         e.preventDefault(); // Prevent page scroll
@@ -791,6 +816,17 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
       const currentFilter = filters.searchText || '';
       const newFilter = cleanAndCombineFilters(currentFilter, 'rowFrom', `#${contextMenu.lineNumber} ::`);
       onFiltersChange({ searchText: newFilter });
+
+      // Scroll to top after setting "From" filter
+      setTimeout(() => {
+        if (virtuosoRef.current) {
+          virtuosoRef.current.scrollToIndex({
+            index: 0,
+            align: 'start',
+            behavior: 'smooth'
+          });
+        }
+      }, 100); // Small delay to ensure filter is applied first
     }
     setContextMenu(null);
   }, [onFiltersChange, contextMenu, filters.searchText]);
@@ -800,9 +836,20 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
       const currentFilter = filters.searchText || '';
       const newFilter = cleanAndCombineFilters(currentFilter, 'rowTo', `:: #${contextMenu.lineNumber}`);
       onFiltersChange({ searchText: newFilter });
+
+      // Scroll to bottom after setting "To" filter
+      setTimeout(() => {
+        if (virtuosoRef.current && flatLogs.length > 0) {
+          virtuosoRef.current.scrollToIndex({
+            index: flatLogs.length - 1,
+            align: 'end',
+            behavior: 'smooth'
+          });
+        }
+      }, 100); // Small delay to ensure filter is applied first
     }
     setContextMenu(null);
-  }, [onFiltersChange, contextMenu, filters.searchText]);
+  }, [onFiltersChange, contextMenu, filters.searchText, flatLogs.length]);
 
   const setAsFromDateFilter = useCallback(() => {
     if (onFiltersChange && contextMenu) {
@@ -827,6 +874,95 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
     }
     setContextMenu(null);
   }, [onFiltersChange, contextMenu, filters.searchText]);
+
+  // Pivot time handlers
+  const handleSetPivot = useCallback(() => {
+    if (onSetPivot && contextMenu) {
+      const log = flatLogs.find(l => l.lineNumber === contextMenu.lineNumber);
+      if (log) {
+        onSetPivot(log);
+      }
+    }
+    setContextMenu(null);
+  }, [onSetPivot, contextMenu, flatLogs]);
+
+  const handleClearPivot = useCallback(() => {
+    if (onClearPivot) {
+      onClearPivot();
+    }
+    setContextMenu(null);
+  }, [onClearPivot]);
+
+  // Validate go to line input
+  const validateGoToLineInput = useCallback((value) => {
+    if (value === '') return true; // Empty input is considered valid (not an error state)
+
+    const lineNumber = parseInt(value.trim());
+    const maxLineNumber = flatLogs.length > 0 ? Math.max(...flatLogs.map(log => log.lineNumber)) : 1;
+
+    return !isNaN(lineNumber) && lineNumber >= 1 && lineNumber <= maxLineNumber;
+  }, [flatLogs]);
+
+  // Handle go to line input change with validation
+  const handleGoToLineChange = useCallback((e) => {
+    const value = e.target.value;
+    setGoToLineValue(value);
+    setIsGoToLineValid(validateGoToLineInput(value));
+  }, [validateGoToLineInput]);
+
+  // Go to line functionality
+  const handleGoToLine = useCallback(() => {
+    const lineNumber = parseInt(goToLineValue.trim());
+    const maxLineNumber = flatLogs.length > 0 ? Math.max(...flatLogs.map(log => log.lineNumber)) : 1;
+
+    if (isNaN(lineNumber) || lineNumber < 1 || lineNumber > maxLineNumber) {
+      setIsGoToLineValid(false);
+      return; // Invalid line number - out of range
+    }
+
+    // Find the exact log with this line number in flatLogs (displayed logs)
+    let targetIndex = flatLogs.findIndex(log => log.lineNumber === lineNumber);
+
+    // If exact line not found, find the closest one
+    if (targetIndex === -1) {
+      // Find the closest line number
+      let closestDistance = Infinity;
+      flatLogs.forEach((log, index) => {
+        const distance = Math.abs(log.lineNumber - lineNumber);
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          targetIndex = index;
+        }
+      });
+    }
+
+    // Scroll to the target index if found
+    if (targetIndex !== -1 && virtuosoRef.current) {
+      virtuosoRef.current.scrollToIndex({
+        index: targetIndex,
+        align: 'center',
+        behavior: 'auto'
+      });
+    }
+
+    // Close dialog and reset value
+    setShowGoToLineDialog(false);
+    setGoToLineValue('');
+    setIsGoToLineValid(true);
+  }, [goToLineValue, flatLogs]);
+
+  // Handle dialog keyboard events
+  const handleGoToLineKeyDown = useCallback((e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleGoToLine();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setShowGoToLineDialog(false);
+      setGoToLineValue('');
+      setIsGoToLineValid(true);
+    }
+  }, [handleGoToLine]);
 
   // Get all unique dates in chronological order
   const allDates = useMemo(() => {
@@ -970,7 +1106,8 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
                 previousLog={index > 0 ? flatLogs[index - 1] : null}
                 contextMenu={contextMenu}
                 setContextMenu={setContextMenu}
-                onHover={setHoveredLogId}
+                onHover={handleHover}
+                pivotLog={pivotLog}
               />
             </div>
           )}
@@ -982,19 +1119,19 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
       {/* Context Menu */}
       {contextMenu && (
         <div
-          className="context-menu fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1 min-w-48"
+          className="context-menu fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1 min-w-36"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(e) => e.stopPropagation()}
         >
           <button
             onClick={setAsFromFilter}
-            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+            className="w-full px-2 py-1 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
           >
             Set as "From" log line index
           </button>
           <button
             onClick={setAsToFilter}
-            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+            className="w-full px-2 py-1 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
           >
             Set as "To" log line index
           </button>
@@ -1004,16 +1141,81 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
 
           <button
             onClick={setAsFromDateFilter}
-            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+            className="w-full px-2 py-1 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
           >
             Set "From" date
           </button>
           <button
             onClick={setAsToDateFilter}
-            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+            className="w-full px-2 py-1 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
           >
             Set "To" date
           </button>
+
+          {/* Separator */}
+          <div className="border-t border-gray-200 dark:border-gray-600 my-1"></div>
+
+          <button
+            onClick={handleSetPivot}
+            className="w-full px-2 py-1 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+          >
+            Set Pivot Time
+          </button>
+          <button
+            onClick={handleClearPivot}
+            disabled={!pivotLog}
+            className={`w-full px-2 py-1 text-left text-xs ${pivotLog
+              ? 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+              : 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
+              }`}
+          >
+            Clear Pivot Time
+          </button>
+        </div>
+      )}
+
+      {/* Go to Line Dialog */}
+      {showGoToLineDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg p-4 w-48">
+            <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">
+              Go to Line
+            </h3>
+            <div className="space-y-3">
+              <input
+                type="number"
+                min="1"
+                max={flatLogs.length > 0 ? Math.max(...flatLogs.map(log => log.lineNumber)) : 1}
+                value={goToLineValue}
+                onChange={handleGoToLineChange}
+                onKeyDown={handleGoToLineKeyDown}
+                placeholder="Enter line number"
+                className={`w-full px-3 py-2 text-sm rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 ${isGoToLineValid
+                  ? 'border border-gray-300 dark:border-gray-600 focus:ring-blue-500 dark:focus:ring-blue-400'
+                  : 'border-2 border-red-500 dark:border-red-400 focus:ring-red-500 dark:focus:ring-red-400'
+                  }`}
+                autoFocus
+              />
+              <div className="flex items-center gap-2 justify-center">
+                <button
+                  onClick={() => {
+                    setShowGoToLineDialog(false);
+                    setGoToLineValue('');
+                    setIsGoToLineValid(true);
+                  }}
+                  className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleGoToLine}
+                  className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

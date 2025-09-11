@@ -30,7 +30,7 @@ const FILTER_TOOLTIP = `Advanced Filtering Guide:
 
 • Works with log level and context line filters`;
 
-const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCount, searchMatchCount, searchMatchPos }) => {
+const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCount, searchMatchCount, searchMatchPos, pivotGap }) => {
   const [isLevelDropdownOpen, setIsLevelDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
   const portalRef = useRef(null);
@@ -309,6 +309,11 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
       {filters.searchText && filters.searchText.includes('||') && (
         <span className="text-gray-400 dark:text-gray-500 opacity-75">
           Filtering for: {filters.searchText.split('||').map(t => t.trim()).filter(t => t).length} terms
+        </span>
+      )}
+      {pivotGap && (
+        <span className="text-gray-400 dark:text-gray-500 opacity-75">
+          Pivot Log Line: {pivotGap}
         </span>
       )}
     </div>
