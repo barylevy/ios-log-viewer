@@ -393,7 +393,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
           } ${pivotLog && pivotLog.id === log.id ? 'ring-2 ring-orange-400 dark:ring-orange-500' : ''}`}
         style={{
           backgroundColor: pivotLog && pivotLog.id === log.id
-            ? (document.documentElement.classList.contains('dark') ? '#FED7AA' : '#FFF7ED')
+            ? (document.documentElement.classList.contains('dark') ? '#EA580C' : '#FED7AA')
             : isHighlighted
               ? (document.documentElement.classList.contains('dark') ? CATO_COLORS.DARK_HIGHLIGHT_BG : CATO_COLORS.LIGHT_HIGHLIGHT_BG)
               : isSelected
