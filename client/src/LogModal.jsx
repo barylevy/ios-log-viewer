@@ -69,8 +69,8 @@ const LogModal = ({ log, onClose, onHighlight, onClearHighlight, onNext, onPrev,
               onClick={onPrev}
               disabled={!hasPrev}
               className={`p-1 rounded-md transition-colors ${!hasPrev
-                  ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+                ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
                 }`}
               title="Previous log (←)"
             >
@@ -84,8 +84,8 @@ const LogModal = ({ log, onClose, onHighlight, onClearHighlight, onNext, onPrev,
               onClick={onNext}
               disabled={!hasNext}
               className={`p-1 rounded-md transition-colors ${!hasNext
-                  ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+                ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
                 }`}
               title="Next log (→)"
             >
@@ -105,13 +105,13 @@ const LogModal = ({ log, onClose, onHighlight, onClearHighlight, onNext, onPrev,
         </div>
 
         {/* Metadata */}
-        {(log.timestamp || log.module || log.thread || log.sourceFile || log.lineIndex) && (
+        {(log.timestamp || log.module || log.thread || log.sourceFile || log.lineNumber) && (
           <div className="p-4 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
             <div className="grid grid-cols-2 gap-4 text-sm">
-              {log.lineIndex && (
+              {log.lineNumber && (
                 <div>
                   <span className="font-medium text-gray-600 dark:text-gray-400">Line:</span>
-                  <span className="ml-2 font-mono text-gray-900 dark:text-white">#{log.lineIndex}</span>
+                  <span className="ml-2 font-mono text-gray-900 dark:text-white">{log.lineNumber}</span>
                 </div>
               )}
               {log.timestamp && (

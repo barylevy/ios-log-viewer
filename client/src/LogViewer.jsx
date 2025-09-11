@@ -308,37 +308,37 @@ const LogViewer = () => {
 
   // Navigation functions for modal
   const navigateToNextLog = useCallback(() => {
-    if (!selectedLog || !currentDisplayContext.logs.length) return;
+    if (!selectedLog || !filteredLogs.length) return;
 
-    const currentIndex = currentDisplayContext.logs.findIndex(log => log.id === selectedLog.id);
-    if (currentIndex >= 0 && currentIndex < currentDisplayContext.logs.length - 1) {
-      const nextLog = currentDisplayContext.logs[currentIndex + 1];
-      setSelectedLog({ ...nextLog, lineIndex: currentIndex + 2 }); // +2 because next index + 1-based indexing
+    const currentIndex = filteredLogs.findIndex(log => log.id === selectedLog.id);
+    if (currentIndex >= 0 && currentIndex < filteredLogs.length - 1) {
+      const nextLog = filteredLogs[currentIndex + 1];
+      setSelectedLog({ ...nextLog, lineIndex: currentIndex + 2 }); // Keep lineIndex for modal navigation, lineNumber is preserved from original log
     }
-  }, [selectedLog, currentDisplayContext.logs, setSelectedLog]);
+  }, [selectedLog, filteredLogs, setSelectedLog]);
 
   const navigateToPrevLog = useCallback(() => {
-    if (!selectedLog || !currentDisplayContext.logs.length) return;
+    if (!selectedLog || !filteredLogs.length) return;
 
-    const currentIndex = currentDisplayContext.logs.findIndex(log => log.id === selectedLog.id);
+    const currentIndex = filteredLogs.findIndex(log => log.id === selectedLog.id);
     if (currentIndex > 0) {
-      const prevLog = currentDisplayContext.logs[currentIndex - 1];
-      setSelectedLog({ ...prevLog, lineIndex: currentIndex }); // currentIndex is already 1-based for prev
+      const prevLog = filteredLogs[currentIndex - 1];
+      setSelectedLog({ ...prevLog, lineIndex: currentIndex }); // Keep lineIndex for modal navigation, lineNumber is preserved from original log
     }
-  }, [selectedLog, currentDisplayContext.logs, setSelectedLog]);
+  }, [selectedLog, filteredLogs, setSelectedLog]);
 
   // Check if next/prev navigation is available
   const hasNextLog = useMemo(() => {
-    if (!selectedLog || !currentDisplayContext.logs.length) return false;
-    const currentIndex = currentDisplayContext.logs.findIndex(log => log.id === selectedLog.id);
-    return currentIndex >= 0 && currentIndex < currentDisplayContext.logs.length - 1;
-  }, [selectedLog, currentDisplayContext.logs]);
+    if (!selectedLog || !filteredLogs.length) return false;
+    const currentIndex = filteredLogs.findIndex(log => log.id === selectedLog.id);
+    return currentIndex >= 0 && currentIndex < filteredLogs.length - 1;
+  }, [selectedLog, filteredLogs]);
 
   const hasPrevLog = useMemo(() => {
-    if (!selectedLog || !currentDisplayContext.logs.length) return false;
-    const currentIndex = currentDisplayContext.logs.findIndex(log => log.id === selectedLog.id);
+    if (!selectedLog || !filteredLogs.length) return false;
+    const currentIndex = filteredLogs.findIndex(log => log.id === selectedLog.id);
     return currentIndex > 0;
-  }, [selectedLog, currentDisplayContext.logs]);
+  }, [selectedLog, filteredLogs]);
 
   const memoizedContent = useMemo(() => {
     if (!hasUserInteracted) {
