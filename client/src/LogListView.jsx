@@ -224,7 +224,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
 
   const finalResult = result.join(' || ');
   return finalResult;
-}; const LogItem = memo(({ log, onClick, isHighlighted, filters, index, onFiltersChange, previousLog, contextMenu, setContextMenu, onHover }) => {
+}; const LogItem = memo(({ log, onClick, isHighlighted, isSelected, filters, index, onFiltersChange, previousLog, contextMenu, setContextMenu, onHover }) => {
   // Process the log message and extract file info - memoized by log.id to prevent recalculation
   const cleanedMessage = useMemo(() => cleanMessage(log.message), [log.message]);
   const fileInfo = useMemo(() => extractFileInfo(log), [log.message, log.timestamp]);
@@ -387,11 +387,13 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
       <div
         className={`border-b border-gray-100 dark:border-gray-800 px-3 py-1.5 hover:bg-blue-50 dark:hover:bg-blue-900 hover:bg-opacity-50 cursor-pointer transition-colors ${isHighlighted
           ? 'bg-blue-50 dark:bg-blue-900 border-blue-200 dark:border-blue-700'
-          : log.isContextLine
-            ? 'bg-gray-50 dark:bg-gray-800 opacity-75'
-            : index % 2 === 1
-              ? 'bg-gray-50 dark:bg-gray-800'
-              : 'bg-white dark:bg-gray-900'
+          : isSelected
+            ? 'bg-indigo-100 dark:bg-indigo-900 border-indigo-200 dark:border-indigo-700'
+            : log.isContextLine
+              ? 'bg-gray-50 dark:bg-gray-800 opacity-75'
+              : index % 2 === 1
+                ? 'bg-gray-50 dark:bg-gray-800'
+                : 'bg-white dark:bg-gray-900'
           }`}
         onClick={() => onClick({ ...log, lineIndex: index + 1 })}
         onContextMenu={handleContextMenu}
@@ -883,6 +885,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
                 log={log}
                 onClick={onLogClick}
                 isHighlighted={highlightedLogId === log.id}
+                isSelected={selectedLogId === log.id}
                 filters={filters}
                 index={index}
                 onFiltersChange={onFiltersChange}
@@ -909,13 +912,13 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
             onClick={setAsFromFilter}
             className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
           >
-            Set as "From" row filter
+            Set as "From" log line index
           </button>
           <button
             onClick={setAsToFilter}
             className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
           >
-            Set as "To" row filter
+            Set as "To" log line index
           </button>
           <button
             onClick={setAsFromDateFilter}
