@@ -588,7 +588,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
           <span className="text-gray-400 dark:text-gray-500 opacity-75">
             Sticky:
           </span>
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap items-center gap-1">
             {stickyLogs
               .slice() // Create a copy to avoid mutating the original array
               .sort((a, b) => {
