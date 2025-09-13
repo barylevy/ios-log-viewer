@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
+import { getLevelButtonColor, getLevelTextColor, cleanMessage } from './utils/logLevelColors';
 
-const LogModal = ({ log, onClose, onHighlight, onClearHighlight, onNext, onPrev, hasNext, hasPrev }) => {
+const LogModal = ({ log, onClose, onAddStickyLog, onNext, onPrev, hasNext, hasPrev }) => {
   // Close modal when Escape key is pressed
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -17,14 +18,21 @@ const LogModal = ({ log, onClose, onHighlight, onClearHighlight, onNext, onPrev,
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose, onNext, onPrev, hasNext, hasPrev]);
+
   if (!log) return null;
 
-  const handleHighlight = () => {
-    onHighlight(log.id);
-    onClose();
-  };
+  const handleAddStickyLog = () => {
+    if (onAddStickyLog) {
+      // Create sticky log object with cleaned message for tooltip
+      const stickyLogData = {
+        ...log,
+        cleanedMessage: cleanMessage(log.message || log.raw)
+      };
 
-  const handleCopy = () => {
+      onAddStickyLog(stickyLogData);
+    }
+    onClose();
+  }; const handleCopy = () => {
     navigator.clipboard.writeText(log.raw);
   };
 
@@ -32,17 +40,6 @@ const LogModal = ({ log, onClose, onHighlight, onClearHighlight, onNext, onPrev,
     if (!timestamp) return timestamp;
     // Convert milliseconds format from HH:MM:SS:mmm to HH:MM:SS.mmm
     return timestamp.replace(/(\d{2}:\d{2}:\d{2}):(\d{3})/, '$1.$2');
-  };
-
-  const getLevelColor = (level) => {
-    switch (level) {
-      case 'error': return 'text-red-600 dark:text-red-400';
-      case 'warning': return 'text-yellow-600 dark:text-yellow-400';
-      case 'info': return 'text-blue-600 dark:text-blue-400';
-      case 'debug': return 'text-green-600 dark:text-green-400';
-      case 'trace': return 'text-gray-600 dark:text-gray-400';
-      default: return 'text-gray-800 dark:text-gray-200';
-    }
   };
 
   return (
@@ -56,7 +53,7 @@ const LogModal = ({ log, onClose, onHighlight, onClearHighlight, onNext, onPrev,
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Log Details</h2>
             {log.level && (
-              <span className={`px-2 py-1 rounded text-xs font-medium ${getLevelColor(log.level)}`}>
+              <span className={`px-2 py-1 rounded text-xs font-medium ${getLevelTextColor(log.level)}`}>
                 {log.level.toUpperCase()}
               </span>
             )}
@@ -156,13 +153,13 @@ const LogModal = ({ log, onClose, onHighlight, onClearHighlight, onNext, onPrev,
               onClick={handleCopy}
               className="px-3 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors text-sm"
             >
-              📋 Copy
+              Copy
             </button>
             <button
-              onClick={handleHighlight}
-              className="px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors text-sm"
+              onClick={handleAddStickyLog}
+              className={`px-3 py-2 rounded transition-colors text-sm ${getLevelButtonColor(log.level)}`}
             >
-              🔍 Highlight in List
+              Sticky Log Line
             </button>
           </div>
           <button

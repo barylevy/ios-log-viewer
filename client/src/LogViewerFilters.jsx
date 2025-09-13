@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom';
+import { getLevelBackgroundColor } from './utils/logLevelColors';
 
 // Extract tooltip text to avoid inline strings
 const FILTER_TOOLTIP = `Advanced Filtering Guide:
@@ -30,7 +31,7 @@ const FILTER_TOOLTIP = `Advanced Filtering Guide:
 
 • Works with log level and context line filters`;
 
-const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCount, searchMatchCount, searchMatchPos, pivotGap }) => {
+const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCount, searchMatchCount, searchMatchPos, pivotGap, stickyLogs, onRemoveStickyLog, onScrollToLog }) => {
   const [isLevelDropdownOpen, setIsLevelDropdownOpen] = useState(false);
   const [isFilterHistoryOpen, setIsFilterHistoryOpen] = useState(false);
   const [isSearchHistoryOpen, setIsSearchHistoryOpen] = useState(false);
@@ -574,10 +575,58 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
           Filtering for: {filters.searchText.split('||').map(t => t.trim()).filter(t => t).length} terms
         </span>
       )}
+      {/* Pivot Gap Display */}
       {pivotGap && (
         <span className="text-gray-400 dark:text-gray-500 opacity-75">
           Pivot Log Line: {pivotGap}
         </span>
+      )}
+
+      {/* Sticky Logs Zone */}
+      {stickyLogs && stickyLogs.length > 0 && (
+        <div className="flex items-center gap-2">
+          <span className="text-gray-400 dark:text-gray-500 opacity-75">
+            Sticky:
+          </span>
+          <div className="flex flex-wrap gap-1">
+            {stickyLogs
+              .slice() // Create a copy to avoid mutating the original array
+              .sort((a, b) => {
+                // Sort by timestamp, then by line number as fallback
+                if (a.timestamp && b.timestamp) {
+                  return new Date(a.timestamp) - new Date(b.timestamp);
+                }
+                // If timestamps are missing, sort by line number
+                return a.lineNumber - b.lineNumber;
+              })
+              .map(sticky => (
+                <div
+                  key={sticky.id}
+                  className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded border transition-colors ${getLevelBackgroundColor(sticky.level)}`}
+                >
+                  {/* Scroll to log button */}
+                  <button
+                    onClick={() => onScrollToLog(sticky.lineNumber)}
+                    className="hover:opacity-75"
+                    title={`Line ${sticky.lineNumber}: ${sticky.cleanedMessage || sticky.message || 'No message available'}`}
+                  >
+                    #{sticky.lineNumber}
+                  </button>
+                  {/* Remove sticky log button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemoveStickyLog(sticky.id);
+                    }}
+                    className="ml-1 hover:opacity-75"
+                    title="Remove sticky log"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+          </div>
+        </div>
       )}
     </div>
   );

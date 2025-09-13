@@ -10,6 +10,7 @@ import {
   CLEAN_PATTERNS,
   GAP_PATTERN
 } from './dateTimeUtils';
+import { cleanMessage } from './utils/logLevelColors';
 
 // Helper function to extract file and line information
 const extractFileInfo = (log) => {
@@ -30,48 +31,6 @@ const extractFileInfo = (log) => {
   }
 
   return null;
-};
-
-// Helper function to clean the message text - optimized with compiled patterns
-const cleanMessage = (message) => {
-  if (!message) return '';
-
-  // Remove timestamp prefixes using compiled patterns
-  let cleaned = message
-    .replace(CLEAN_PATTERNS.DATE_TIME_PREFIX, '') // Remove date-time prefix (YYYY-MM-DD HH:mm:ss)
-    .replace(CLEAN_PATTERNS.DD_MM_YY_PREFIX, '') // Remove DD/MM/YY HH:mm:ss.SSS prefix
-    .replace(CLEAN_PATTERNS.DD_MM_YYYY_PREFIX, '') // Remove DD/MM/YYYY HH:mm:ss.SSS prefix
-    .replace(CLEAN_PATTERNS.BRACKET_TIME, '') // Remove [MM/dd/yy HH:mm:ss.fff]
-    .replace(CLEAN_PATTERNS.PID, '') // Remove [PID]
-    .replace(CLEAN_PATTERNS.DOUBLE_BRACKET, ''); // Remove other bracketed info at start
-
-  // Remove iOS-style metadata prefix
-  const iosMatch = cleaned.match(CLEAN_PATTERNS.IOS_METADATA);
-  if (iosMatch) {
-    cleaned = iosMatch[1];
-  }
-
-  // Remove comprehensive log level indicators using LOG_LEVEL_MATRIX
-  for (const [level, ...patterns] of LOG_LEVEL_MATRIX) {
-    for (const pattern of patterns) {
-      if (cleaned.includes(pattern)) {
-        // Remove the pattern from the line
-        cleaned = cleaned.replace(pattern, '');
-      }
-    }
-  }
-
-  // Remove basic log level indicators using compiled patterns (fallback)
-  cleaned = cleaned
-    .replace(CLEAN_PATTERNS.LOG_LEVEL_SPACE, '') // Remove single letter + space at start
-    .replace(CLEAN_PATTERNS.LOG_LEVEL_COLON, '') // Remove single letter + colon + space at start
-    .replace(CLEAN_PATTERNS.LOG_LEVEL_WORD, '$1') // Remove "D " before "catoapi:"
-    .replace(CLEAN_PATTERNS.FILE_LINE, ''); // Remove [file:line] patterns
-
-  // Clean up whitespace: trim and normalize multiple spaces to single space
-  cleaned = cleaned.trim().replace(/\s+/g, ' ');
-
-  return cleaned;
 };
 
 // Helper function to clean and organize filters
@@ -224,11 +183,16 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
 
   const finalResult = result.join(' || ');
   return finalResult;
-}; const LogItem = memo(({ log, onClick, isHighlighted, isSelected, filters, index, onFiltersChange, previousLog, contextMenu, setContextMenu, onHover, pivotLog }) => {
+}; const LogItem = memo(({ log, onClick, isHighlighted, isSelected, filters, index, onFiltersChange, previousLog, contextMenu, setContextMenu, onHover, pivotLog, stickyLogs }) => {
   // Process the log message and extract file info - memoized by log.id to prevent recalculation
   const cleanedMessage = useMemo(() => cleanMessage(log.message), [log.message]);
   const fileInfo = useMemo(() => extractFileInfo(log), [log.message, log.timestamp]);
   const timeInfo = useMemo(() => extractTimeFromTimestamp(log.timestamp || log.message) || '--:--:--.---', [log.timestamp, log.message]);
+
+  // Check if this log has a sticky label
+  const hasSticky = useMemo(() => {
+    return stickyLogs && stickyLogs.some(sticky => sticky.id === log.id);
+  }, [stickyLogs, log.id]);
 
   // Calculate time gap threshold once and cache it
   const timeGapThreshold = useMemo(() => {
@@ -311,8 +275,33 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
   const handleContextMenu = useCallback((e) => {
     e.preventDefault();
     if (log.timestamp) {
-      // Calculate menu dimensions (approximate)
-      const menuHeight = 160; // Updated height for smaller padding (py-1 instead of py-2)
+      // Calculate menu dimensions dynamically
+      const calculateMenuHeight = () => {
+        const buttonHeight = 24; // py-1 = ~24px per button
+        const separatorHeight = 9; // my-1 + border = ~9px per separator
+        const containerPadding = 8; // py-1 on container = 8px total
+
+        // Count menu items dynamically
+        const menuItems = [
+          'Sticky Log Line',
+          'separator',
+          'Set as "From" log line index',
+          'Set as "To" log line index',
+          'separator',
+          'Set "From" date',
+          'Set "To" date',
+          'separator',
+          'Set Pivot Time',
+          pivotLog ? 'Clear Pivot Time' : null, // Only shown if pivotLog exists
+        ].filter(Boolean); // Remove null items
+
+        const buttons = menuItems.filter(item => item !== 'separator').length;
+        const separators = menuItems.filter(item => item === 'separator').length;
+
+        return (buttons * buttonHeight) + (separators * separatorHeight) + containerPadding;
+      };
+
+      const menuHeight = calculateMenuHeight();
       const menuWidth = 144; // min-w-36 = 9rem = 144px
 
       // Get viewport dimensions
@@ -345,7 +334,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
         log: log
       });
     }
-  }, [log.timestamp]);
+  }, [log.timestamp, pivotLog]);
 
   // Convert timestamp to datetime-local format
   const formatTimestampForInput = (timestamp) => {
@@ -420,7 +409,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
       >
         <div className="flex items-start gap-2">
           {/* Timestamp */}
-          <div className={`flex-shrink-0 text-xs font-mono min-w-14 ${timeInfo === '--:--:--.---'
+          <div className={`flex-shrink-0 text-xs font-mono min-w-14 ${hasSticky ? 'underline decoration-solid decoration-1' : ''} ${timeInfo === '--:--:--.---'
             ? 'text-gray-300 dark:text-gray-600 opacity-50'
             : timeGapInfo.hasGap
               ? 'text-orange-600 dark:text-orange-400 font-semibold'
@@ -486,7 +475,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
 
 LogItem.displayName = 'LogItem';
 
-const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filters, onFiltersChange, onSearchMatchUpdate, onHover, pivotLog, onSetPivot, onClearPivot }) => {
+const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filters, onFiltersChange, onSearchMatchUpdate, onHover, pivotLog, onSetPivot, onClearPivot, stickyLogs, onAddStickyLog, highlightLog }) => {
   const virtuosoRef = useRef(null);
   // Refs for each item element to allow focus
   const itemRefs = useRef({});
@@ -800,6 +789,31 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [hoveredLogId, selectedLogId, highlightedLogId, logs, onLogClick, flatLogs]);
 
+  // ===== STICKY LOG SCROLL LISTENER =====
+  useEffect(() => {
+    const handleScrollToLog = (event) => {
+      const { index, logId, shouldHighlight } = event.detail;
+
+      if (virtuosoRef.current && index >= 0) {
+        virtuosoRef.current.scrollToIndex({
+          index: index,
+          align: 'center',
+          behavior: 'auto'
+        });
+
+        // If highlighting is requested, trigger it after scroll
+        if (shouldHighlight && logId && highlightLog) {
+          setTimeout(() => {
+            highlightLog(logId);
+          }, 100);
+        }
+      }
+    };
+
+    window.addEventListener('scrollToLogIndex', handleScrollToLog);
+    return () => window.removeEventListener('scrollToLogIndex', handleScrollToLog);
+  }, [highlightLog]);
+
   // Context menu filter functions
   const extractFullTimestampForFilter = (timestamp) => {
     if (!timestamp) return '';
@@ -892,6 +906,25 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
     }
     setContextMenu(null);
   }, [onClearPivot]);
+
+  // ===== STICKY LOG FUNCTIONALITY =====
+  const handleAddStickyLog = useCallback(() => {
+    if (onAddStickyLog && contextMenu) {
+      const log = contextMenu.log;
+      const lineNumber = contextMenu.lineNumber;
+
+      if (log && lineNumber) {
+        // Create sticky log object with line number and cleaned message for tooltip
+        const stickyLogData = {
+          ...log,
+          lineNumber: lineNumber,
+          cleanedMessage: cleanMessage(log.message) // Add cleaned message for tooltip
+        };
+        onAddStickyLog(stickyLogData);
+      }
+    }
+    setContextMenu(null);
+  }, [onAddStickyLog, contextMenu]);
 
   // Validate go to line input
   const validateGoToLineInput = useCallback((value) => {
@@ -1093,6 +1126,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
               ref={el => itemRefs.current[index] = el}
               tabIndex={-1}
               key={log.id}
+              data-log-id={log.id}
               className="outline-none"
             >
               <LogItem
@@ -1108,6 +1142,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
                 setContextMenu={setContextMenu}
                 onHover={handleHover}
                 pivotLog={pivotLog}
+                stickyLogs={stickyLogs}
               />
             </div>
           )}
@@ -1123,6 +1158,16 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(e) => e.stopPropagation()}
         >
+          <button
+            onClick={handleAddStickyLog}
+            className="w-full px-2 py-1 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+          >
+            Sticky Log Line
+          </button>
+
+          {/* Separator */}
+          <div className="border-t border-gray-200 dark:border-gray-600 my-1"></div>
+
           <button
             onClick={setAsFromFilter}
             className="w-full px-2 py-1 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"

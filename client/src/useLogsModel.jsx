@@ -139,6 +139,94 @@ const useLogsModel = () => {
     }
   }, [allFileFilters]);
 
+  // ===== STICKY LOGS MANAGEMENT =====
+  const [allFileStickyLogs, setAllFileStickyLogs] = useState(() => {
+    // Load saved sticky logs from localStorage on initial load
+    try {
+      const saved = localStorage.getItem('logViewerStickyLogs');
+      return saved ? JSON.parse(saved) : {};
+    } catch (error) {
+      console.error('Failed to load saved sticky logs:', error);
+      return {};
+    }
+  }); // Store sticky logs per file
+
+  // Save sticky logs to localStorage whenever allFileStickyLogs changes
+  useEffect(() => {
+    try {
+      // Clean up old entries if we have too many (keep only last 50 files)
+      const entries = Object.entries(allFileStickyLogs);
+      if (entries.length > 50) {
+        const recentEntries = entries.slice(-50);
+        const cleanedStickyLogs = Object.fromEntries(recentEntries);
+        localStorage.setItem('logViewerStickyLogs', JSON.stringify(cleanedStickyLogs));
+      } else {
+        localStorage.setItem('logViewerStickyLogs', JSON.stringify(allFileStickyLogs));
+      }
+    } catch (error) {
+      console.error('Failed to save sticky logs to localStorage:', error);
+      // If localStorage is full, clear old data and try again
+      if (error.name === 'QuotaExceededError') {
+        try {
+          localStorage.removeItem('logViewerStickyLogs');
+          localStorage.setItem('logViewerStickyLogs', JSON.stringify({}));
+        } catch (clearError) {
+          console.error('Failed to clear localStorage:', clearError);
+        }
+      }
+    }
+  }, [allFileStickyLogs]);
+
+  // Get sticky logs for current file
+  const stickyLogs = useMemo(() => {
+    return currentFileName ? (allFileStickyLogs[currentFileName] || []) : [];
+  }, [allFileStickyLogs, currentFileName]);
+
+  const addStickyLog = useCallback((log) => {
+    if (!currentFileName) return;
+
+    try {
+      setAllFileStickyLogs(prev => {
+        const currentFileStickyLogs = prev[currentFileName] || [];
+
+        // Avoid duplicates
+        if (currentFileStickyLogs.find(sticky => sticky.id === log.id)) {
+          return prev;
+        }
+
+        const newStickyLog = {
+          id: log.id,
+          lineNumber: log.lineNumber,
+          timestamp: log.timestamp,
+          level: log.level,
+          message: log.message ? log.message.substring(0, 50) + (log.message.length > 50 ? '...' : '') : 'No message',
+          cleanedMessage: log.cleanedMessage || log.message || 'No message'
+        };
+
+        return {
+          ...prev,
+          [currentFileName]: [...currentFileStickyLogs, newStickyLog]
+        };
+      });
+    } catch (error) {
+      console.error('Error adding sticky log:', error);
+    }
+  }, [currentFileName]);
+
+  const removeStickyLog = useCallback((logId) => {
+    if (!currentFileName) return;
+
+    setAllFileStickyLogs(prev => {
+      const currentFileStickyLogs = prev[currentFileName] || [];
+      const updatedFileStickyLogs = currentFileStickyLogs.filter(sticky => sticky.id !== logId);
+
+      return {
+        ...prev,
+        [currentFileName]: updatedFileStickyLogs
+      };
+    });
+  }, [currentFileName]);
+
   // Parse header information from log content
   const parseHeaderInfo = (content) => {
     const lines = content.split('\n');
@@ -537,6 +625,66 @@ const useLogsModel = () => {
     }));
   }, [logs, filters, searchData, normalizeTimestamp]);
 
+  const scrollToLog = useCallback((lineNumber) => {
+    try {
+      // Find the log with the given line number in filtered logs (what's actually displayed)
+      const targetLogIndex = filteredLogs.findIndex(log => log.lineNumber === lineNumber);
+
+      if (targetLogIndex !== -1) {
+        // Log is visible - scroll to it
+        const targetLog = filteredLogs[targetLogIndex];
+
+        setTimeout(() => {
+          const scrollEvent = new CustomEvent('scrollToLogIndex', {
+            detail: { index: targetLogIndex, logId: targetLog.id, shouldHighlight: true }
+          });
+          window.dispatchEvent(scrollEvent);
+        }, 100);
+      } else {
+        // Log is not visible due to filtering - find it in all logs first
+        const targetLogInAll = logs.find(log => log.lineNumber === lineNumber);
+
+        if (targetLogInAll) {
+          // Find the closest visible log in filtered logs
+          let closestIndex = -1;
+          let minDistance = Infinity;
+
+          filteredLogs.forEach((log, index) => {
+            const distance = Math.abs(log.lineNumber - lineNumber);
+            if (distance < minDistance) {
+              minDistance = distance;
+              closestIndex = index;
+            }
+          });
+
+          if (closestIndex !== -1) {
+            // Scroll to closest visible log and show notification
+            setTimeout(() => {
+              const scrollEvent = new CustomEvent('scrollToLogIndex', {
+                detail: { index: closestIndex, logId: filteredLogs[closestIndex].id, shouldHighlight: true }
+              });
+              window.dispatchEvent(scrollEvent);
+
+              // Show notification that target log is not visible
+              const notificationEvent = new CustomEvent('showLogNotVisible', {
+                detail: {
+                  lineNumber: lineNumber,
+                  message: `Log line ${lineNumber} is not visible due to current filters. Scrolled to nearest visible log.`
+                }
+              });
+              window.dispatchEvent(notificationEvent);
+            }, 100);
+          }
+        } else {
+          // Log doesn't exist
+          console.warn(`Log line ${lineNumber} not found`);
+        }
+      }
+    } catch (error) {
+      console.error('Error scrolling to log:', error);
+    }
+  }, [logs, filteredLogs]);
+
   const updateFilters = useCallback((newFilters) => {
     setFilters(prev => {
       const updatedFilters = { ...prev, ...newFilters };
@@ -555,8 +703,7 @@ const useLogsModel = () => {
 
   const highlightLog = useCallback((logId) => {
     setHighlightedLogId(logId);
-    // Auto-clear highlight after 3 seconds
-    setTimeout(() => setHighlightedLogId(null), 3000);
+    // Highlight persists until manually cleared or another log is highlighted
   }, []);
 
   const clearHighlight = useCallback(() => {
@@ -692,6 +839,7 @@ const useLogsModel = () => {
     allFileLogs,
     allFileFilters,
     currentFileName,
+    stickyLogs,
     loadLogs,
     requestFileLoad,
     isFileLoading,
@@ -703,7 +851,10 @@ const useLogsModel = () => {
     setLogsForFile,
     switchToFile,
     clearSavedFilters,
-    getFileDisplayName
+    getFileDisplayName,
+    addStickyLog,
+    removeStickyLog,
+    scrollToLog
   };
 };
 
