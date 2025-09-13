@@ -227,6 +227,17 @@ const useLogsModel = () => {
     });
   }, [currentFileName]);
 
+  const clearAllStickyLogs = useCallback(() => {
+    if (!currentFileName) return;
+
+    setAllFileStickyLogs(prev => {
+      return {
+        ...prev,
+        [currentFileName]: []
+      };
+    });
+  }, [currentFileName]);
+
   // Parse header information from log content
   const parseHeaderInfo = (content) => {
     const lines = content.split('\n');
@@ -854,6 +865,7 @@ const useLogsModel = () => {
     getFileDisplayName,
     addStickyLog,
     removeStickyLog,
+    clearAllStickyLogs,
     scrollToLog
   };
 };

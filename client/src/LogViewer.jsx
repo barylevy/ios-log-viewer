@@ -29,6 +29,7 @@ const LogViewer = () => {
     switchToFile,
     addStickyLog,
     removeStickyLog,
+    clearAllStickyLogs,
     scrollToLog
   } = useLogsModel();
 
@@ -567,6 +568,7 @@ const LogViewer = () => {
                   pivotGap={currentPivotGap}
                   stickyLogs={stickyLogs}
                   onRemoveStickyLog={removeStickyLog}
+                  onClearAllStickyLogs={clearAllStickyLogs}
                   onScrollToLog={scrollToLog}
                 />
                 <div className="flex-1 overflow-hidden">
