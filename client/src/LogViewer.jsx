@@ -211,15 +211,18 @@ const LogViewer = () => {
     }
     setFiles(prev => {
       const newFiles = [...prev, { name: file.name, id: fileId, fileObj: file }];
-      if (prev.length === 0) {
-        setActiveFileIndex(0);
-        setShowingCombinedView(false);
-        requestFileLoad(fileId, file);
-        // Immediately switch to the first file to show its logs
-        setTimeout(() => {
-          switchToFile(fileId);
-        }, 0);
-      }
+      const newIndex = newFiles.length - 1;
+      
+      // Always set the newly loaded file as active
+      setActiveFileIndex(newIndex);
+      setShowingCombinedView(false);
+      requestFileLoad(fileId, file);
+      
+      // Switch to the new file to show its logs
+      setTimeout(() => {
+        switchToFile(fileId);
+      }, 0);
+      
       return newFiles;
     });
     setHasUserInteracted(true);
