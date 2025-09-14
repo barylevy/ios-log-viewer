@@ -278,8 +278,8 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
       });
     };
 
-    // Highlight filter terms (blue)
-    processHighlights(filters.searchText, 'bg-blue-200 dark:bg-blue-600');
+    // Highlight filter terms (light blue)
+    processHighlights(filters.searchText, 'bg-blue-100 dark:bg-blue-500');
 
     // Highlight search query terms (green)
     processHighlights(filters.searchQuery, 'bg-green-200 dark:bg-green-600 font-bold');
