@@ -3,8 +3,9 @@ import { getLevelButtonColor, getLevelTextColor, cleanMessage } from './utils/lo
 import JsonTreeViewer from './components/JsonTreeViewer';
 
 const LogModal = ({ log, onClose, onAddStickyLog, onNext, onPrev, hasNext, hasPrev }) => {
-  const [viewMode, setViewMode] = useState('text'); // 'text' or 'json'
-
+  const [viewMode, setViewMode] = useState('json'); // Default to JSON tree view
+  const [jsonSearchQuery, setJsonSearchQuery] = useState('');
+  const [jsonExpandedPaths, setJsonExpandedPaths] = useState(new Set());
   // Close modal when Escape key is pressed
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -25,21 +26,15 @@ const LogModal = ({ log, onClose, onAddStickyLog, onNext, onPrev, hasNext, hasPr
   if (!log) return null;
 
   const handleAddStickyLog = () => {
-    if (onAddStickyLog) {
-      // Create sticky log object with cleaned message for tooltip
-      const stickyLogData = {
-        ...log,
-        cleanedMessage: cleanMessage(log.message || log.raw)
-      };
-
-      onAddStickyLog(stickyLogData);
-    }
+    onAddStickyLog(log.id);
     onClose();
   };
 
   const handleCopy = () => {
     // Copy JSON data if in JSON view mode, otherwise copy full raw content
-    const contentToCopy = (viewMode === 'json' && hasJsonContent && jsonData) ? jsonData : log.raw;
+    const contentToCopy = (viewMode === 'json' && hasJsonContent && jsonData)
+      ? JSON.stringify(jsonData, null, 2)
+      : log.raw;
     navigator.clipboard.writeText(contentToCopy);
   };
 
@@ -50,18 +45,75 @@ const LogModal = ({ log, onClose, onAddStickyLog, onNext, onPrev, hasNext, hasPr
     const jsonStringIndex = log.raw.indexOf('jsonString:');
     if (jsonStringIndex === -1) return null;
 
-    // Extract everything after "jsonString:"
-    const jsonData = log.raw.substring(jsonStringIndex + 'jsonString:'.length).trim();
-    return jsonData;
+    try {
+      // Extract everything after "jsonString:"
+      const jsonString = log.raw.substring(jsonStringIndex + 'jsonString:'.length).trim();
+      // Parse the JSON string into an object
+      return JSON.parse(jsonString);
+    } catch (error) {
+      console.error('Failed to parse JSON:', error);
+      return null;
+    }
   };
 
   const hasJsonContent = log.raw && log.raw.includes('jsonString:');
   const jsonData = hasJsonContent ? getJsonData() : null;
 
+  // JSON tree control functions
+  const getAllPaths = (obj, currentPath) => {
+    const allPaths = new Set();
+    const addPaths = (obj, currentPath) => {
+      if (typeof obj === 'object' && obj !== null) {
+        allPaths.add(currentPath);
+        if (Array.isArray(obj)) {
+          obj.forEach((_, index) => {
+            addPaths(obj[index], `${currentPath}[${index}]`);
+          });
+        } else {
+          Object.keys(obj).forEach(key => {
+            addPaths(obj[key], currentPath ? `${currentPath}.${key}` : key);
+          });
+        }
+      }
+    };
+    addPaths(obj, currentPath);
+    return allPaths;
+  };
+
+  const expandAllJson = () => {
+    if (jsonData) {
+      const allPaths = getAllPaths(jsonData, 'root');
+      setJsonExpandedPaths(allPaths);
+    }
+  };
+
+  const collapseAllJson = () => {
+    setJsonExpandedPaths(new Set());
+  };
+
+  // Expand all by default when JSON data changes
+  React.useEffect(() => {
+    if (jsonData && viewMode === 'json') {
+      const allPaths = getAllPaths(jsonData, 'root');
+      setJsonExpandedPaths(allPaths);
+    }
+  }, [jsonData, viewMode]);
+
   const formatTimestamp = (timestamp) => {
     if (!timestamp) return timestamp;
     // Convert milliseconds format from HH:MM:SS:mmm to HH:MM:SS.mmm
     return timestamp.replace(/(\d{2}:\d{2}:\d{2}):(\d{3})/, '$1.$2');
+  };
+
+  const getLevelColor = (level) => {
+    switch (level) {
+      case 'error': return 'text-red-600 dark:text-red-400';
+      case 'warning': return 'text-yellow-600 dark:text-yellow-400';
+      case 'info': return 'text-blue-600 dark:text-blue-400';
+      case 'debug': return 'text-green-600 dark:text-green-400';
+      case 'trace': return 'text-gray-600 dark:text-gray-400';
+      default: return 'text-gray-800 dark:text-gray-200';
+    }
   };
 
   return (
@@ -75,7 +127,7 @@ const LogModal = ({ log, onClose, onAddStickyLog, onNext, onPrev, hasNext, hasPr
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Log Details</h2>
             {log.level && (
-              <span className={`px-2 py-1 rounded text-xs font-medium ${getLevelTextColor(log.level)}`}>
+              <span className={`px-2 py-1 rounded text-xs font-medium ${getLevelColor(log.level)}`}>
                 {log.level.toUpperCase()}
               </span>
             )}
@@ -163,34 +215,98 @@ const LogModal = ({ log, onClose, onAddStickyLog, onNext, onPrev, hasNext, hasPr
 
         {/* Content */}
         <div className="flex-1 overflow-auto p-4">
-          {/* View Mode Toggle */}
+          {/* View Mode Controls - Only show if JSON content is available */}
           {hasJsonContent && (
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-sm text-gray-600 dark:text-gray-400">View:</span>
-              <button
-                onClick={() => setViewMode('text')}
-                className={`px-3 py-1 text-sm rounded transition-colors ${viewMode === 'text'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                  }`}
-              >
-                Text
-              </button>
-              <button
-                onClick={() => setViewMode('json')}
-                className={`px-3 py-1 text-sm rounded transition-colors ${viewMode === 'json'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                  }`}
-              >
-                JSON Tree
-              </button>
+            <div className="mb-4 flex items-center gap-4 flex-wrap">
+              {/* JSON Tree Controls - Only show when in JSON mode */}
+              {viewMode === 'json' && (
+                <>
+                  <div className="flex gap-2 p-2 border border-gray-300 dark:border-gray-600 rounded">
+                    <button
+                      onClick={expandAllJson}
+                      className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded transition-colors"
+                    >
+                      Expand All
+                    </button>
+                    <button
+                      onClick={collapseAllJson}
+                      className="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white text-sm rounded transition-colors"
+                    >
+                      Collapse All
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* Radio buttons */}
+              <div className="flex gap-4 p-2 border border-gray-300 dark:border-gray-600 rounded">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="viewMode"
+                    value="json"
+                    checked={viewMode === 'json'}
+                    onChange={(e) => setViewMode(e.target.value)}
+                    className="text-blue-500 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">JSON Tree</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="viewMode"
+                    value="text"
+                    checked={viewMode === 'text'}
+                    onChange={(e) => setViewMode(e.target.value)}
+                    className="text-blue-500 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Raw Text</span>
+                </label>
+              </div>
+
+              {/* JSON Tree Search - Only show when in JSON mode */}
+              {viewMode === 'json' && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder="Search in JSON..."
+                    value={jsonSearchQuery}
+                    onChange={(e) => setJsonSearchQuery(e.target.value)}
+                    className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  {jsonSearchQuery && (
+                    <button
+                      onClick={() => setJsonSearchQuery('')}
+                      className="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded transition-colors"
+                      title="Clear search"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
           {/* Content Display */}
           {viewMode === 'json' && hasJsonContent ? (
-            <JsonTreeViewer data={jsonData} />
+            <JsonTreeViewer
+              data={jsonData}
+              searchQuery={jsonSearchQuery}
+              expandedPaths={jsonExpandedPaths}
+              onTogglePath={(path) => {
+                setJsonExpandedPaths(prev => {
+                  const newSet = new Set(prev);
+                  if (newSet.has(path)) {
+                    newSet.delete(path);
+                  } else {
+                    newSet.add(path);
+                  }
+                  return newSet;
+                });
+              }}
+              hideControls={true}
+            />
           ) : (
             <pre className="whitespace-pre-wrap font-mono text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-900 p-4 rounded border">
               {log.raw}
@@ -206,13 +322,13 @@ const LogModal = ({ log, onClose, onAddStickyLog, onNext, onPrev, hasNext, hasPr
               className="px-3 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors text-sm"
               title={viewMode === 'json' && hasJsonContent ? 'Copy JSON data only' : 'Copy full log content'}
             >
-              {viewMode === 'json' && hasJsonContent ? 'Copy JSON' : 'Copy'}
+              📋 {viewMode === 'json' && hasJsonContent ? 'Copy JSON' : 'Copy'}
             </button>
             <button
               onClick={handleAddStickyLog}
-              className={`px-3 py-2 rounded transition-colors text-sm ${getLevelButtonColor(log.level)}`}
+              className={`px-3 py-2 text-white rounded transition-colors text-sm ${getLevelButtonColor(log.level)}`}
             >
-              Sticky Log Line
+              � Sticky Log Line
             </button>
           </div>
           <button
