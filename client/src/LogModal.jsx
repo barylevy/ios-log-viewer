@@ -1,7 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { getLevelButtonColor, getLevelTextColor, cleanMessage } from './utils/logLevelColors';
+import JsonTreeViewer from './components/JsonTreeViewer';
 
 const LogModal = ({ log, onClose, onAddStickyLog, onNext, onPrev, hasNext, hasPrev }) => {
+  const [viewMode, setViewMode] = useState('text'); // 'text' or 'json'
+
   // Close modal when Escape key is pressed
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -32,9 +35,28 @@ const LogModal = ({ log, onClose, onAddStickyLog, onNext, onPrev, hasNext, hasPr
       onAddStickyLog(stickyLogData);
     }
     onClose();
-  }; const handleCopy = () => {
-    navigator.clipboard.writeText(log.raw);
   };
+
+  const handleCopy = () => {
+    // Copy JSON data if in JSON view mode, otherwise copy full raw content
+    const contentToCopy = (viewMode === 'json' && hasJsonContent && jsonData) ? jsonData : log.raw;
+    navigator.clipboard.writeText(contentToCopy);
+  };
+
+  // Check if log content contains "jsonString:" phrase and extract JSON data
+  const getJsonData = () => {
+    if (!log.raw) return null;
+
+    const jsonStringIndex = log.raw.indexOf('jsonString:');
+    if (jsonStringIndex === -1) return null;
+
+    // Extract everything after "jsonString:"
+    const jsonData = log.raw.substring(jsonStringIndex + 'jsonString:'.length).trim();
+    return jsonData;
+  };
+
+  const hasJsonContent = log.raw && log.raw.includes('jsonString:');
+  const jsonData = hasJsonContent ? getJsonData() : null;
 
   const formatTimestamp = (timestamp) => {
     if (!timestamp) return timestamp;
@@ -141,9 +163,39 @@ const LogModal = ({ log, onClose, onAddStickyLog, onNext, onPrev, hasNext, hasPr
 
         {/* Content */}
         <div className="flex-1 overflow-auto p-4">
-          <pre className="whitespace-pre-wrap font-mono text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-900 p-4 rounded border">
-            {log.raw}
-          </pre>
+          {/* View Mode Toggle */}
+          {hasJsonContent && (
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-sm text-gray-600 dark:text-gray-400">View:</span>
+              <button
+                onClick={() => setViewMode('text')}
+                className={`px-3 py-1 text-sm rounded transition-colors ${viewMode === 'text'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                  }`}
+              >
+                Text
+              </button>
+              <button
+                onClick={() => setViewMode('json')}
+                className={`px-3 py-1 text-sm rounded transition-colors ${viewMode === 'json'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                  }`}
+              >
+                JSON Tree
+              </button>
+            </div>
+          )}
+
+          {/* Content Display */}
+          {viewMode === 'json' && hasJsonContent ? (
+            <JsonTreeViewer data={jsonData} />
+          ) : (
+            <pre className="whitespace-pre-wrap font-mono text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-900 p-4 rounded border">
+              {log.raw}
+            </pre>
+          )}
         </div>
 
         {/* Actions */}
@@ -152,8 +204,9 @@ const LogModal = ({ log, onClose, onAddStickyLog, onNext, onPrev, hasNext, hasPr
             <button
               onClick={handleCopy}
               className="px-3 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors text-sm"
+              title={viewMode === 'json' && hasJsonContent ? 'Copy JSON data only' : 'Copy full log content'}
             >
-              Copy
+              {viewMode === 'json' && hasJsonContent ? 'Copy JSON' : 'Copy'}
             </button>
             <button
               onClick={handleAddStickyLog}
