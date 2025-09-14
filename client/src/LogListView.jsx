@@ -11,27 +11,6 @@ import {
   GAP_PATTERN
 } from './dateTimeUtils';
 
-// Helper function to extract file and line information
-const extractFileInfo = (log) => {
-  if (!log.message) return null;
-
-  // Look for patterns like:
-  // [CNVpnConfManager:404]
-  // [cato_dev_posture_run:358]
-  // [DEMModule.cpp:189]
-  const fileInfoMatch = log.message.match(/\[([^:\]]+):(\d+)\]/);
-  if (fileInfoMatch) {
-    return `${fileInfoMatch[1]}:${fileInfoMatch[2]}`;
-  }
-
-  // Look for module or component info
-  if (log.module) {
-    return log.module;
-  }
-
-  return null;
-};
-
 // Helper function to clean the message text - optimized with compiled patterns
 const cleanMessage = (message) => {
   if (!message) return '';
@@ -225,10 +204,24 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
   const finalResult = result.join(' || ');
   return finalResult;
 }; const LogItem = memo(({ log, onClick, isHighlighted, isSelected, filters, index, onFiltersChange, previousLog, contextMenu, setContextMenu, onHover }) => {
-  // Process the log message and extract file info - memoized by log.id to prevent recalculation
+  // Process the log message - memoized by log.id to prevent recalculation
   const cleanedMessage = useMemo(() => cleanMessage(log.message), [log.message]);
-  const fileInfo = useMemo(() => extractFileInfo(log), [log.message, log.timestamp]);
   const timeInfo = useMemo(() => extractTimeFromTimestamp(log.timestamp || log.message) || '--:--:--.---', [log.timestamp, log.message]);
+
+  // Format thread/process info directly
+  const threadProcessInfo = useMemo(() => {
+    const threadId = log.thread;
+    const processId = log.process;
+
+    if (processId && threadId) {
+      return `[${processId}:${threadId}]`;
+    } else if (processId) {
+      return `[${processId}:?]`;
+    } else if (threadId) {
+      return `[?:${threadId}]`;
+    }
+    return null;
+  }, [log.thread, log.process]);
 
   // Calculate time gap threshold once and cache it
   const timeGapThreshold = useMemo(() => {
@@ -452,8 +445,8 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
               dangerouslySetInnerHTML={{ __html: highlightedMessage }}
             />
 
-            {/* File info with gap time at the end */}
-            {(fileInfo || timeGapInfo.hasGap) && (
+            {/* Thread/Process info with gap time at the end */}
+            {(threadProcessInfo || timeGapInfo.hasGap) && (
               <div className="flex-shrink-0 flex items-center gap-3 pr-2">
                 {/* Time Gap Indicator */}
                 {timeGapInfo.hasGap && (
@@ -465,10 +458,10 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
                   </div>
                 )}
 
-                {/* File info */}
-                {fileInfo && (
+                {/* Thread/Process info */}
+                {threadProcessInfo && (
                   <div className="text-xs text-gray-400 dark:text-gray-500 font-mono">
-                    {fileInfo}
+                    {threadProcessInfo}
                   </div>
                 )}
               </div>

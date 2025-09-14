@@ -176,13 +176,13 @@ const LogModal = ({ log, onClose, onAddStickyLog, onNext, onPrev, hasNext, hasPr
         </div>
 
         {/* Metadata */}
-        {(log.timestamp || log.module || log.thread || log.sourceFile || log.lineNumber) && (
+        {(log.timestamp || log.module || log.thread || log.process || log.sourceFile || log.lineNumber) && (
           <div className="p-4 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
             <div className="grid grid-cols-2 gap-4 text-sm">
               {log.lineNumber && (
                 <div>
-                  <span className="font-medium text-gray-600 dark:text-gray-400">Line:</span>
-                  <span className="ml-2 font-mono text-gray-900 dark:text-white">{log.lineNumber}</span>
+                  <span className="font-medium text-gray-600 dark:text-gray-400">Log Line:</span>
+                  <span className="ml-2 font-mono text-gray-900 dark:text-white">#{log.lineNumber}</span>
                 </div>
               )}
               {log.timestamp && (
@@ -191,16 +191,22 @@ const LogModal = ({ log, onClose, onAddStickyLog, onNext, onPrev, hasNext, hasPr
                   <span className="ml-2 font-mono text-gray-900 dark:text-white">{formatTimestamp(log.timestamp)}</span>
                 </div>
               )}
-              {log.module && (
+              {log.process && (
                 <div>
-                  <span className="font-medium text-gray-600 dark:text-gray-400">Module:</span>
-                  <span className="ml-2 text-gray-900 dark:text-white">{log.module}</span>
+                  <span className="font-medium text-gray-600 dark:text-gray-400">Process:</span>
+                  <span className="ml-2 font-mono text-gray-900 dark:text-white">#{log.process}</span>
                 </div>
               )}
               {log.thread && (
                 <div>
                   <span className="font-medium text-gray-600 dark:text-gray-400">Thread:</span>
                   <span className="ml-2 font-mono text-gray-900 dark:text-white">#{log.thread}</span>
+                </div>
+              )}
+              {log.module && (
+                <div>
+                  <span className="font-medium text-gray-600 dark:text-gray-400">Module:</span>
+                  <span className="ml-2 text-gray-900 dark:text-white">{log.module}</span>
                 </div>
               )}
               {log.sourceFile && (
