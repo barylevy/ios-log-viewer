@@ -637,7 +637,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
     // Scroll to match without opening modal
     virtuosoRef.current.scrollToIndex({
       index: target,
-      align: 'start',
+      align: 'center',
       behavior: 'smooth'
     });
     setCurrentMatchIndex(next);
@@ -656,7 +656,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
     // Scroll to match without opening modal
     virtuosoRef.current.scrollToIndex({
       index: target,
-      align: 'start',
+      align: 'center',
       behavior: 'smooth'
     });
     setCurrentMatchIndex(prev);
