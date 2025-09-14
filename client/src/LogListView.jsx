@@ -1121,31 +1121,49 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
         <Virtuoso
           ref={virtuosoRef}
           data={flatLogs}
-          itemContent={(index, log) => (
-            <div
-              ref={el => itemRefs.current[index] = el}
-              tabIndex={-1}
-              key={log.id}
-              data-log-id={log.id}
-              className="outline-none"
-            >
-              <LogItem
-                log={log}
-                onClick={onLogClick}
-                isHighlighted={highlightedLogId === log.id}
-                isSelected={selectedLogId === log.id}
-                filters={filters}
-                index={index}
-                onFiltersChange={onFiltersChange}
-                previousLog={index > 0 ? flatLogs[index - 1] : null}
-                contextMenu={contextMenu}
-                setContextMenu={setContextMenu}
-                onHover={handleHover}
-                pivotLog={pivotLog}
-                stickyLogs={stickyLogs}
-              />
-            </div>
-          )}
+          itemContent={(index, log) => {
+            const previousLog = index > 0 ? flatLogs[index - 1] : null;
+            const showDateSeparator = previousLog && log.date && previousLog.date !== log.date;
+            
+            return (
+              <div
+                ref={el => itemRefs.current[index] = el}
+                tabIndex={-1}
+                key={log.id}
+                data-log-id={log.id}
+                className="outline-none"
+              >
+                {/* Date Separator */}
+                {showDateSeparator && (
+                  <div className="relative my-2">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+                    </div>
+                    <div className="relative flex justify-center text-xs">
+                      <span className="bg-white dark:bg-gray-900 px-3 py-1 text-gray-500 dark:text-gray-400 font-medium rounded-full border border-gray-300 dark:border-gray-600">
+                        {log.date}
+                      </span>
+                    </div>
+                  </div>
+                )}
+                <LogItem
+                  log={log}
+                  onClick={onLogClick}
+                  isHighlighted={highlightedLogId === log.id}
+                  isSelected={selectedLogId === log.id}
+                  filters={filters}
+                  index={index}
+                  onFiltersChange={onFiltersChange}
+                  previousLog={previousLog}
+                  contextMenu={contextMenu}
+                  setContextMenu={setContextMenu}
+                  onHover={handleHover}
+                  pivotLog={pivotLog}
+                  stickyLogs={stickyLogs}
+                />
+              </div>
+            );
+          }}
           rangeChanged={handleRangeChanged}
           style={{ height: '100%' }}
         />
