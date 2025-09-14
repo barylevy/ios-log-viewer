@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom';
+import { getLevelBackgroundColor } from './utils/logLevelColors';
 
 // Extract tooltip text to avoid inline strings
 const FILTER_TOOLTIP = `Advanced Filtering Guide:
@@ -30,17 +31,131 @@ const FILTER_TOOLTIP = `Advanced Filtering Guide:
 
 • Works with log level and context line filters`;
 
-const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCount, searchMatchCount, searchMatchPos, pivotGap }) => {
+const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCount, searchMatchCount, searchMatchPos, pivotGap, stickyLogs, onRemoveStickyLog, onClearAllStickyLogs, onScrollToLog }) => {
   const [isLevelDropdownOpen, setIsLevelDropdownOpen] = useState(false);
+  const [isFilterHistoryOpen, setIsFilterHistoryOpen] = useState(false);
+  const [isSearchHistoryOpen, setIsSearchHistoryOpen] = useState(false);
+  const [filterHistory, setFilterHistory] = useState(() => {
+    // Load filter history from localStorage
+    const saved = localStorage.getItem('logViewer_filterHistory');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [searchHistory, setSearchHistory] = useState(() => {
+    // Load search history from localStorage
+    const saved = localStorage.getItem('logViewer_searchHistory');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   const dropdownRef = useRef(null);
   const portalRef = useRef(null);
   const filterInputRef = useRef(null);
+  const filterHistoryRef = useRef(null);
+  const searchInputRef = useRef(null);
+  const searchHistoryRef = useRef(null);
   // For portal positioning
   const buttonRef = useRef(null);
+  const filterChevronRef = useRef(null);
+  const searchChevronRef = useRef(null);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
+  const [filterDropdownPos, setFilterDropdownPos] = useState({ top: 0, left: 0 });
+  const [searchDropdownPos, setSearchDropdownPos] = useState({ top: 0, left: 0 });
 
   const handleFilterChange = (key, value) => {
     onFiltersChange({ [key]: value });
+  };
+
+  // Save phrases to history when user finishes typing
+  const handleFilterBlur = () => {
+    const value = filters.searchText;
+    if (value && value.trim()) {
+      // Split by || and save each phrase individually
+      const phrases = value.split('||').map(phrase => phrase.trim()).filter(phrase => phrase.length > 0);
+      phrases.forEach(phrase => saveToFilterHistory(phrase));
+    }
+  };
+
+  // Handle Enter key to also save phrases
+  const handleFilterKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleFilterBlur();
+    }
+  };
+
+  // Save search phrases to history when user finishes typing
+  const handleSearchBlur = () => {
+    const value = filters.searchQuery;
+    if (value && value.trim()) {
+      // Split by || and save each phrase individually
+      const phrases = value.split('||').map(phrase => phrase.trim()).filter(phrase => phrase.length > 0);
+      phrases.forEach(phrase => saveToSearchHistory(phrase));
+    }
+  };
+
+  // Handle Enter key to also save search phrases
+  const handleSearchKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleSearchBlur();
+    }
+  };
+
+  // Save filter phrase to history
+  const saveToFilterHistory = (phrase) => {
+    setFilterHistory(prevHistory => {
+      // Remove if already exists
+      const filtered = prevHistory.filter(item => item !== phrase);
+      // Add to beginning
+      const newHistory = [phrase, ...filtered].slice(0, 50); // Keep max 50 items
+
+      // Save to localStorage
+      localStorage.setItem('logViewer_filterHistory', JSON.stringify(newHistory));
+
+      return newHistory;
+    });
+  };
+
+  // Add phrase to current filter
+  const addPhraseToFilter = (phrase) => {
+    const currentFilter = filters.searchText || '';
+    const newFilter = currentFilter ? `${currentFilter} || ${phrase}` : phrase;
+    handleFilterChange('searchText', newFilter);
+    setIsFilterHistoryOpen(false);
+  };
+
+  // Clear filter history
+  const clearFilterHistory = () => {
+    setFilterHistory([]);
+    localStorage.removeItem('logViewer_filterHistory');
+    setIsFilterHistoryOpen(false);
+  };
+
+  // Save search phrase to history
+  const saveToSearchHistory = (phrase) => {
+    setSearchHistory(prevHistory => {
+      // Remove if already exists
+      const filtered = prevHistory.filter(item => item !== phrase);
+      // Add to beginning
+      const newHistory = [phrase, ...filtered].slice(0, 50); // Keep max 50 items
+
+      // Save to localStorage
+      localStorage.setItem('logViewer_searchHistory', JSON.stringify(newHistory));
+
+      return newHistory;
+    });
+  };
+
+  // Add phrase to current search
+  const addPhraseToSearch = (phrase) => {
+    const currentSearch = filters.searchQuery || '';
+    const newSearch = currentSearch ? `${currentSearch} || ${phrase}` : phrase;
+    handleFilterChange('searchQuery', newSearch);
+    setIsSearchHistoryOpen(false);
+  };
+
+  // Clear search history
+  const clearSearchHistory = () => {
+    setSearchHistory([]);
+    localStorage.removeItem('logViewer_searchHistory');
+    setIsSearchHistoryOpen(false);
   };
 
   // Close dropdown when clicking outside (using click event to allow checkbox selection)
@@ -48,22 +163,66 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
     const handleClickOutside = (event) => {
       if (
         (dropdownRef.current && dropdownRef.current.contains(event.target)) ||
-        (portalRef.current && portalRef.current.contains(event.target))
+        (buttonRef.current && buttonRef.current.contains(event.target))
       ) {
-        return;
+        return; // Click is inside the level dropdown, do nothing
       }
-      if (isLevelDropdownOpen) {
-        event.stopPropagation();
-        event.preventDefault();
-        setIsLevelDropdownOpen(false);
+
+      if (
+        (filterHistoryRef.current && filterHistoryRef.current.contains(event.target)) ||
+        (filterChevronRef.current && filterChevronRef.current.contains(event.target))
+      ) {
+        return; // Click is inside the filter history dropdown, do nothing
       }
+
+      if (
+        (searchHistoryRef.current && searchHistoryRef.current.contains(event.target)) ||
+        (searchChevronRef.current && searchChevronRef.current.contains(event.target))
+      ) {
+        return; // Click is inside the search history dropdown, do nothing
+      }
+
+      // Close all dropdowns
+      setIsLevelDropdownOpen(false);
+      setIsFilterHistoryOpen(false);
+      setIsSearchHistoryOpen(false);
     };
 
-    document.addEventListener('click', handleClickOutside, true);
+    document.addEventListener('click', handleClickOutside);
     return () => {
-      document.removeEventListener('click', handleClickOutside, true);
+      document.removeEventListener('click', handleClickOutside);
     };
-  }, [dropdownRef, portalRef, isLevelDropdownOpen]);
+  }, []);
+
+  // Compute filter dropdown position when opening
+  useEffect(() => {
+    if (isFilterHistoryOpen && filterChevronRef.current) {
+      const rect = filterChevronRef.current.getBoundingClientRect();
+      setFilterDropdownPos({
+        top: rect.bottom + window.scrollY,
+        left: rect.right + window.scrollX - 300 // Align to right edge, adjust for dropdown width
+      });
+    }
+  }, [isFilterHistoryOpen]);
+
+  // Compute log level dropdown position when opening
+  useEffect(() => {
+    if (isLevelDropdownOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX });
+    }
+  }, [isLevelDropdownOpen]);
+
+  // Compute search dropdown position when opening
+  useEffect(() => {
+    if (isSearchHistoryOpen && searchChevronRef.current) {
+      const rect = searchChevronRef.current.getBoundingClientRect();
+      setSearchDropdownPos({
+        top: rect.bottom + window.scrollY,
+        left: rect.right + window.scrollX - 300 // Align to right edge, adjust for dropdown width
+      });
+    }
+  }, [isSearchHistoryOpen]);
 
   // Handle Cmd+F to focus filter input
   useEffect(() => {
@@ -132,25 +291,41 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
   const renderSearchNavigationInput = () => (
     <div className="flex-1 min-w-64 flex items-center">
       <label className="text-xs font-medium text-gray-700 dark:text-gray-300 mr-2">Search:</label>
-      <div className="relative w-full">
+      <div className="relative w-full flex border border-gray-300 dark:border-gray-600 rounded-md focus-within:ring-2 focus-within:ring-green-500 focus-within:border-green-500 bg-white dark:bg-gray-700">
         <input
+          ref={searchInputRef}
           type="text"
           placeholder="Search in record logs. Add #gap=5 for time gap indicators..."
           value={filters.searchQuery || ''}
           onChange={(e) => handleFilterChange('searchQuery', e.target.value)}
-          className="w-full h-6 px-2 pr-28 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
+          onBlur={handleSearchBlur}
+          onKeyDown={handleSearchKeyDown}
+          className="w-full h-6 px-2 pr-28 border-none rounded-l-md focus:outline-none bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
           title="Search in logs. Add #gap=5 to show visual separators between records with 5+ second gaps. Combine with search terms: 'error #gap=3' shows errors with gap indicators."
         />
         {filters.searchQuery && (
           <button
             onClick={() => handleFilterChange('searchQuery', '')}
-            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            className="absolute right-10 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 z-10"
           >
             ×
           </button>
         )}
         {filters.searchQuery && (
-          <div className="absolute right-10 top-1/2 transform -translate-y-1/2 flex items-center space-x-1">
+          <div className="absolute right-8 top-0 bottom-0 w-px bg-gray-300 dark:bg-gray-600 z-10"></div>
+        )}
+        <button
+          ref={searchChevronRef}
+          onClick={() => setIsSearchHistoryOpen(!isSearchHistoryOpen)}
+          className="w-8 h-6 border-none rounded-r-md bg-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none flex items-center justify-center"
+          title="Search history"
+        >
+          <svg className={`w-3 h-3 transition-transform ${isSearchHistoryOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {filters.searchQuery && (
+          <div className="absolute right-12 top-1/2 transform -translate-y-1/2 flex items-center space-x-1">
             <button
               onClick={() => window.dispatchEvent(new Event('prevSearchMatch'))}
               title="Previous match"
@@ -173,45 +348,134 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
           </div>
         )}
       </div>
+
+      {/* Search History Dropdown */}
+      {isSearchHistoryOpen && searchHistory.length > 0 && ReactDOM.createPortal(
+        <div
+          ref={searchHistoryRef}
+          style={{
+            position: 'absolute',
+            top: searchDropdownPos.top,
+            left: searchDropdownPos.left,
+            zIndex: 9999,
+            width: '300px'
+          }}
+          className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg"
+        >
+          <div className="py-1 max-h-80 overflow-y-auto">
+            {/* History Items */}
+            {searchHistory.slice(0, 10).map((phrase, index) => (
+              <button
+                key={index}
+                onClick={() => addPhraseToSearch(phrase)}
+                className="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 border-b border-gray-100 dark:border-gray-600 last:border-b-0"
+                title={`Add "${phrase}" to search`}
+              >
+                <div className="truncate">{phrase}</div>
+              </button>
+            ))}
+
+            {/* Clear History Button */}
+            <div className="border-t border-gray-200 dark:border-gray-600 mt-1">
+              <button
+                onClick={clearSearchHistory}
+                className="w-full px-3 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 text-center"
+              >
+                Clear History
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 
-  const renderFilterInput = () => (
-    <div className="flex-1 min-w-64 flex flex-col items-start">
-      <div className="flex items-center w-full">
-        <label className="text-xs font-medium text-gray-700 dark:text-gray-300 mr-2">Filter:</label>
-        <div className="relative w-full">
-          <input
-            ref={filterInputRef}
-            type="text"
-            placeholder="Filter logs: text || terms, !exclude, #gap=5, #row::, #date:: ranges. Hover for full guide."
-            value={filters.searchText}
-            onChange={(e) => handleFilterChange('searchText', e.target.value)}
-            className="w-full h-6 px-2 pr-8 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-800 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
-            title={FILTER_TOOLTIP}
-          />
-          {filters.searchText && (
+  const renderFilterInput = () => {
+    return (
+      <div className="flex-1 min-w-64 flex flex-col items-start">
+        <div className="flex items-center w-full">
+          <label className="text-xs font-medium text-gray-700 dark:text-gray-300 mr-2">Filter:</label>
+          <div className="relative w-full flex border border-gray-300 dark:border-gray-600 rounded-md focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 bg-white dark:bg-gray-700">
+            <input
+              ref={filterInputRef}
+              type="text"
+              placeholder="Filter logs: text || terms, !exclude, #gap=5, #row::, #date:: ranges. Hover for full guide."
+              value={filters.searchText}
+              onChange={(e) => handleFilterChange('searchText', e.target.value)}
+              onBlur={handleFilterBlur}
+              onKeyDown={handleFilterKeyDown}
+              className="w-full h-6 px-2 pr-28 border-none rounded-l-md focus:outline-none bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
+              title={FILTER_TOOLTIP}
+            />
+            {filters.searchText && (
+              <button
+                onClick={() => handleFilterChange('searchText', '')}
+                className="absolute right-10 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 z-10"
+              >
+                ×
+              </button>
+            )}
+            {filters.searchText && (
+              <div className="absolute right-8 top-0 bottom-0 w-px bg-gray-300 dark:bg-gray-600 z-10"></div>
+            )}
             <button
-              onClick={() => handleFilterChange('searchText', '')}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              ref={filterChevronRef}
+              onClick={() => setIsFilterHistoryOpen(!isFilterHistoryOpen)}
+              className="w-8 h-6 border-none rounded-r-md bg-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none flex items-center justify-center"
+              title="Filter history"
             >
-              ×
+              <svg className={`w-3 h-3 transition-transform ${isFilterHistoryOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
             </button>
-          )}
+          </div>
         </div>
+
+        {/* Filter History Dropdown */}
+        {isFilterHistoryOpen && filterHistory.length > 0 && ReactDOM.createPortal(
+          <div
+            ref={filterHistoryRef}
+            style={{
+              position: 'absolute',
+              top: filterDropdownPos.top,
+              left: filterDropdownPos.left,
+              zIndex: 9999,
+              width: '300px'
+            }}
+            className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg"
+          >
+            <div className="py-1 max-h-80 overflow-y-auto">
+              {/* History Items */}
+              {filterHistory.slice(0, 10).map((phrase, index) => (
+                <button
+                  key={index}
+                  onClick={() => addPhraseToFilter(phrase)}
+                  className="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 border-b border-gray-100 dark:border-gray-600 last:border-b-0"
+                  title={`Add "${phrase}" to filter`}
+                >
+                  <div className="truncate">{phrase}</div>
+                </button>
+              ))}
+
+              {/* Clear History Button */}
+              <div className="border-t border-gray-200 dark:border-gray-600 mt-1">
+                <button
+                  onClick={clearFilterHistory}
+                  className="w-full px-3 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 text-center"
+                >
+                  Clear History
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderLogLevelFilter = () => {
-    // Compute dropdown position when opening
-    useEffect(() => {
-      if (isLevelDropdownOpen && buttonRef.current) {
-        const rect = buttonRef.current.getBoundingClientRect();
-        setDropdownPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX });
-      }
-    }, [isLevelDropdownOpen]);
-
     return (
       <div className="flex items-center gap-1" ref={dropdownRef}>
         <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Level:</label>
@@ -311,10 +575,68 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
           Filtering for: {filters.searchText.split('||').map(t => t.trim()).filter(t => t).length} terms
         </span>
       )}
+      {/* Pivot Gap Display */}
       {pivotGap && (
         <span className="text-gray-400 dark:text-gray-500 opacity-75">
-          Pivot Gap: {pivotGap}
+          Pivot Log Line: {pivotGap}
         </span>
+      )}
+
+      {/* Sticky Logs Zone */}
+      {stickyLogs && stickyLogs.length > 0 && (
+        <div className="flex items-center gap-2">
+          <span className="text-gray-400 dark:text-gray-500 opacity-75">
+            Sticky:
+          </span>
+          <div className="flex flex-wrap items-center gap-1">
+            {stickyLogs
+              .slice() // Create a copy to avoid mutating the original array
+              .sort((a, b) => {
+                // Sort by timestamp, then by line number as fallback
+                if (a.timestamp && b.timestamp) {
+                  return new Date(a.timestamp) - new Date(b.timestamp);
+                }
+                // If timestamps are missing, sort by line number
+                return a.lineNumber - b.lineNumber;
+              })
+              .map(sticky => (
+                <div
+                  key={sticky.id}
+                  className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded border transition-colors ${getLevelBackgroundColor(sticky.level)}`}
+                >
+                  {/* Scroll to log button */}
+                  <button
+                    onClick={() => onScrollToLog(sticky.lineNumber)}
+                    className="hover:opacity-75"
+                    title={`Line ${sticky.lineNumber}: ${sticky.cleanedMessage || sticky.message || 'No message available'}`}
+                  >
+                    #{sticky.lineNumber}
+                  </button>
+                  {/* Remove sticky log button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemoveStickyLog(sticky.id);
+                    }}
+                    className="ml-1 hover:opacity-75"
+                    title="Remove sticky log"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            {/* Clear All Sticky Logs Button */}
+            <button
+              onClick={onClearAllStickyLogs}
+              className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors border border-gray-300 dark:border-gray-600"
+              title="Clear all sticky logs"
+            >
+              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

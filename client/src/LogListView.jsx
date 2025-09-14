@@ -10,47 +10,27 @@ import {
   CLEAN_PATTERNS,
   GAP_PATTERN
 } from './dateTimeUtils';
+import { cleanMessage } from './utils/logLevelColors';
 
-// Helper function to clean the message text - optimized with compiled patterns
-const cleanMessage = (message) => {
-  if (!message) return '';
+// Helper function to extract file and line information
+const extractFileInfo = (log) => {
+  if (!log.message) return null;
 
-  // Remove timestamp prefixes using compiled patterns
-  let cleaned = message
-    .replace(CLEAN_PATTERNS.DATE_TIME_PREFIX, '') // Remove date-time prefix (YYYY-MM-DD HH:mm:ss)
-    .replace(CLEAN_PATTERNS.DD_MM_YY_PREFIX, '') // Remove DD/MM/YY HH:mm:ss.SSS prefix
-    .replace(CLEAN_PATTERNS.DD_MM_YYYY_PREFIX, '') // Remove DD/MM/YYYY HH:mm:ss.SSS prefix
-    .replace(CLEAN_PATTERNS.BRACKET_TIME, '') // Remove [MM/dd/yy HH:mm:ss.fff]
-    .replace(CLEAN_PATTERNS.PID, '') // Remove [PID]
-    .replace(CLEAN_PATTERNS.DOUBLE_BRACKET, ''); // Remove other bracketed info at start
-
-  // Remove iOS-style metadata prefix
-  const iosMatch = cleaned.match(CLEAN_PATTERNS.IOS_METADATA);
-  if (iosMatch) {
-    cleaned = iosMatch[1];
+  // Look for patterns like:
+  // [CNVpnConfManager:404]
+  // [cato_dev_posture_run:358]
+  // [DEMModule.cpp:189]
+  const fileInfoMatch = log.message.match(/\[([^:\]]+):(\d+)\]/);
+  if (fileInfoMatch) {
+    return `${fileInfoMatch[1]}:${fileInfoMatch[2]}`;
   }
 
-  // Remove comprehensive log level indicators using LOG_LEVEL_MATRIX
-  for (const [level, ...patterns] of LOG_LEVEL_MATRIX) {
-    for (const pattern of patterns) {
-      if (cleaned.includes(pattern)) {
-        // Remove the pattern from the line
-        cleaned = cleaned.replace(pattern, '');
-      }
-    }
+  // Look for module or component info
+  if (log.module) {
+    return log.module;
   }
 
-  // Remove basic log level indicators using compiled patterns (fallback)
-  cleaned = cleaned
-    .replace(CLEAN_PATTERNS.LOG_LEVEL_SPACE, '') // Remove single letter + space at start
-    .replace(CLEAN_PATTERNS.LOG_LEVEL_COLON, '') // Remove single letter + colon + space at start
-    .replace(CLEAN_PATTERNS.LOG_LEVEL_WORD, '$1') // Remove "D " before "catoapi:"
-    .replace(CLEAN_PATTERNS.FILE_LINE, ''); // Remove [file:line] patterns
-
-  // Clean up whitespace: trim and normalize multiple spaces to single space
-  cleaned = cleaned.trim().replace(/\s+/g, ' ');
-
-  return cleaned;
+  return null;
 };
 
 // Helper function to clean and organize filters
@@ -203,25 +183,16 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
 
   const finalResult = result.join(' || ');
   return finalResult;
-}; const LogItem = memo(({ log, onClick, isHighlighted, isSelected, filters, index, onFiltersChange, previousLog, contextMenu, setContextMenu, onHover }) => {
-  // Process the log message - memoized by log.id to prevent recalculation
+}; const LogItem = memo(({ log, onClick, isHighlighted, isSelected, filters, index, onFiltersChange, previousLog, contextMenu, setContextMenu, onHover, pivotLog, stickyLogs }) => {
+  // Process the log message and extract file info - memoized by log.id to prevent recalculation
   const cleanedMessage = useMemo(() => cleanMessage(log.message), [log.message]);
+  const fileInfo = useMemo(() => extractFileInfo(log), [log.message, log.timestamp]);
   const timeInfo = useMemo(() => extractTimeFromTimestamp(log.timestamp || log.message) || '--:--:--.---', [log.timestamp, log.message]);
 
-  // Format thread/process info directly
-  const threadProcessInfo = useMemo(() => {
-    const threadId = log.thread;
-    const processId = log.process;
-
-    if (processId && threadId) {
-      return `[${processId}:${threadId}]`;
-    } else if (processId) {
-      return `[${processId}:?]`;
-    } else if (threadId) {
-      return `[?:${threadId}]`;
-    }
-    return null;
-  }, [log.thread, log.process]);
+  // Check if this log has a sticky label
+  const hasSticky = useMemo(() => {
+    return stickyLogs && stickyLogs.some(sticky => sticky.id === log.id);
+  }, [stickyLogs, log.id]);
 
   // Calculate time gap threshold once and cache it
   const timeGapThreshold = useMemo(() => {
@@ -271,8 +242,8 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
       });
     };
 
-    // Highlight filter terms (light blue)
-    processHighlights(filters.searchText, 'bg-blue-100 dark:bg-blue-500');
+    // Highlight filter terms (blue)
+    processHighlights(filters.searchText, 'bg-blue-200 dark:bg-blue-600');
 
     // Highlight search query terms (green)
     processHighlights(filters.searchQuery, 'bg-green-200 dark:bg-green-600 font-bold');
@@ -304,9 +275,34 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
   const handleContextMenu = useCallback((e) => {
     e.preventDefault();
     if (log.timestamp) {
-      // Calculate menu dimensions (approximate)
-      const menuHeight = 160; // Approximate height for 4 menu items
-      const menuWidth = 192; // min-w-48 = 12rem = 192px
+      // Calculate menu dimensions dynamically
+      const calculateMenuHeight = () => {
+        const buttonHeight = 24; // py-1 = ~24px per button
+        const separatorHeight = 9; // my-1 + border = ~9px per separator
+        const containerPadding = 8; // py-1 on container = 8px total
+
+        // Count menu items dynamically
+        const menuItems = [
+          'Sticky Log Line',
+          'separator',
+          'Set as "From" log line index',
+          'Set as "To" log line index',
+          'separator',
+          'Set "From" date',
+          'Set "To" date',
+          'separator',
+          'Set Pivot Time',
+          pivotLog ? 'Clear Pivot Time' : null, // Only shown if pivotLog exists
+        ].filter(Boolean); // Remove null items
+
+        const buttons = menuItems.filter(item => item !== 'separator').length;
+        const separators = menuItems.filter(item => item === 'separator').length;
+
+        return (buttons * buttonHeight) + (separators * separatorHeight) + containerPadding;
+      };
+
+      const menuHeight = calculateMenuHeight();
+      const menuWidth = 144; // min-w-36 = 9rem = 144px
 
       // Get viewport dimensions
       const viewportHeight = window.innerHeight;
@@ -338,7 +334,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
         log: log
       });
     }
-  }, [log.timestamp]);
+  }, [log.timestamp, pivotLog]);
 
   // Convert timestamp to datetime-local format
   const formatTimestampForInput = (timestamp) => {
@@ -383,25 +379,29 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
           : index % 2 === 1
             ? 'bg-gray-50 dark:bg-gray-800'
             : 'bg-white dark:bg-gray-900'
-          }`}
+          } ${pivotLog && pivotLog.id === log.id ? 'ring-2 ring-orange-400 dark:ring-orange-500' : ''}`}
         style={{
-          backgroundColor: isHighlighted
-            ? (document.documentElement.classList.contains('dark') ? CATO_COLORS.DARK_HIGHLIGHT_BG : CATO_COLORS.LIGHT_HIGHLIGHT_BG)
-            : isSelected
-              ? (document.documentElement.classList.contains('dark') ? CATO_COLORS.DARK_BG : CATO_COLORS.LIGHT_BG)
-              : undefined,
+          backgroundColor: pivotLog && pivotLog.id === log.id
+            ? (document.documentElement.classList.contains('dark') ? '#EA580C' : '#FED7AA')
+            : isHighlighted
+              ? (document.documentElement.classList.contains('dark') ? CATO_COLORS.DARK_HIGHLIGHT_BG : CATO_COLORS.LIGHT_HIGHLIGHT_BG)
+              : isSelected
+                ? (document.documentElement.classList.contains('dark') ? CATO_COLORS.DARK_BG : CATO_COLORS.LIGHT_BG)
+                : undefined,
         }}
         onMouseEnter={(e) => {
-          if (!isHighlighted && !isSelected) {
+          if (!isHighlighted && !isSelected && !(pivotLog && pivotLog.id === log.id)) {
             // Check if dark mode is active
             const isDarkMode = document.documentElement.classList.contains('dark');
             e.currentTarget.style.backgroundColor = isDarkMode ? CATO_COLORS.PRIMARY_DARK : CATO_COLORS.LIGHT_BG;
           }
-          onHover(log.id);
+          onHover(log);
         }}
         onMouseLeave={(e) => {
-          // Always reset inline styles on mouse leave
-          e.currentTarget.style.backgroundColor = '';
+          // Always reset inline styles on mouse leave unless it's a pivot log
+          if (!(pivotLog && pivotLog.id === log.id)) {
+            e.currentTarget.style.backgroundColor = '';
+          }
           onHover(null);
         }}
         onClick={() => onClick({ ...log, lineIndex: index + 1 })}
@@ -409,7 +409,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
       >
         <div className="flex items-start gap-2">
           {/* Timestamp */}
-          <div className={`flex-shrink-0 text-xs font-mono min-w-14 ${timeInfo === '--:--:--.---'
+          <div className={`flex-shrink-0 text-xs font-mono min-w-14 ${hasSticky ? 'underline decoration-solid decoration-1' : ''} ${timeInfo === '--:--:--.---'
             ? 'text-gray-300 dark:text-gray-600 opacity-50'
             : timeGapInfo.hasGap
               ? 'text-orange-600 dark:text-orange-400 font-semibold'
@@ -445,8 +445,8 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
               dangerouslySetInnerHTML={{ __html: highlightedMessage }}
             />
 
-            {/* Thread/Process info with gap time at the end */}
-            {(threadProcessInfo || timeGapInfo.hasGap) && (
+            {/* File info with gap time at the end */}
+            {(fileInfo || timeGapInfo.hasGap) && (
               <div className="flex-shrink-0 flex items-center gap-3 pr-2">
                 {/* Time Gap Indicator */}
                 {timeGapInfo.hasGap && (
@@ -458,10 +458,10 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
                   </div>
                 )}
 
-                {/* Thread/Process info */}
-                {threadProcessInfo && (
+                {/* File info */}
+                {fileInfo && (
                   <div className="text-xs text-gray-400 dark:text-gray-500 font-mono">
-                    {threadProcessInfo}
+                    {fileInfo}
                   </div>
                 )}
               </div>
@@ -475,7 +475,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
 
 LogItem.displayName = 'LogItem';
 
-const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filters, onFiltersChange, onSearchMatchUpdate }) => {
+const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filters, onFiltersChange, onSearchMatchUpdate, onHover, pivotLog, onSetPivot, onClearPivot, stickyLogs, onAddStickyLog, highlightLog }) => {
   const virtuosoRef = useRef(null);
   // Refs for each item element to allow focus
   const itemRefs = useRef({});
@@ -488,6 +488,19 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
   const [hoveredLogId, setHoveredLogId] = useState(null);
   // Track visible range for smart scrolling
   const [visibleRange, setVisibleRange] = useState(null);
+  // Go to line dialog state
+  const [showGoToLineDialog, setShowGoToLineDialog] = useState(false);
+  const [goToLineValue, setGoToLineValue] = useState('');
+  const [isGoToLineValid, setIsGoToLineValid] = useState(true);
+
+  // Handle hover with both internal ID tracking and parent callback
+  const handleHover = useCallback((log) => {
+    const logId = log ? log.id : null;
+    setHoveredLogId(logId);
+    if (onHover) {
+      onHover(log); // Pass full log object to parent
+    }
+  }, [onHover]);
 
   // Group logs by date for sticky headers
   const groupedLogs = useMemo(() => {
@@ -624,7 +637,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
     // Scroll to match without opening modal
     virtuosoRef.current.scrollToIndex({
       index: target,
-      align: 'start',
+      align: 'center',
       behavior: 'smooth'
     });
     setCurrentMatchIndex(next);
@@ -643,7 +656,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
     // Scroll to match without opening modal
     virtuosoRef.current.scrollToIndex({
       index: target,
-      align: 'start',
+      align: 'center',
       behavior: 'smooth'
     });
     setCurrentMatchIndex(prev);
@@ -729,6 +742,14 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
         return;
       }
 
+      // Command+L: Go to line
+      if ((e.metaKey || e.ctrlKey) && e.key === 'l') {
+        e.preventDefault();
+        setShowGoToLineDialog(true);
+        setIsGoToLineValid(true); // Reset validation state when opening dialog
+        return;
+      }
+
       // Space key for hovered items
       if (e.key === ' ' || e.key === 'Spacebar') {
         e.preventDefault(); // Prevent page scroll
@@ -768,6 +789,31 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [hoveredLogId, selectedLogId, highlightedLogId, logs, onLogClick, flatLogs]);
 
+  // ===== STICKY LOG SCROLL LISTENER =====
+  useEffect(() => {
+    const handleScrollToLog = (event) => {
+      const { index, logId, shouldHighlight } = event.detail;
+
+      if (virtuosoRef.current && index >= 0) {
+        virtuosoRef.current.scrollToIndex({
+          index: index,
+          align: 'center',
+          behavior: 'auto'
+        });
+
+        // If highlighting is requested, trigger it after scroll
+        if (shouldHighlight && logId && highlightLog) {
+          setTimeout(() => {
+            highlightLog(logId);
+          }, 100);
+        }
+      }
+    };
+
+    window.addEventListener('scrollToLogIndex', handleScrollToLog);
+    return () => window.removeEventListener('scrollToLogIndex', handleScrollToLog);
+  }, [highlightLog]);
+
   // Context menu filter functions
   const extractFullTimestampForFilter = (timestamp) => {
     if (!timestamp) return '';
@@ -784,6 +830,17 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
       const currentFilter = filters.searchText || '';
       const newFilter = cleanAndCombineFilters(currentFilter, 'rowFrom', `#${contextMenu.lineNumber} ::`);
       onFiltersChange({ searchText: newFilter });
+
+      // Scroll to top after setting "From" filter
+      setTimeout(() => {
+        if (virtuosoRef.current) {
+          virtuosoRef.current.scrollToIndex({
+            index: 0,
+            align: 'start',
+            behavior: 'smooth'
+          });
+        }
+      }, 100); // Small delay to ensure filter is applied first
     }
     setContextMenu(null);
   }, [onFiltersChange, contextMenu, filters.searchText]);
@@ -793,9 +850,20 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
       const currentFilter = filters.searchText || '';
       const newFilter = cleanAndCombineFilters(currentFilter, 'rowTo', `:: #${contextMenu.lineNumber}`);
       onFiltersChange({ searchText: newFilter });
+
+      // Scroll to bottom after setting "To" filter
+      setTimeout(() => {
+        if (virtuosoRef.current && flatLogs.length > 0) {
+          virtuosoRef.current.scrollToIndex({
+            index: flatLogs.length - 1,
+            align: 'end',
+            behavior: 'smooth'
+          });
+        }
+      }, 100); // Small delay to ensure filter is applied first
     }
     setContextMenu(null);
-  }, [onFiltersChange, contextMenu, filters.searchText]);
+  }, [onFiltersChange, contextMenu, filters.searchText, flatLogs.length]);
 
   const setAsFromDateFilter = useCallback(() => {
     if (onFiltersChange && contextMenu) {
@@ -820,6 +888,114 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
     }
     setContextMenu(null);
   }, [onFiltersChange, contextMenu, filters.searchText]);
+
+  // Pivot time handlers
+  const handleSetPivot = useCallback(() => {
+    if (onSetPivot && contextMenu) {
+      const log = flatLogs.find(l => l.lineNumber === contextMenu.lineNumber);
+      if (log) {
+        onSetPivot(log);
+      }
+    }
+    setContextMenu(null);
+  }, [onSetPivot, contextMenu, flatLogs]);
+
+  const handleClearPivot = useCallback(() => {
+    if (onClearPivot) {
+      onClearPivot();
+    }
+    setContextMenu(null);
+  }, [onClearPivot]);
+
+  // ===== STICKY LOG FUNCTIONALITY =====
+  const handleAddStickyLog = useCallback(() => {
+    if (onAddStickyLog && contextMenu) {
+      const log = contextMenu.log;
+      const lineNumber = contextMenu.lineNumber;
+
+      if (log && lineNumber) {
+        // Create sticky log object with line number and cleaned message for tooltip
+        const stickyLogData = {
+          ...log,
+          lineNumber: lineNumber,
+          cleanedMessage: cleanMessage(log.message) // Add cleaned message for tooltip
+        };
+        onAddStickyLog(stickyLogData);
+      }
+    }
+    setContextMenu(null);
+  }, [onAddStickyLog, contextMenu]);
+
+  // Validate go to line input
+  const validateGoToLineInput = useCallback((value) => {
+    if (value === '') return true; // Empty input is considered valid (not an error state)
+
+    const lineNumber = parseInt(value.trim());
+    const maxLineNumber = flatLogs.length > 0 ? Math.max(...flatLogs.map(log => log.lineNumber)) : 1;
+
+    return !isNaN(lineNumber) && lineNumber >= 1 && lineNumber <= maxLineNumber;
+  }, [flatLogs]);
+
+  // Handle go to line input change with validation
+  const handleGoToLineChange = useCallback((e) => {
+    const value = e.target.value;
+    setGoToLineValue(value);
+    setIsGoToLineValid(validateGoToLineInput(value));
+  }, [validateGoToLineInput]);
+
+  // Go to line functionality
+  const handleGoToLine = useCallback(() => {
+    const lineNumber = parseInt(goToLineValue.trim());
+    const maxLineNumber = flatLogs.length > 0 ? Math.max(...flatLogs.map(log => log.lineNumber)) : 1;
+
+    if (isNaN(lineNumber) || lineNumber < 1 || lineNumber > maxLineNumber) {
+      setIsGoToLineValid(false);
+      return; // Invalid line number - out of range
+    }
+
+    // Find the exact log with this line number in flatLogs (displayed logs)
+    let targetIndex = flatLogs.findIndex(log => log.lineNumber === lineNumber);
+
+    // If exact line not found, find the closest one
+    if (targetIndex === -1) {
+      // Find the closest line number
+      let closestDistance = Infinity;
+      flatLogs.forEach((log, index) => {
+        const distance = Math.abs(log.lineNumber - lineNumber);
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          targetIndex = index;
+        }
+      });
+    }
+
+    // Scroll to the target index if found
+    if (targetIndex !== -1 && virtuosoRef.current) {
+      virtuosoRef.current.scrollToIndex({
+        index: targetIndex,
+        align: 'center',
+        behavior: 'auto'
+      });
+    }
+
+    // Close dialog and reset value
+    setShowGoToLineDialog(false);
+    setGoToLineValue('');
+    setIsGoToLineValid(true);
+  }, [goToLineValue, flatLogs]);
+
+  // Handle dialog keyboard events
+  const handleGoToLineKeyDown = useCallback((e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleGoToLine();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setShowGoToLineDialog(false);
+      setGoToLineValue('');
+      setIsGoToLineValid(true);
+    }
+  }, [handleGoToLine]);
 
   // Get all unique dates in chronological order
   const allDates = useMemo(() => {
@@ -945,28 +1121,49 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
         <Virtuoso
           ref={virtuosoRef}
           data={flatLogs}
-          itemContent={(index, log) => (
-            <div
-              ref={el => itemRefs.current[index] = el}
-              tabIndex={-1}
-              key={log.id}
-              className="outline-none"
-            >
-              <LogItem
-                log={log}
-                onClick={onLogClick}
-                isHighlighted={highlightedLogId === log.id}
-                isSelected={selectedLogId === log.id}
-                filters={filters}
-                index={index}
-                onFiltersChange={onFiltersChange}
-                previousLog={index > 0 ? flatLogs[index - 1] : null}
-                contextMenu={contextMenu}
-                setContextMenu={setContextMenu}
-                onHover={setHoveredLogId}
-              />
-            </div>
-          )}
+          itemContent={(index, log) => {
+            const previousLog = index > 0 ? flatLogs[index - 1] : null;
+            const showDateSeparator = previousLog && log.date && previousLog.date !== log.date;
+            
+            return (
+              <div
+                ref={el => itemRefs.current[index] = el}
+                tabIndex={-1}
+                key={log.id}
+                data-log-id={log.id}
+                className="outline-none"
+              >
+                {/* Date Separator */}
+                {showDateSeparator && (
+                  <div className="relative my-2">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+                    </div>
+                    <div className="relative flex justify-center text-xs">
+                      <span className="bg-white dark:bg-gray-900 px-3 py-1 text-gray-500 dark:text-gray-400 font-medium rounded-full border border-gray-300 dark:border-gray-600">
+                        {log.date}
+                      </span>
+                    </div>
+                  </div>
+                )}
+                <LogItem
+                  log={log}
+                  onClick={onLogClick}
+                  isHighlighted={highlightedLogId === log.id}
+                  isSelected={selectedLogId === log.id}
+                  filters={filters}
+                  index={index}
+                  onFiltersChange={onFiltersChange}
+                  previousLog={previousLog}
+                  contextMenu={contextMenu}
+                  setContextMenu={setContextMenu}
+                  onHover={handleHover}
+                  pivotLog={pivotLog}
+                  stickyLogs={stickyLogs}
+                />
+              </div>
+            );
+          }}
           rangeChanged={handleRangeChanged}
           style={{ height: '100%' }}
         />
@@ -975,19 +1172,29 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
       {/* Context Menu */}
       {contextMenu && (
         <div
-          className="context-menu fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1 min-w-48"
+          className="context-menu fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1 min-w-36"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(e) => e.stopPropagation()}
         >
           <button
+            onClick={handleAddStickyLog}
+            className="w-full px-2 py-1 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+          >
+            Sticky Log Line
+          </button>
+
+          {/* Separator */}
+          <div className="border-t border-gray-200 dark:border-gray-600 my-1"></div>
+
+          <button
             onClick={setAsFromFilter}
-            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+            className="w-full px-2 py-1 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
           >
             Set as "From" log line index
           </button>
           <button
             onClick={setAsToFilter}
-            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+            className="w-full px-2 py-1 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
           >
             Set as "To" log line index
           </button>
@@ -997,13 +1204,13 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
 
           <button
             onClick={setAsFromDateFilter}
-            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+            className="w-full px-2 py-1 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
           >
             Set "From" date
           </button>
           <button
             onClick={setAsToDateFilter}
-            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+            className="w-full px-2 py-1 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
           >
             Set "To" date
           </button>
@@ -1013,18 +1220,65 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
 
           <button
             onClick={handleSetPivot}
-            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+            className="w-full px-2 py-1 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
           >
             Set Pivot Time
           </button>
-          {pivotLog && (
-            <button
-              onClick={handleClearPivot}
-              className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
-            >
-              Clear Pivot Time
-            </button>
-          )}
+          <button
+            onClick={handleClearPivot}
+            disabled={!pivotLog}
+            className={`w-full px-2 py-1 text-left text-xs ${pivotLog
+              ? 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+              : 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
+              }`}
+          >
+            Clear Pivot Time
+          </button>
+        </div>
+      )}
+
+      {/* Go to Line Dialog */}
+      {showGoToLineDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg p-4 w-48">
+            <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">
+              Go to Line
+            </h3>
+            <div className="space-y-3">
+              <input
+                type="number"
+                min="1"
+                max={flatLogs.length > 0 ? Math.max(...flatLogs.map(log => log.lineNumber)) : 1}
+                value={goToLineValue}
+                onChange={handleGoToLineChange}
+                onKeyDown={handleGoToLineKeyDown}
+                placeholder="Enter line number"
+                className={`w-full px-3 py-2 text-sm rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 ${isGoToLineValid
+                  ? 'border border-gray-300 dark:border-gray-600 focus:ring-blue-500 dark:focus:ring-blue-400'
+                  : 'border-2 border-red-500 dark:border-red-400 focus:ring-red-500 dark:focus:ring-red-400'
+                  }`}
+                autoFocus
+              />
+              <div className="flex items-center gap-2 justify-center">
+                <button
+                  onClick={() => {
+                    setShowGoToLineDialog(false);
+                    setGoToLineValue('');
+                    setIsGoToLineValid(true);
+                  }}
+                  className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleGoToLine}
+                  className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
