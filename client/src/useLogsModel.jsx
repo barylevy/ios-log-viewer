@@ -305,6 +305,7 @@ const useLogsModel = () => {
             level: extractLogLevel(line),
             module: extractModule(line),
             thread: extractThread(line),
+            process: extractProcess(line),
             lineNumber: idx + 1,
             originalLineNumbers: [idx + 1]
           };
@@ -323,6 +324,7 @@ const useLogsModel = () => {
             level: extractLogLevel(line),
             module: extractModule(line),
             thread: extractThread(line),
+            process: extractProcess(line),
             lineNumber: idx + 1,
             originalLineNumbers: [idx + 1]
           };
@@ -367,9 +369,40 @@ const useLogsModel = () => {
   };
 
   const extractThread = (line) => {
-    // Try to extract thread ID
-    const threadMatch = line.match(/\[(\d+)\]/);
+    // For iOS log format: try to extract the first bracketed number as thread ID
+    // Pattern: [module:line] [thread] [process]
+    const bracketNumbers = line.match(/\[(\d+)\]/g);
+    if (bracketNumbers && bracketNumbers.length >= 1) {
+      // Extract the first bracketed number (thread ID)
+      const firstNumber = bracketNumbers[0].match(/\[(\d+)\]/);
+      if (firstNumber) {
+        return firstNumber[1];
+      }
+    }
+    
+    // Fallback: Try to extract thread ID - look for patterns like thread:12345
+    const threadMatch = line.match(/(?:thread[:\s]*)?(\d+)(?:\]|$|\s)/i);
     return threadMatch ? threadMatch[1] : '';
+  };
+
+  const extractProcess = (line) => {
+    // Try to extract process ID - look for patterns like pid:12345, process:12345, or [pid:12345]
+    const processMatch = line.match(/(?:pid|process)[:\s]*(\d+)/i) || 
+                         line.match(/\[(?:pid|process)[:\s]*(\d+)\]/i);
+    if (processMatch) {
+      return processMatch[1];
+    }
+    
+    // For iOS log format: try to extract the second bracketed number as process ID
+    // Pattern: [module:line] [thread] [process]
+    const bracketNumbers = line.match(/\[(\d+)\]/g);
+    if (bracketNumbers && bracketNumbers.length >= 2) {
+      // Extract the second bracketed number (process ID)
+      const secondNumber = bracketNumbers[1].match(/\[(\d+)\]/);
+      return secondNumber ? secondNumber[1] : '';
+    }
+    
+    return '';
   };
 
   // Normalize timestamps for comparison

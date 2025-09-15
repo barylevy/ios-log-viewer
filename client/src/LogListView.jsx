@@ -12,22 +12,21 @@ import {
 } from './dateTimeUtils';
 import { cleanMessage } from './utils/logLevelColors';
 
-// Helper function to extract file and line information
+// Helper function to extract process and thread information
 const extractFileInfo = (log) => {
-  if (!log.message) return null;
-
-  // Look for patterns like:
-  // [CNVpnConfManager:404]
-  // [cato_dev_posture_run:358]
-  // [DEMModule.cpp:189]
-  const fileInfoMatch = log.message.match(/\[([^:\]]+):(\d+)\]/);
-  if (fileInfoMatch) {
-    return `${fileInfoMatch[1]}:${fileInfoMatch[2]}`;
+  // Display [processId:threadId] format if both are available
+  if (log.process && log.thread) {
+    return `[${log.process}:${log.thread}]`;
   }
-
-  // Look for module or component info
-  if (log.module) {
-    return log.module;
+  
+  // Fallback to just thread if only thread is available
+  if (log.thread) {
+    return `[${log.thread}]`;
+  }
+  
+  // Fallback to just process if only process is available
+  if (log.process) {
+    return `[${log.process}]`;
   }
 
   return null;
@@ -445,7 +444,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
               dangerouslySetInnerHTML={{ __html: highlightedMessage }}
             />
 
-            {/* File info with gap time at the end */}
+            {/* Process/Thread info with gap time at the end */}
             {(fileInfo || timeGapInfo.hasGap) && (
               <div className="flex-shrink-0 flex items-center gap-3 pr-2">
                 {/* Time Gap Indicator */}
@@ -458,7 +457,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
                   </div>
                 )}
 
-                {/* File info */}
+                {/* Process/Thread info */}
                 {fileInfo && (
                   <div className="text-xs text-gray-400 dark:text-gray-500 font-mono">
                     {fileInfo}
