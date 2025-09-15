@@ -18,12 +18,12 @@ const extractFileInfo = (log) => {
   if (log.process && log.thread) {
     return `[${log.process}:${log.thread}]`;
   }
-  
+
   // Fallback to just thread if only thread is available
   if (log.thread) {
     return `[${log.thread}]`;
   }
-  
+
   // Fallback to just process if only process is available
   if (log.process) {
     return `[${log.process}]`;
