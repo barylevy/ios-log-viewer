@@ -243,7 +243,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
     };
 
     // Highlight filter terms (blue)
-    processHighlights(filters.searchText, 'bg-blue-200 dark:bg-blue-600');
+    processHighlights(filters.searchText, 'bg-blue-200 dark:bg-blue-500');
 
     // Highlight search query terms (green)
     processHighlights(filters.searchQuery, 'bg-green-200 dark:bg-green-600 font-bold');
@@ -1124,7 +1124,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
           itemContent={(index, log) => {
             const previousLog = index > 0 ? flatLogs[index - 1] : null;
             const showDateSeparator = previousLog && log.date && previousLog.date !== log.date;
-            
+
             return (
               <div
                 ref={el => itemRefs.current[index] = el}
