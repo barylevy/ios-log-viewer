@@ -3,7 +3,7 @@ import { getLevelButtonColor, getLevelTextColor, cleanMessage } from './utils/lo
 import JsonTreeViewer from './components/JsonTreeViewer';
 
 const LogModal = ({ log, onClose, onAddStickyLog, onNext, onPrev, hasNext, hasPrev }) => {
-  const [viewMode, setViewMode] = useState('text'); // 'text' or 'json'
+  const [viewMode, setViewMode] = useState('json'); // 'text' or 'json' - default to json
 
   // Close modal when Escape key is pressed
   useEffect(() => {
@@ -124,35 +124,55 @@ const LogModal = ({ log, onClose, onAddStickyLog, onNext, onPrev, hasNext, hasPr
         </div>
 
         {/* Metadata */}
-        {(log.timestamp || log.module || log.thread || log.sourceFile || log.lineNumber) && (
+        {(log.timestamp || log.module || log.thread || log.process || log.sourceFile || log.lineNumber) && (
           <div className="p-4 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              {log.lineNumber && (
-                <div>
-                  <span className="font-medium text-gray-600 dark:text-gray-400">Line:</span>
-                  <span className="ml-2 font-mono text-gray-900 dark:text-white">{log.lineNumber}</span>
-                </div>
-              )}
+            <div className="grid grid-cols-[auto_auto_auto] gap-x-8 gap-y-2 text-sm">
+              {/* First Row - Left: Timestamp (auto-sized) */}
               {log.timestamp && (
-                <div>
+                <div className="whitespace-nowrap">
                   <span className="font-medium text-gray-600 dark:text-gray-400">Timestamp:</span>
                   <span className="ml-2 font-mono text-gray-900 dark:text-white">{formatTimestamp(log.timestamp)}</span>
                 </div>
               )}
+
+              {/* First Row - Center: ProcessId (auto-sized) */}
+              {log.process && (
+                <div className="whitespace-nowrap">
+                  <span className="font-medium text-gray-600 dark:text-gray-400">ProcessId:</span>
+                  <span className="ml-2 font-mono text-gray-900 dark:text-white">{log.process}</span>
+                </div>
+              )}
+
+              {/* First Row - Right: Log Line (auto-sized) */}
+              {log.lineNumber && (
+                <div className="whitespace-nowrap">
+                  <span className="font-medium text-gray-600 dark:text-gray-400">Log Line:</span>
+                  <span className="ml-2 font-mono text-gray-900 dark:text-white">{log.lineNumber}</span>
+                </div>
+              )}
+
+              {/* Second Row - Left: Module (auto-sized) */}
               {log.module && (
-                <div>
+                <div className="whitespace-nowrap">
                   <span className="font-medium text-gray-600 dark:text-gray-400">Module:</span>
                   <span className="ml-2 text-gray-900 dark:text-white">{log.module}</span>
                 </div>
               )}
+
+              {/* Second Row - Center: ThreadId (auto-sized) */}
               {log.thread && (
-                <div>
-                  <span className="font-medium text-gray-600 dark:text-gray-400">Thread:</span>
-                  <span className="ml-2 font-mono text-gray-900 dark:text-white">#{log.thread}</span>
+                <div className="whitespace-nowrap">
+                  <span className="font-medium text-gray-600 dark:text-gray-400">ThreadId:</span>
+                  <span className="ml-2 font-mono text-gray-900 dark:text-white">{log.thread}</span>
                 </div>
               )}
+
+              {/* Second Row - Right: Empty space for now */}
+              <div></div>
+
+              {/* Source file if present */}
               {log.sourceFile && (
-                <div>
+                <div className="col-span-3">
                   <span className="font-medium text-gray-600 dark:text-gray-400">Source:</span>
                   <span className="ml-2 text-gray-900 dark:text-white">{log.sourceFile}</span>
                 </div>
@@ -167,24 +187,26 @@ const LogModal = ({ log, onClose, onAddStickyLog, onNext, onPrev, hasNext, hasPr
           {hasJsonContent && (
             <div className="flex items-center gap-2 mb-3">
               <span className="text-sm text-gray-600 dark:text-gray-400">View:</span>
-              <button
-                onClick={() => setViewMode('text')}
-                className={`px-3 py-1 text-sm rounded transition-colors ${viewMode === 'text'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                  }`}
-              >
-                Text
-              </button>
-              <button
-                onClick={() => setViewMode('json')}
-                className={`px-3 py-1 text-sm rounded transition-colors ${viewMode === 'json'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                  }`}
-              >
-                JSON Tree
-              </button>
+              <div className="flex border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden">
+                <button
+                  onClick={() => setViewMode('text')}
+                  className={`px-3 py-1 text-sm transition-colors ${viewMode === 'text'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
+                >
+                  Text
+                </button>
+                <button
+                  onClick={() => setViewMode('json')}
+                  className={`px-3 py-1 text-sm transition-colors border-l border-gray-300 dark:border-gray-600 ${viewMode === 'json'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
+                >
+                  JSON Tree
+                </button>
+              </div>
             </div>
           )}
 
