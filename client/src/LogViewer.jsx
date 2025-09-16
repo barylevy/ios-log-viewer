@@ -531,6 +531,8 @@ const LogViewer = () => {
         showAIChat={showAIChat}
         hasLogs={files.length > 0}
         currentFileHeaders={headerState}
+        currentLogs={currentDisplayContext.logs}
+        currentFileName={currentDisplayContext.fileName}
       />
 
       {/* Main content area - Split panel container */}

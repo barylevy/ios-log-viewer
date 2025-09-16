@@ -3,13 +3,15 @@ import FileSelectionModal from './FileSelectionModal';
 import AboutModal from './AboutModal';
 import AIConfigSettings from './Settings';
 import { CATO_COLORS } from './constants';
+import { openAIChatInNewWindow, openAIChatInNewTab } from './utils/aiChatUtils';
 
-const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, currentFileHeaders, onClearTabs }) => {
+const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, currentFileHeaders, onClearTabs, currentLogs, currentFileName }) => {
   const fileInputRef = useRef(null);
   const directoryInputRef = useRef(null);
   const [showFileSelectionModal, setShowFileSelectionModal] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showAIChatDropdown, setShowAIChatDropdown] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(
     () => localStorage.getItem('theme') === 'dark' ||
@@ -19,16 +21,17 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (showDropdown && !event.target.closest('.relative')) {
+      if (showDropdown && !event.target.closest('.settings-dropdown')) {
         setShowDropdown(false);
+      }
+      if (showAIChatDropdown && !event.target.closest('.ai-chat-dropdown')) {
+        setShowAIChatDropdown(false);
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showDropdown]);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showDropdown, showAIChatDropdown]);
 
   // Apply theme on mount and when theme changes
   useEffect(() => {
@@ -115,6 +118,20 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
     setShowDropdown(false);
   };
 
+  const handleOpenAIChatNewWindow = () => {
+    if (currentLogs && currentFileName) {
+      openAIChatInNewWindow(currentLogs, currentFileName);
+    }
+    setShowAIChatDropdown(false);
+  };
+
+  const handleOpenAIChatNewTab = () => {
+    if (currentLogs && currentFileName) {
+      openAIChatInNewTab(currentLogs, currentFileName);
+    }
+    setShowAIChatDropdown(false);
+  };
+
   return (
     <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-600 p-2">
       <div className="flex items-center justify-between flex-nowrap gap-4">
@@ -178,22 +195,63 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
           </button>
 
           {hasLogs && (
-            <button
-              onClick={onToggleAIChat}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${showAIChat
-                ? 'bg-red-600 hover:bg-red-700 text-white'
-                : 'text-white hover:opacity-90'
-                }`}
-              style={{
-                backgroundColor: showAIChat ? undefined : CATO_COLORS.PRIMARY
-              }}
-            >
-              {showAIChat ? 'Hide AI Chat' : 'Show AI Chat'}
-            </button>
+            <div className="relative ai-chat-dropdown">
+              <div className="flex">
+                {/* Main AI Chat Button */}
+                <button
+                  onClick={onToggleAIChat}
+                  className={`px-4 py-2 rounded-l-md text-sm font-medium transition-colors ${showAIChat
+                    ? 'bg-red-600 hover:bg-red-700 text-white'
+                    : 'bg-green-600 hover:bg-green-700 text-white'
+                    }`}
+                >
+                  {showAIChat ? 'Hide AI Chat' : 'Show AI Chat'}
+                </button>
+
+                {/* Dropdown Arrow Button */}
+                <button
+                  onClick={() => setShowAIChatDropdown(!showAIChatDropdown)}
+                  className={`px-2 py-2 rounded-r-md text-sm font-medium transition-colors border-l border-opacity-20 ${showAIChat
+                    ? 'bg-red-600 hover:bg-red-700 text-white border-white'
+                    : 'bg-green-600 hover:bg-green-700 text-white border-white'
+                    }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Dropdown Menu */}
+              {showAIChatDropdown && (
+                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-600 z-50">
+                  <div className="py-1">
+                    <button
+                      onClick={onToggleAIChat}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    >
+                      {showAIChat ? 'Hide Side Panel' : 'Show Side Panel'}
+                    </button>
+                    <button
+                      onClick={handleOpenAIChatNewTab}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    >
+                      Open in New Tab
+                    </button>
+                    <button
+                      onClick={handleOpenAIChatNewWindow}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    >
+                      Open in New Window
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {/* Settings Dropdown */}
-          <div className="relative">
+          <div className="relative settings-dropdown">
             <button
               onClick={handleDropdownToggle}
               className="p-2 rounded-md text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
