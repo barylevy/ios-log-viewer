@@ -7,6 +7,16 @@ import {
   extractDateFromTimestamp,
   GAP_PATTERN
 } from './dateTimeUtils';
+import {
+  extractLogLevel,
+  extractModule,
+  extractThread,
+  extractProcess,
+  normalizeTimestamp,
+  parseLogLine,
+  parseLogContent,
+  parseWindowsLogFormat
+} from './LogParser';
 const DATE_RANGE_REGEX = /(^|\s)::\s*#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)/; // :: #date
 const DATE_START_REGEX = /#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)\s*::/; // #date ::
 const DATE_BOTH_REGEX = /#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)\s*::\s*#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)/; // #date :: #date
@@ -287,50 +297,10 @@ const useLogsModel = () => {
         if (!hasExistingHeaders && !hasNewHeaders) return prev;
         return prev;
       });
-      const allLines = content.split('\n'); // Keep all lines including empty ones
-      // New logic: group lines by timestamp
-      const logs = [];
-      let currentLog = null;
-      allLines.forEach((line, idx) => {
-        if (!line.trim() || headerLines.includes(idx)) return;
-        const hasTimestamp = extractTimestamp(line);
-        if (hasTimestamp) {
-          // Start a new log entry
-          if (currentLog) logs.push(currentLog);
-          currentLog = {
-            id: logs.length,
-            raw: line,
-            message: line,
-            timestamp: hasTimestamp,
-            level: extractLogLevel(line),
-            module: extractModule(line),
-            thread: extractThread(line),
-            process: extractProcess(line),
-            lineNumber: idx + 1,
-            originalLineNumbers: [idx + 1]
-          };
-        } else if (currentLog) {
-          // Append to previous log's message, but increment line number
-          currentLog.message += '\n' + line;
-          currentLog.raw += '\n' + line;
-          currentLog.originalLineNumbers.push(idx + 1);
-        } else {
-          // If the first line(s) have no timestamp, treat as a log
-          currentLog = {
-            id: logs.length,
-            raw: line,
-            message: line,
-            timestamp: '',
-            level: extractLogLevel(line),
-            module: extractModule(line),
-            thread: extractThread(line),
-            process: extractProcess(line),
-            lineNumber: idx + 1,
-            originalLineNumbers: [idx + 1]
-          };
-        }
-      });
-      if (currentLog) logs.push(currentLog);
+      
+      // Parse the log content using the dedicated parser
+      const logs = parseLogContent(content, headerLines);
+      
       setAllFileLogs(prev => ({ ...prev, [fileId]: logs }));
       setLogs(logs);
       setSelectedLog(null);
@@ -352,96 +322,6 @@ const useLogsModel = () => {
   const isFileLoading = useCallback((fileId) => {
     return !!fileLoadingState[fileId];
   }, [fileLoadingState]);
-
-  const extractLogLevel = (line) => {
-    for (const [level, ...patterns] of LOG_LEVEL_MATRIX) {
-      for (const pattern of patterns) {
-        if (line.includes(pattern)) return level;
-      }
-    }
-    return 'info';
-  };
-
-  const extractModule = (line) => {
-    // Try to extract module/component name from brackets
-    const moduleMatch = line.match(/\[([^\]]+)\]/);
-    return moduleMatch ? moduleMatch[1] : '';
-  };
-
-  const extractThread = (line) => {
-    // For iOS log format: try to extract the first bracketed number as thread ID
-    // Pattern: [module:line] [thread] [process]
-    const bracketNumbers = line.match(/\[(\d+)\]/g);
-    if (bracketNumbers && bracketNumbers.length >= 1) {
-      // Extract the first bracketed number (thread ID)
-      const firstNumber = bracketNumbers[0].match(/\[(\d+)\]/);
-      if (firstNumber) {
-        return firstNumber[1];
-      }
-    }
-
-    // Fallback: Try to extract thread ID - look for patterns like thread:12345
-    const threadMatch = line.match(/(?:thread[:\s]*)?(\d+)(?:\]|$|\s)/i);
-    return threadMatch ? threadMatch[1] : '';
-  };
-
-  const extractProcess = (line) => {
-    // Try to extract process ID - look for patterns like pid:12345, process:12345, or [pid:12345]
-    const processMatch = line.match(/(?:pid|process)[:\s]*(\d+)/i) ||
-      line.match(/\[(?:pid|process)[:\s]*(\d+)\]/i);
-    if (processMatch) {
-      return processMatch[1];
-    }
-
-    // For iOS log format: try to extract the second bracketed number as process ID
-    // Pattern: [module:line] [thread] [process]
-    const bracketNumbers = line.match(/\[(\d+)\]/g);
-    if (bracketNumbers && bracketNumbers.length >= 2) {
-      // Extract the second bracketed number (process ID)
-      const secondNumber = bracketNumbers[1].match(/\[(\d+)\]/);
-      return secondNumber ? secondNumber[1] : '';
-    }
-
-    return '';
-  };
-
-  // Normalize timestamps for comparison
-  const normalizeTimestamp = (timestamp) => {
-    if (!timestamp) return null;
-
-    try {
-      let date;
-
-      if (timestamp.includes('T')) {
-        // ISO format from datetime-local: 2025-08-02T23:54:57
-        date = new Date(timestamp);
-      } else if (timestamp.includes('-') && timestamp.includes(' ')) {
-        // Log format: 2025-08-02 23:54:57:514 or 2025-08-02 23:54:57
-        // Handle milliseconds properly by converting to ISO format
-        let isoTimestamp = timestamp.replace(' ', 'T');
-
-        // If it has milliseconds in format HH:MM:SS:mmm, convert to HH:MM:SS.mmm
-        if (isoTimestamp.match(/\d{2}:\d{2}:\d{2}:\d{3}$/)) {
-          isoTimestamp = isoTimestamp.replace(/(\d{2}:\d{2}:\d{2}):(\d{3})$/, '$1.$2');
-        }
-
-        date = new Date(isoTimestamp);
-      } else if (timestamp.includes('-') && !timestamp.includes(' ') && !timestamp.includes(':')) {
-        // Date only format: 2025-07-04 - assume start of day (00:00:00)
-        date = new Date(`${timestamp}T00:00:00`);
-      } else if (timestamp.includes(':')) {
-        // Time only: 23:54:57 - use today's date
-        const today = new Date().toISOString().split('T')[0];
-        date = new Date(`${today}T${timestamp}`);
-      } else {
-        return null;
-      }
-
-      return isNaN(date.getTime()) ? null : date;
-    } catch {
-      return null;
-    }
-  };
 
   // Pre-compile search terms and regexes for performance
   // Parse row range filter or date range filter if present
