@@ -12,9 +12,9 @@ import {
 } from './dateTimeUtils';
 import { cleanMessage } from './utils/logLevelColors';
 
-// Helper function to extract process and thread information
+// Helper function to extract process and thread information for display
 const extractFileInfo = (log) => {
-  // Display [processId:threadId] format if both are available
+  // Display both process ID and thread ID if both are available
   if (log.process && log.thread) {
     return `[${log.process}:${log.thread}]`;
   }
@@ -250,17 +250,36 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
     return messageHtml;
   }, [cleanedMessage, filters.searchQuery, filters.searchText]);
 
-  // Determine log level for styling
+  // Determine log level for styling - use the parsed level field, with fallback to pattern matching
   const logLevel = useMemo(() => {
-    const message = (log.message || '');//.toLowerCase();
+    // First, try to use the properly parsed level field
+    if (log.level) {
+      // Map single character levels to full names
+      const levelMap = {
+        'E': 'error',
+        'W': 'warning', 
+        'I': 'info',
+        'D': 'debug',
+        'T': 'trace',
+        'V': 'debug', // Android verbose maps to debug
+        'F': 'error'  // Android fatal maps to error
+      };
+      
+      const normalizedLevel = levelMap[log.level.toUpperCase()] || log.level.toLowerCase();
+      if (['error', 'warning', 'info', 'debug', 'trace'].includes(normalizedLevel)) {
+        return normalizedLevel;
+      }
+    }
 
+    // Fallback: search patterns in message (for legacy compatibility)
+    const message = (log.message || '');
     for (const [level, ...patterns] of LOG_LEVEL_MATRIX) {
       for (const pattern of patterns) {
         if (message.includes(pattern)) return level;
       }
     }
     return 'info';
-  }, [log.message]);
+  }, [log.level, log.message]);
 
   const logLevelColor = {
     error: 'text-red-600 dark:text-red-400',

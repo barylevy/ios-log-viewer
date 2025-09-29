@@ -15,6 +15,7 @@ import {
   normalizeTimestamp,
   parseLogLine,
   parseLogContent,
+  parseLogFormat,
   parseWindowsLogFormat
 } from './LogParser';
 const DATE_RANGE_REGEX = /(^|\s)::\s*#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)/; // :: #date

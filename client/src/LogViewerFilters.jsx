@@ -249,7 +249,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
     if (level === 'all') {
       // If 'all' is clicked, toggle between all levels and just 'all'
       if (currentLevels.includes('all')) {
-        onFiltersChange({ logLevel: ['error', 'warning', 'info', 'debug', 'trace', 'activity'] });
+        onFiltersChange({ logLevel: ['error', 'warning', 'info', 'debug', 'trace'] });
       } else {
         onFiltersChange({ logLevel: ['all'] });
       }
@@ -503,7 +503,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
                 { value: 'info', label: 'Info', color: 'text-blue-600 dark:text-blue-400' },
                 { value: 'debug', label: 'Debug', color: 'text-green-600 dark:text-green-400' },
                 { value: 'trace', label: 'Trace', color: 'text-purple-600 dark:text-purple-400' },
-                { value: 'activity', label: 'Activity', color: 'text-indigo-600 dark:text-indigo-400' },
+
               ].map(({ value, label, color }) => (
                 <label
                   key={value}

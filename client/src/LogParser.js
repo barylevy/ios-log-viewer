@@ -4,8 +4,8 @@ import {
   extractTimeGapFromSearch, 
   extractDateFromTimestamp,
   GAP_PATTERN 
-} from './dateTimeUtils';
-import { LOG_LEVEL_MATRIX } from './constants';
+} from './dateTimeUtils.js';
+import { LOG_LEVEL_MATRIX } from './constants.js';
 
 /**
  * Log parsing utilities - handles parsing of different log formats including iOS and Windows
@@ -13,36 +13,185 @@ import { LOG_LEVEL_MATRIX } from './constants';
 
 /**
  * Extract log level from a log line
+ * Returns the original format when found in structured logs, null when not present
  * @param {string} line - The log line to parse
- * @returns {string} - The log level (info, warning, error, etc.)
+ * @returns {string|null} - The original log level format or null if not found
  */
 export const extractLogLevel = (line) => {
-  for (const [level, ...patterns] of LOG_LEVEL_MATRIX) {
-    for (const pattern of patterns) {
-      if (line.includes(pattern)) return level;
+  // Windows format: [Date] [Level] [Module] [ProcessId] [ThreadId] [File:Line]
+  const windowsMatch = line.match(/^\[[\d\/]+\s[\d:.]+\]\s+\[([^\]]+)\]/);
+  if (windowsMatch) {
+    return windowsMatch[1]; // Return original format like "I", "W", "ERROR"
+  }
+
+  // Android format: [date] [thread] [module] - [Level] - message
+  const androidMatch = line.match(/\]\s+-\s+\[([DVWE])\]\s+-/);
+  if (androidMatch) {
+    return androidMatch[1]; // Return original format like "D", "V", "W", "E"
+  }
+
+  // Linux format: date [Level][module][function:line]
+  const linuxMatch = line.match(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\s+\[([DWIE])\]/);
+  if (linuxMatch) {
+    return linuxMatch[1]; // Return original format like "I", "W", "E", "D"
+  }
+
+  // Chrome format: [processId:threadId:timestamp:LEVEL:file]
+  const chromeMatch = line.match(/^\[\d+:\d+:\d+\/\d+\.\d+:([A-Z]+):[^\]]+\]/);
+  if (chromeMatch) {
+    return chromeMatch[1]; // Return original format like "INFO", "WARNING", "ERROR"
+  }
+
+  // Check for various log level patterns and return original format
+  const exactMatches = [
+    { pattern: /\[Error\]/i, level: 'Error' },
+    { pattern: /\[Warning\]/i, level: 'Warning' },
+    { pattern: /\[Info\]/i, level: 'Info' },
+    { pattern: /\[Debug\]/i, level: 'Debug' },
+    { pattern: /\[Trace\]/i, level: 'Trace' },
+    { pattern: /ERROR:/i, level: 'ERROR' },
+    { pattern: /WARNING:/i, level: 'WARNING' },
+    { pattern: /INFO:/i, level: 'INFO' },
+    { pattern: /DEBUG:/i, level: 'DEBUG' }
+  ];
+
+  for (const {pattern, level} of exactMatches) {
+    if (pattern.test(line)) {
+      return level;
     }
   }
-  return 'info';
+
+  // For Mac/iOS logs and other formats without explicit log levels, return null
+  return null;
 };
 
 /**
  * Extract module/component name from a log line
+ * Supports multiple formats:
+ * - iOS/macOS format: [ModuleName:line] [thread] [process]
+ * - Windows format: [level] [ModuleName] [processId] [threadId] [file:line]
+ * - Linux format: [level][ModuleName][function:line][unknown][unknown][thread]
+ * - Android format: [thread] [ModuleName] - [level] -
  * @param {string} line - The log line to parse
  * @returns {string} - The module name or empty string
  */
 export const extractModule = (line) => {
-  // Try to extract module/component name from brackets
+  // Chrome/Windows format: [processId:threadId:MMDD/HHMMSS.SSS:LEVEL:file.cc(line)]
+  const chromeMatch = line.match(/^\[\d+:\d+:\d{4}\/\d{6}\.\d{3}:[A-Z]+:([^\]]+)\]/);
+  if (chromeMatch) {
+    const fileName = chromeMatch[1]; // Extract filename from the Chrome format
+    // Extract just the filename without path and line number
+    const fileNameOnly = fileName.split('/').pop().split('(')[0];
+    return fileNameOnly.trim();
+  }
+
+  // Android format: [date] [thread] [domain] - [level] - message
+  const androidMatch = line.match(/^\[[\w-]+\s[\d:.]+\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+-\s+\[[DWE]\]\s+-/);
+  if (androidMatch) {
+    const domain = androidMatch[2]; // Third bracket is the domain/module
+    return domain.trim();
+  }
+
+  // Linux format: date [level][module][function:line][unknown][unknown][thread]
+  const linuxMatch = line.match(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\s+\[[DWIE]\]\[([^\]]+)\]\[[^\]]+\]/);
+  if (linuxMatch) {
+    const module = linuxMatch[1];
+    return module.trim();
+  }
+
+  // Windows format variation 2: [date] [level] [module] [processId] [threadId] [file:line]
+  const windowsMatch = line.match(/^\[[\d/]+\s[\d:.]+\]\s+\[[^\]]+\]\s+\[([^\]]+)\]\s+\[\d+\]\s+\[\d+\]\s+\[[^\]]+\]/);
+  if (windowsMatch) {
+    const module = windowsMatch[1];
+    return module.trim();
+  }
+
+  // iOS/macOS format: [ModuleName:line] [thread] [process] - extract module before colon
+  const iosModuleMatch = line.match(/\[([^:\]]+):\d+\]/);
+  if (iosModuleMatch) {
+    return iosModuleMatch[1].trim();
+  }
+
+  // iOS/macOS/Windows format variation 1: Try to extract module/component name from brackets
+  // This should be the first bracketed item that contains text (not just numbers)
   const moduleMatch = line.match(/\[([^\]]+)\]/);
-  return moduleMatch ? moduleMatch[1] : '';
+  if (moduleMatch) {
+    const potential = moduleMatch[1];
+    // Skip if it's just numbers (likely thread/process ID)
+    if (!/^\d+$/.test(potential) && !potential.includes(':')) {
+      return potential;
+    }
+  }
+
+  return '';
 };
 
 /**
  * Extract thread ID from a log line
+ * Supports multiple formats:
+ * - iOS/macOS format: [module:line] [thread] [process]
+ * - Windows format: already handled in extractProcess
+ * - Linux format: [level][module][function:line][unknown][unknown][thread]
+ * - Android format: [thread] [module] - [level] -
  * @param {string} line - The log line to parse
  * @returns {string} - The thread ID or empty string
  */
 export const extractThread = (line) => {
-  // For iOS log format: try to extract the first bracketed number as thread ID
+  // Android format: [date] [thread] [domain] - [level] - message
+  const androidMatch = line.match(/^\[[\w-]+\s[\d:.]+\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+-\s+\[[DWE]\]\s+-/);
+  if (androidMatch) {
+    const thread = androidMatch[1]; // Second bracket is the thread
+    return thread.trim();
+  }
+
+  // Linux format: date [level][module][function:line][unknown][unknown][thread]
+  const linuxMatch = line.match(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\s+\[[DWIE]\]\[[^\]]+\]\[[^\]]+\]\[[^\]]*\]\[[^\]]*\]\[([^\]]+)\]/);
+  if (linuxMatch) {
+    const thread = linuxMatch[1];
+    return thread === '_:' ? '_' : thread;
+  }
+
+  // Windows format with combined hex IDs: [date] [level] [module] [processId:threadId] [function]
+  const windowsHexMatch = line.match(/^\[[\d\/]+\s[\d:.]+\]\s+\[[^\]]+\]\s+\[[^\]]+\]\s+\[([0-9A-Fa-f]+):([0-9A-Fa-f]+)\]/);
+  if (windowsHexMatch) {
+    const threadId = windowsHexMatch[2]; // Second part after colon is thread ID
+    return threadId;
+  }
+
+  // Windows format: [date] [level] [module] [processId] [threadId] [file:line]
+  const windowsMatch = line.match(/^\[[\d\/]+\s[\d:.]+\]\s+\[[^\]]+\]\s+\[[^\]]+\]\s+\[(\d+)\]\s+\[(\d+)\]\s+\[[^\]]+\]/);
+  if (windowsMatch) {
+    const threadId = windowsMatch[2]; // Second number is thread ID
+    return threadId;
+  }
+
+  // Chrome/Windows format: [processId:threadId:timestamp:level:file]
+  const chromeMatch = line.match(/^\[(\d+):(\d+):\d+\/\d+\.\d+:[A-Z]+:[^\]]+\]/);
+  if (chromeMatch) {
+    const threadId = chromeMatch[2]; // Second number is thread ID
+    return threadId;
+  }
+
+  // For iOS/macOS log format: detect app vs daemon format
+  // App format: [module:line] [thread] [process] - smaller numbers first
+  // Daemon format: [module:line] [process] [thread] - larger numbers first
+  const iosMacPattern = line.match(/\[[^:\]]+:\d+\]\s+\[(\d+)\]\s+\[(\d+)\]/);
+  if (iosMacPattern) {
+    const firstNum = parseInt(iosMacPattern[1]);
+    const secondNum = parseInt(iosMacPattern[2]);
+    
+    // Heuristic: if first number is much larger, it's daemon format [process] [thread]
+    // If second number is larger, it's app format [thread] [process]
+    if (firstNum > secondNum * 10) {
+      // Daemon format: [process] [thread]
+      return iosMacPattern[2]; // Second number is thread ID
+    } else {
+      // App format: [thread] [process]  
+      return iosMacPattern[1]; // First number is thread ID
+    }
+  }
+
+  // For other iOS/macOS log format: try to extract the first bracketed number as thread ID
   // Pattern: [module:line] [thread] [process]
   const bracketNumbers = line.match(/\[(\d+)\]/g);
   if (bracketNumbers && bracketNumbers.length >= 1) {
@@ -62,8 +211,11 @@ export const extractThread = (line) => {
  * Extract process ID from a log line
  * Supports multiple formats:
  * - iOS format: [module:line] [thread] [process]
+ * - macOS format: [module:line] [thread] [process] 
  * - Windows format 1: [processId:threadId] (combined)
  * - Windows format 2: [processId] [threadId] (separate)
+ * - Linux format: [level][module][function:line][unknown][unknown][thread]
+ * - Android format: [thread] [module] - [level] -
  * - Generic: pid:12345, process:12345, [pid:12345]
  * @param {string} line - The log line to parse
  * @returns {string} - The process ID or process:thread combination
@@ -76,25 +228,82 @@ export const extractProcess = (line) => {
     return processMatch[1];
   }
 
-  // Windows format variation 1: [processId:threadId] - extract both parts
-  // Pattern matches hex or decimal numbers: [5938:4BE8] or [1234:5678]
-  const windowsMatch1 = line.match(/\[([0-9A-Fa-f]+):([0-9A-Fa-f]+)\]/);
+  // Chrome/Windows format: [processId:threadId:timestamp:level:file] - handle this first
+  const chromeMatch = line.match(/^\[(\d+):(\d+):\d+\/\d+\.\d+:[A-Z]+:[^\]]+\]/);
+  if (chromeMatch) {
+    const processId = chromeMatch[1]; // First number is process ID
+    return processId;
+  }
+
+  // Windows format variation 1: [date] [level] [module] [processId:threadId] [function] [unknown] [unknown] [message]
+  const windowsMatch1 = line.match(/^\[[\d\/]+\s[\d:.]+\]\s+\[[^\]]+\]\s+\[[^\]]+\]\s+\[([0-9A-Fa-f]+):([0-9A-Fa-f]+)\]/);
   if (windowsMatch1) {
-    const processId = windowsMatch1[1];
-    const threadId = windowsMatch1[2];
+    const processId = windowsMatch1[1]; // Just the process part
+    return processId; // Return only process ID, not combined
+  }
+
+  // Windows format variation 1b: [processId:threadId] - simple format only (not part of structured log)
+  // Pattern matches hex or decimal numbers: [5938:4BE8] or [1234:5678] but not complex Chrome format
+  const windowsMatchSimple = line.match(/\[([0-9A-Fa-f]+):([0-9A-Fa-f]+)\](?!\s*\[)/);
+  if (windowsMatchSimple) {
+    const processId = windowsMatchSimple[1];
+    const threadId = windowsMatchSimple[2];
     return `${processId}:${threadId}`;
   }
 
-  // Windows format variation 2: [processId] [threadId] - separate brackets
-  // Look for pattern: [level] [module] [processId] [threadId] [file:line]
-  const windowsMatch2 = line.match(/\[[^\]]+\]\s+\[[^\]]+\]\s+\[(\d+)\]\s+\[(\d+)\]\s+\[[^\]]+\]/);
+  // Windows format variation 2: [date] [level] [module] [processId] [threadId] [file:line]
+  const windowsMatch2 = line.match(/^\[[\d\/]+\s[\d:.]+\]\s+\[[^\]]+\]\s+\[[^\]]+\]\s+\[(\d+)\]\s+\[(\d+)\]\s+\[[^\]]+\]/);
   if (windowsMatch2) {
-    const processId = windowsMatch2[1];
-    const threadId = windowsMatch2[2];
+    const processId = windowsMatch2[1]; // First number is process ID
+    const threadId = windowsMatch2[2];  // Second number is thread ID
+    return processId;
+  }
+
+  // Windows format variation 3: [processId] [threadId] - separate brackets (legacy pattern)
+  // Look for pattern: [level] [module] [processId] [threadId] [file:line]
+  const windowsMatch3 = line.match(/\[[^\]]+\]\s+\[[^\]]+\]\s+\[(\d+)\]\s+\[(\d+)\]\s+\[[^\]]+\]/);
+  if (windowsMatch3) {
+    const processId = windowsMatch3[1];
+    const threadId = windowsMatch3[2];
     return `${processId}:${threadId}`;
   }
 
-  // For iOS log format: try to extract the second bracketed number as process ID
+  // Android format: [date] [thread] [domain] - [level] - message
+  // For Android, we'll use the thread as the process identifier
+  const androidMatch = line.match(/^\[[\w-]+\s[\d:.]+\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+-\s+\[[DWE]\]\s+-/);
+  if (androidMatch) {
+    const thread = androidMatch[1]; // Use thread as process identifier for Android
+    return thread.trim();
+  }
+
+  // Linux format: date [level][module][function:line][unknown][unknown][thread]
+  // Pattern: 2025-08-04 11:18:00 [I][client  ][log_client_version:1716][:][:][_:]
+  const linuxMatch = line.match(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\s+\[[DWIE]\]\[[^\]]+\]\[[^\]]+\]\[[^\]]*\]\[[^\]]*\]\[([^\]]+)\]/);
+  if (linuxMatch) {
+    const thread = linuxMatch[1];
+    return thread === '_:' ? '_' : thread;
+  }
+
+  // For iOS/macOS log format: detect app vs daemon format
+  // App format: [module:line] [thread] [process] - smaller numbers first
+  // Daemon format: [module:line] [process] [thread] - larger numbers first
+  const iosMacPattern = line.match(/\[[^:\]]+:\d+\]\s+\[(\d+)\]\s+\[(\d+)\]/);
+  if (iosMacPattern) {
+    const firstNum = parseInt(iosMacPattern[1]);
+    const secondNum = parseInt(iosMacPattern[2]);
+    
+    // Heuristic: if first number is much larger, it's daemon format [process] [thread]
+    // If second number is larger, it's app format [thread] [process]
+    if (firstNum > secondNum * 10) {
+      // Daemon format: [process] [thread]
+      return iosMacPattern[1]; // First number is process ID
+    } else {
+      // App format: [thread] [process]  
+      return iosMacPattern[2]; // Second number is process ID
+    }
+  }
+
+  // For other iOS/macOS log format: try to extract the second bracketed number as process ID
   // Pattern: [module:line] [thread] [process]
   const bracketNumbers = line.match(/\[(\d+)\]/g);
   if (bracketNumbers && bracketNumbers.length >= 2) {
@@ -159,10 +368,14 @@ export const normalizeTimestamp = (timestamp) => {
 export const parseLogLine = (line, lineNumber, logId) => {
   const timestamp = extractTimestamp(line);
   
+  // Use parseLogFormat to get properly extracted message and other fields
+  const parsedFormat = parseLogFormat(line);
+  const cleanMessage = parsedFormat?.message || line; // Fallback to full line if parsing fails
+  
   return {
     id: logId,
     raw: line,
-    message: line,
+    message: cleanMessage,
     timestamp: timestamp,
     level: extractLogLevel(line),
     module: extractModule(line),
@@ -209,45 +422,158 @@ export const parseLogContent = (content, headerLines = []) => {
 };
 
 /**
- * Parse Windows log format variations for detailed component extraction
- * @param {string} line - The Windows log line to parse
- * @returns {Object|null} - Parsed components or null if not a valid Windows format
+ * Parse different log format variations for detailed component extraction
+ * @param {string} line - The log line to parse
+ * @returns {Object|null} - Parsed components or null if not a recognized format
  */
-export const parseWindowsLogFormat = (line) => {
+export const parseLogFormat = (line) => {
+  // iOS/macOS format: date time [module:line] [thread] [process] message
+  const iosMatch = line.match(/^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}:\d{3})\s+\[([^\]]+)\]\s+\[(\d+)\]\s+\[(\d+)\]\s+(.*)$/);
+  if (iosMatch) {
+    const firstNum = parseInt(iosMatch[3]);
+    const secondNum = parseInt(iosMatch[4]);
+    
+    // Apply same daemon/app heuristic as in extractThread/extractProcess
+    // If first number is much larger, it's daemon format [process] [thread]
+    // If second number is larger, it's app format [thread] [process]
+    let threadId, processId;
+    if (firstNum > secondNum * 10) {
+      // Daemon format: [process] [thread]
+      processId = iosMatch[3];
+      threadId = iosMatch[4];
+    } else {
+      // App format: [thread] [process]
+      threadId = iosMatch[3];
+      processId = iosMatch[4];
+    }
+    
+    return {
+      format: 'ios-macos',
+      dateTime: iosMatch[1],
+      moduleInfo: iosMatch[2],
+      threadId: threadId,
+      processId: processId,
+      message: iosMatch[5]
+    };
+  }
+
   // Windows format variation 1: date time [level] [module] [process:thread] [function:line] [unknown] [unknown] [message]
-  const pattern1 = /^(\d{2}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([0-9A-Fa-f]+:[0-9A-Fa-f]+)\]\s+\[([^\]]+)\]\s+\[([^\]]*)\]\s+\[([^\]]*)\]\s+\[(.*)$/;
-  
-  let match = line.match(pattern1);
-  if (match) {
+  const windowsMatch1 = line.match(/^(\d{2}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([0-9A-Fa-f]+:[0-9A-Fa-f]+)\]\s+\[([^\]]+)\]\s+\[([^\]]*)\]\s+\[([^\]]*)\]\s+\[(.*)$/);
+  if (windowsMatch1) {
     return {
       format: 'windows-combined',
-      dateTime: match[1],
-      logLevel: match[2],
-      moduleName: match[3].trim(),
-      processThreadIds: match[4],
-      fileNameLine: match[5].trim(),
-      unknown1: match[6],
-      unknown2: match[7],
-      message: match[8]
+      dateTime: windowsMatch1[1],
+      logLevel: windowsMatch1[2],
+      moduleName: windowsMatch1[3].trim(),
+      processThreadIds: windowsMatch1[4],
+      fileNameLine: windowsMatch1[5].trim(),
+      unknown1: windowsMatch1[6],
+      unknown2: windowsMatch1[7],
+      message: windowsMatch1[8]
     };
   }
 
   // Windows format variation 2: [date time] [level] [module] [processId] [threadId] [file:line] message
-  const pattern2 = /^\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[(\d+)\]\s+\[(\d+)\]\s+\[([^\]]+)\]\s+(.*)$/;
-  
-  match = line.match(pattern2);
-  if (match) {
+  const windowsMatch2 = line.match(/^\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[(\d+)\]\s+\[(\d+)\]\s+\[([^\]]+)\]\s+(.*)$/);
+  if (windowsMatch2) {
     return {
       format: 'windows-separate',
-      dateTime: match[1],
-      logLevel: match[2],
-      moduleName: match[3].trim(),
-      processId: match[4],
-      threadId: match[5],
-      fileName: match[6],
-      message: match[7]
+      dateTime: windowsMatch2[1],
+      logLevel: windowsMatch2[2],
+      moduleName: windowsMatch2[3].trim(),
+      processId: windowsMatch2[4],
+      threadId: windowsMatch2[5],
+      fileName: windowsMatch2[6],
+      message: windowsMatch2[7]
+    };
+  }
+
+  // Windows format variation 3: [date time] [level] [module] [hexProcessId:hexThreadId] [function:line] [...] [...] message
+  const windowsHexMatch = line.match(/^\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([0-9A-Fa-f]+):([0-9A-Fa-f]+)\]\s+\[([^\]]+)\]\s+\[([^\]]*)\]\s+\[([^\]]*)\]\s+(.*)$/);
+  if (windowsHexMatch) {
+    return {
+      format: 'windows-hex',
+      dateTime: windowsHexMatch[1],
+      logLevel: windowsHexMatch[2],
+      moduleName: windowsHexMatch[3].trim(),
+      processId: windowsHexMatch[4], // Hex process ID
+      threadId: windowsHexMatch[5],  // Hex thread ID
+      fileName: windowsHexMatch[6],
+      unknown1: windowsHexMatch[7],
+      unknown2: windowsHexMatch[8],
+      message: windowsHexMatch[9]
+    };
+  }
+
+  // Linux format: date time [level][module][function:line][unknown][unknown][thread] message
+  const linuxMatch = line.match(/^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})\s+\[([DWIE])\]\[([^\]]+)\]\[([^\]]+)\]\[([^\]]*)\]\[([^\]]*)\]\[([^\]]+)\]\s+(.*)$/);
+  if (linuxMatch) {
+    return {
+      format: 'linux',
+      dateTime: linuxMatch[1],
+      logLevel: linuxMatch[2],
+      moduleName: linuxMatch[3].trim(),
+      functionLine: linuxMatch[4],
+      unknown1: linuxMatch[5],
+      unknown2: linuxMatch[6],
+      threadId: linuxMatch[7] === '_:' ? '' : linuxMatch[7],
+      message: linuxMatch[8]
+    };
+  }
+
+  // Android format: [date time] [thread] [module] - [level] - message
+  const androidMatch = line.match(/^\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+-\s+\[([DVWE])\]\s+-\s+(.*)$/);
+  if (androidMatch) {
+    return {
+      format: 'android',
+      dateTime: androidMatch[1],
+      threadId: androidMatch[2],
+      moduleName: androidMatch[3],
+      logLevel: androidMatch[4],
+      message: androidMatch[5]
+    };
+  }
+
+  // Android system log format: MM-dd HH:mm:ss.SSS  processId  threadId level module: message
+  const androidSystemMatch = line.match(/^(\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})\s+(\d+)\s+(\d+)\s+([DVIWEF])\s+([^:]+):\s+(.*)$/);
+  if (androidSystemMatch) {
+    return {
+      format: 'android-system',
+      dateTime: androidSystemMatch[1],
+      processId: androidSystemMatch[2],
+      threadId: androidSystemMatch[3],
+      logLevel: androidSystemMatch[4],
+      moduleName: androidSystemMatch[5].trim(),
+      message: androidSystemMatch[6]
+    };
+  }
+
+  // Chrome/Windows format: [processId:threadId:MMDD/HHMMSS.SSS:LEVEL:file.cc(line)] [optional timestamp] message
+  const chromeMatch = line.match(/^\[(\d+):(\d+):(\d{4})\/(\d{6}\.\d{3}):([A-Z]+):([^\]]+)\](?:\s+\[([^\]]+)\])?\s+(.*)$/);
+  if (chromeMatch) {
+    return {
+      format: 'chrome-windows',
+      processId: chromeMatch[1],
+      threadId: chromeMatch[2],
+      date: chromeMatch[3], // MMDD format
+      time: chromeMatch[4], // HHMMSS.SSS format
+      logLevel: chromeMatch[5],
+      fileName: chromeMatch[6],
+      optionalTimestamp: chromeMatch[7] || null,
+      message: chromeMatch[8]
     };
   }
 
   return null;
+};
+
+/**
+ * Parse Windows log format variations for detailed component extraction
+ * @param {string} line - The Windows log line to parse
+ * @returns {Object|null} - Parsed components or null if not a valid Windows format
+ * @deprecated Use parseLogFormat instead
+ */
+export const parseWindowsLogFormat = (line) => {
+  const result = parseLogFormat(line);
+  return result && result.format.startsWith('windows') ? result : null;
 };

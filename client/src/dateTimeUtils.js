@@ -26,6 +26,8 @@ export const CLEAN_PATTERNS = {
     DD_MM_YY_PREFIX: /^\d{2}\/\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3}\s*/,
     DD_MM_YYYY_PREFIX: /^\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}:\d{2}\.\d{3}\s*/,
     BRACKET_TIME: /^\[\d{2}\/\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2}\.\d+\]\s*/,
+    CHROME_METADATA: /^\[\d+:\d+:\d{4}\/\d{6}\.\d{3}:[A-Z]+:[^\]]+\](?:\s+\[[^\]]+\])?\s*/, // Remove Chrome format metadata
+    WINDOWS_METADATA: /^\[[\d\/]+\s[\d:.]+\]\s+\[[^\]]+\]\s+\[[^\]]+\]\s+\[\d+\]\s+\[\d+\]\s+/, // Remove Windows format metadata
     PID: /\[\d+\]\s*/,
     DOUBLE_BRACKET: /\[.*?\]\s*\[.*?\]\s*/,
     IOS_METADATA: /^.*?\s+0x[\da-fA-F]+\s+\w+\s+0x[\da-fA-F]+\s+\d+\s+\d+\s+(.+)$/,
@@ -50,6 +52,7 @@ export const extractTimestamp = (line) => {
         /(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}:\d{3})/,  // 2025-08-02 23:54:57:514
         /(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3,6})/,  // 2025-08-02 23:54:57.514 or .514123
         /(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})/,        // 2025-08-02 23:54:57 (fallback without ms)
+        /\[(\d{4}-[A-Za-z]{3}-\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})\]/,  // [2025-Jul-28 22:34:49.399] (Android format)
         /(\d{2}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})/,  // 19/08/25 08:38:58.203
         /(\d{2}\/\d{2}\/\d{4}\s\d{2}:\d{2}:\d{2}\.\d{3})/,  // 19/08/2025 08:38:58.203
         /(\d{2}:\d{2}:\d{2}:\d{3})/,                      // 23:54:57:514
@@ -136,6 +139,19 @@ export const parseTimestampToMs = (timestamp) => {
  */
 export const extractDateFromTimestamp = (timestamp) => {
     if (!timestamp) return null;
+
+    // Android format with month name: 2025-Jul-28
+    const androidMatch = timestamp.match(/(\d{4})-([A-Za-z]{3})-(\d{2})/);
+    if (androidMatch) {
+        const [, year, monthName, day] = androidMatch;
+        const months = {
+            'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
+            'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
+            'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+        };
+        const month = months[monthName] || monthName;
+        return `${year}-${month}-${day}`;
+    }
 
     // Try to extract date part from various timestamp formats:
     // 1. Standard ISO format: 2025-08-02

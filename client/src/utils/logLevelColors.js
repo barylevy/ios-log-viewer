@@ -8,6 +8,8 @@ export const cleanMessage = (message) => {
 
     // Remove timestamp prefixes using compiled patterns
     let cleaned = message
+        .replace(CLEAN_PATTERNS.CHROME_METADATA, '') // Remove Chrome format metadata first
+        .replace(CLEAN_PATTERNS.WINDOWS_METADATA, '') // Remove Windows format metadata
         .replace(CLEAN_PATTERNS.DATE_TIME_PREFIX, '') // Remove date-time prefix (YYYY-MM-DD HH:mm:ss)
         .replace(CLEAN_PATTERNS.DD_MM_YY_PREFIX, '') // Remove DD/MM/YY HH:mm:ss.SSS prefix
         .replace(CLEAN_PATTERNS.DD_MM_YYYY_PREFIX, '') // Remove DD/MM/YYYY HH:mm:ss.SSS prefix
@@ -57,8 +59,6 @@ export const getLevelBackgroundColor = (level) => {
             return 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 border-green-200 dark:border-green-700';
         case 'trace':
             return 'bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 border-gray-200 dark:border-gray-700';
-        case 'activity':
-            return 'bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200 border-indigo-200 dark:border-indigo-700';
         default:
             return 'bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 border-gray-200 dark:border-gray-700';
     }
@@ -77,8 +77,6 @@ export const getLevelButtonColor = (level) => {
             return 'bg-green-500 hover:bg-green-600 text-white';
         case 'trace':
             return 'bg-gray-500 hover:bg-gray-600 text-white';
-        case 'activity':
-            return 'bg-indigo-500 hover:bg-indigo-600 text-white';
         default:
             return 'bg-orange-500 hover:bg-orange-600 text-white'; // Default orange for unknown levels
     }
