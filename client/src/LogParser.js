@@ -453,13 +453,20 @@ export const parseLogFormat = (line) => {
       processId = iosMatch[4];
     }
     
+    // Extract log level if it's a standalone letter at the start of the message
+    const messageWithLevel = iosMatch[5];
+    const logLevelMatch = messageWithLevel.match(/^\s*([DIWEVT])\s+/);
+    const logLevel = logLevelMatch ? logLevelMatch[1] : null;
+    const cleanMessage = logLevelMatch ? messageWithLevel.replace(/^\s*[DIWEVT]\s+/, '') : messageWithLevel;
+    
     return {
       format: 'ios-macos',
       dateTime: iosMatch[1],
       moduleInfo: iosMatch[2].trim(),
       threadId: threadId,
       processId: processId,
-      message: iosMatch[5]
+      logLevel: logLevel,
+      message: cleanMessage
     };
   }
 
@@ -494,7 +501,22 @@ export const parseLogFormat = (line) => {
     };
   }
 
-  // Windows format variation 3: [date time] [level] [module] [hexProcessId:hexThreadId] [function:line] [...] [...] message
+  // Windows format variation 3a: [date time] [level] [module] [hexProcessId:hexThreadId] [function:line] message (simpler format)
+  const windowsHexSimple = line.match(/^\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([0-9A-Fa-f]+):([0-9A-Fa-f]+)\]\s+\[([^\]]+)\]\s+(.*)$/);
+  if (windowsHexSimple) {
+    return {
+      format: 'windows-hex',
+      dateTime: windowsHexSimple[1],
+      logLevel: windowsHexSimple[2],
+      moduleName: windowsHexSimple[3].trim(),
+      processId: windowsHexSimple[4], // Hex process ID
+      threadId: windowsHexSimple[5],  // Hex thread ID
+      fileName: windowsHexSimple[6],
+      message: windowsHexSimple[7]
+    };
+  }
+
+  // Windows format variation 3b: [date time] [level] [module] [hexProcessId:hexThreadId] [function:line] [...] [...] message (with extra brackets)
   const windowsHexMatch = line.match(/^\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([0-9A-Fa-f]+):([0-9A-Fa-f]+)\]\s+\[([^\]]+)\]\s+\[([^\]]*)\]\s+\[([^\]]*)\]\s+(.*)$/);
   if (windowsHexMatch) {
     return {
