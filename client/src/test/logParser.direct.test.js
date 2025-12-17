@@ -200,7 +200,7 @@ function parseTestData(fileName) {
 
 describe('LogParser Direct Tests with LogRecordsTests Data', () => {
   describe('Mac/iOS Log Parsing', () => {
-    const testData = parseTestData('mac_test_logs.test_log');
+    const testData = parseTestData('mac_test_logs.log');
 
     test.each(testData)('should parse Mac/iOS log line correctly: %s', (logLine, expected) => {
       const rawResult = parseLogFormat(logLine);
@@ -210,7 +210,7 @@ describe('LogParser Direct Tests with LogRecordsTests Data', () => {
   });
 
   describe('Windows Log Parsing', () => {
-    const testData = parseTestData('windows_test_logs.test_log');
+    const testData = parseTestData('windows_test_logs.log');
 
     test.each(testData)('should parse Windows log line correctly: %s', (logLine, expected) => {
       const rawResult = parseLogFormat(logLine);
@@ -220,7 +220,7 @@ describe('LogParser Direct Tests with LogRecordsTests Data', () => {
   });
 
   describe('Android Log Parsing', () => {
-    const testData = parseTestData('android_test_logs.test_log');
+    const testData = parseTestData('android_test_logs.log');
 
     test.each(testData)('should parse Android log line correctly: %s', (logLine, expected) => {
       const rawResult = parseLogFormat(logLine);
@@ -230,7 +230,7 @@ describe('LogParser Direct Tests with LogRecordsTests Data', () => {
   });
 
   describe('Linux Log Parsing', () => {
-    const testData = parseTestData('linux_test_logs.test_log');
+    const testData = parseTestData('linux_test_logs.log');
 
     test.each(testData)('should parse Linux log line correctly: %s', (logLine, expected) => {
       const rawResult = parseLogFormat(logLine);
