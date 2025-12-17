@@ -36,6 +36,14 @@ const LogViewer = () => {
   // Pivot time tracking
   const [pivotLog, setPivotLog] = useState(null);
   const [hoveredLog, setHoveredLog] = useState(null);
+  const [lastHoveredLog, setLastHoveredLog] = useState(null);
+
+  // Update lastHoveredLog whenever hoveredLog changes to a non-null value
+  useEffect(() => {
+    if (hoveredLog) {
+      setLastHoveredLog(hoveredLog);
+    }
+  }, [hoveredLog]);
 
   // Utility function to parse timestamp to milliseconds
   const parseTimestampToMs = useCallback((timestamp) => {
@@ -96,14 +104,17 @@ const LogViewer = () => {
   const currentPivotGap = useMemo(() => {
     if (!pivotLog) return null;
 
-    if (hoveredLog) {
-      // Show gap to hovered log
-      return calculatePivotGap(pivotLog.timestamp, hoveredLog.timestamp);
+    // Use current hovered log if available, otherwise use last hovered log
+    const logToCompare = hoveredLog || lastHoveredLog;
+    
+    if (logToCompare) {
+      // Show gap to hovered or last hovered log
+      return calculatePivotGap(pivotLog.timestamp, logToCompare.timestamp);
     } else {
       // Show that pivot is set (no specific gap)
       return "Set";
     }
-  }, [pivotLog, hoveredLog, calculatePivotGap]);
+  }, [pivotLog, hoveredLog, lastHoveredLog, calculatePivotGap]);
 
   // Pivot control functions
   const setPivotTime = useCallback((log) => {
@@ -516,7 +527,7 @@ const LogViewer = () => {
         highlightLog={highlightLog}
       />
     );
-  }, [hasUserInteracted, files.length, filteredLogs, handleLogClick, highlightedLogId, filters]);
+  }, [hasUserInteracted, files.length, filteredLogs, handleLogClick, highlightedLogId, filters, pivotLog, setPivotTime, clearPivotTime, stickyLogs, addStickyLog, highlightLog, setSearchPos, setSearchTotal, updateFilters, setHoveredLog]);
 
   // Remove old currentFileHeaders logic - now using headerState
 
