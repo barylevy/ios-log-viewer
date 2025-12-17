@@ -260,13 +260,13 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
         'W': 'warning', 
         'I': 'info',
         'D': 'debug',
-        'T': 'trace',
-        'V': 'debug', // Android verbose maps to debug
+        'T': 'verbose',
+        'V': 'verbose', // Android verbose maps to verbose
         'F': 'error'  // Android fatal maps to error
       };
       
       const normalizedLevel = levelMap[log.level.toUpperCase()] || log.level.toLowerCase();
-      if (['error', 'warning', 'info', 'debug', 'trace'].includes(normalizedLevel)) {
+      if (['error', 'warning', 'info', 'debug', 'verbose'].includes(normalizedLevel)) {
         return normalizedLevel;
       }
     }
@@ -286,7 +286,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
     warning: 'text-yellow-600 dark:text-yellow-500',
     info: 'text-blue-600 dark:text-blue-400',
     debug: 'text-green-600 dark:text-green-400',
-    trace: 'text-purple-600 dark:text-purple-400'
+    verbose: 'text-purple-600 dark:text-purple-400'
   }[logLevel];
 
   // Handle right-click context menu

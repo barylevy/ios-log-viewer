@@ -5,7 +5,7 @@ export const LOG_LEVEL_MATRIX = [
     ['warning', '[Warning]', ' W ', '[W]', '[warn]', 'WARNING:', 'Warning:'],
     ['info', '[Info]', ' I ', '[I]', 'INFO:', 'Info:'],
     ['debug', '[Debug]', ' D ', '[D]', 'DEBUG:', 'Debug:'],
-    ['trace', '[Trace]', ' T ', '[T]', '[verbose]']
+    ['verbose', '[Verbose]', ' V ', '[V]', '[T]', '[Trace]', 'VERBOSE:', 'Verbose:']
 ];
 
 // Cato Networks Brand Colors
