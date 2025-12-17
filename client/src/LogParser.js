@@ -456,7 +456,7 @@ export const parseLogFormat = (line) => {
     return {
       format: 'ios-macos',
       dateTime: iosMatch[1],
-      moduleInfo: iosMatch[2],
+      moduleInfo: iosMatch[2].trim(),
       threadId: threadId,
       processId: processId,
       message: iosMatch[5]
