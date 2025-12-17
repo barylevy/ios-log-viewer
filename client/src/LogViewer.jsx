@@ -580,6 +580,7 @@ const LogViewer = () => {
                   searchMatchCount={searchMatchCount}
                   searchMatchPos={searchPos}
                   pivotGap={currentPivotGap}
+                  pivotLineNumber={pivotLog?.lineNumber}
                   stickyLogs={stickyLogs}
                   onRemoveStickyLog={removeStickyLog}
                   onClearAllStickyLogs={clearAllStickyLogs}

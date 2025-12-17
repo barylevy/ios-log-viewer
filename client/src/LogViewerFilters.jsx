@@ -31,7 +31,7 @@ const FILTER_TOOLTIP = `Advanced Filtering Guide:
 
 • Works with log level and context line filters`;
 
-const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCount, searchMatchCount, searchMatchPos, pivotGap, stickyLogs, onRemoveStickyLog, onClearAllStickyLogs, onScrollToLog }) => {
+const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCount, searchMatchCount, searchMatchPos, pivotGap, pivotLineNumber, stickyLogs, onRemoveStickyLog, onClearAllStickyLogs, onScrollToLog }) => {
   const [isLevelDropdownOpen, setIsLevelDropdownOpen] = useState(false);
   const [isFilterHistoryOpen, setIsFilterHistoryOpen] = useState(false);
   const [isSearchHistoryOpen, setIsSearchHistoryOpen] = useState(false);
@@ -578,7 +578,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
       {/* Pivot Gap Display */}
       {pivotGap && (
         <span className="text-gray-400 dark:text-gray-500 opacity-75">
-          Pivot Log Line: {pivotGap}
+          Pivot Log Line: #{pivotLineNumber} - {pivotGap}
         </span>
       )}
 
