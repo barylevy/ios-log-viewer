@@ -534,7 +534,7 @@ export const parseLogFormat = (line) => {
       format: 'android',
       dateTime: androidMatch[1],
       threadId: androidMatch[2],
-      moduleName: androidMatch[3],
+      moduleName: androidMatch[3].trim(),
       logLevel: androidMatch[4],
       message: androidMatch[5]
     };
