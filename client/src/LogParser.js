@@ -24,6 +24,12 @@ export const extractLogLevel = (line) => {
     return windowsMatch[1]; // Return original format like "I", "W", "ERROR"
   }
 
+  // Mac/iOS format: timestamp [module:line] [Level] [t:thread] [p:process]
+  const macMatch = line.match(/\]\s+\[([DIWEVT])\]\s+\[t:/);
+  if (macMatch) {
+    return macMatch[1]; // Return original format like "D", "I", "W", "E"
+  }
+
   // Android format: [date] [thread] [module] - [Level] - message
   const androidMatch = line.match(/\]\s+-\s+\[([DVWE])\]\s+-/);
   if (androidMatch) {
