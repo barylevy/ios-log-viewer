@@ -1112,9 +1112,9 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
                 </svg>
               </button>
 
-              {/* Current Date */}
+              {/* Current Date - Show targetNavigationDate if navigating, otherwise currentStickyDate */}
               <span className="text-xs text-gray-700 dark:text-gray-300">
-                {currentStickyDate}
+                {targetNavigationDate || currentStickyDate}
               </span>
 
               {/* Next Date Button */}
