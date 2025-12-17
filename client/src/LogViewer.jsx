@@ -48,8 +48,15 @@ const LogViewer = () => {
         return new Date(timestamp).getTime();
       } else if (timestamp.includes('-') && timestamp.includes(' ')) {
         // Format: 2025-08-02 23:54:57:514
-        const cleanTimestamp = timestamp.replace(/:\d{3}$/, ''); // Remove milliseconds
-        return new Date(cleanTimestamp.replace(' ', 'T')).getTime();
+        // Parse with milliseconds support
+        const match = timestamp.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})(?::(\d{3}))?/);
+        if (match) {
+          const [, date, time, ms] = match;
+          const isoString = `${date}T${time}`;
+          const baseMs = new Date(isoString).getTime();
+          const milliseconds = ms ? parseInt(ms, 10) : 0;
+          return baseMs + milliseconds;
+        }
       } else if (timestamp.match(/^\d{2}:\d{2}:\d{2}/)) {
         // Time only: 23:54:57 - use today's date
         const today = new Date().toISOString().split('T')[0];
@@ -75,11 +82,13 @@ const LogViewer = () => {
     const hours = Math.floor((totalSeconds % (24 * 3600)) / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
+    const milliseconds = diffMs % 1000;
 
+    // Always show with milliseconds precision
     if (days > 0) {
-      return `${String(days).padStart(2, '0')} Days, ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+      return `${String(days).padStart(2, '0')} Days, ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`;
     } else {
-      return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+      return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`;
     }
   }, [parseTimestampToMs]);
 
