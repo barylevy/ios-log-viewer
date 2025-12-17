@@ -498,6 +498,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
   // Refs for each item element to allow focus
   const itemRefs = useRef({});
   const [currentStickyDate, setCurrentStickyDate] = useState(null);
+  const [targetNavigationDate, setTargetNavigationDate] = useState(null);
   // Search navigation state
   const [currentMatchIndex, setCurrentMatchIndex] = useState(-1);
   // Shared context menu state for all log items
@@ -1028,9 +1029,11 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
 
   // Find current date index for navigation
   const currentDateIndex = useMemo(() => {
-    if (!currentStickyDate || !allDates.length) return -1;
-    return allDates.indexOf(currentStickyDate);
-  }, [currentStickyDate, allDates]);
+    // Use targetNavigationDate if we're in the middle of navigation
+    const dateToUse = targetNavigationDate || currentStickyDate;
+    if (!dateToUse || !allDates.length) return -1;
+    return allDates.indexOf(dateToUse);
+  }, [targetNavigationDate, currentStickyDate, allDates]);
 
   // Navigation functions
   const scrollToDate = useCallback((targetDate) => {
@@ -1050,6 +1053,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
   const goToPreviousDate = useCallback(() => {
     if (currentDateIndex > 0) {
       const prevDate = allDates[currentDateIndex - 1];
+      setTargetNavigationDate(prevDate);
       scrollToDate(prevDate);
     }
   }, [currentDateIndex, allDates, scrollToDate]);
@@ -1057,6 +1061,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
   const goToNextDate = useCallback(() => {
     if (currentDateIndex < allDates.length - 1) {
       const nextDate = allDates[currentDateIndex + 1];
+      setTargetNavigationDate(nextDate);
       scrollToDate(nextDate);
     }
   }, [currentDateIndex, allDates, scrollToDate]);
@@ -1068,9 +1073,13 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
       const firstVisibleLog = flatLogs[range.startIndex];
       if (firstVisibleLog?.date) {
         setCurrentStickyDate(firstVisibleLog.date);
+        // Clear target navigation date once we've scrolled to the target
+        if (targetNavigationDate === firstVisibleLog.date) {
+          setTargetNavigationDate(null);
+        }
       }
     }
-  }, [flatLogs]);
+  }, [flatLogs, targetNavigationDate]);
 
   // Early return AFTER all hooks have been called
   if (!logs || logs.length === 0) {
