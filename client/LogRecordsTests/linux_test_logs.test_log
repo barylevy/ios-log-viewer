@@ -1,0 +1,185 @@
+# Linux Log Test Samples
+# Various formats found in Linux cato-clientd logs
+
+# Standard Linux format: YYYY-MM-DD HH:MM:SS [Level][Module][Function:Line][Field1][Field2][Thread] Message
+# Linux Log Test Samples with Expected Parse Results
+# Various formats found in Linux cato-clientd logs
+
+# Standard Linux format: YYYY-MM-DD HH:MM:SS [Level][Module][Function:Line][Field1][Field2][Thread] Message
+2025-08-04 11:18:00 [I][client  ][log_client_version                 : 1716][:][:][_:] --------------------------------------
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "I", "FileName": "log_client_version", "Line": "1716", "Module": "client"}
+
+2025-08-04 11:18:00 [I][client  ][log_client_version                 : 1718][:][:][_:] client:  5.5.0.2620 [34a42e447e] - Jul  6 2025, 10:32:53 pbs:[be90267a]
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "I", "FileName": "log_client_version", "Line": "1718", "Module": "client"}
+
+2025-08-04 11:18:00 [I][client  ][log_client_version                 : 1719][:][:][_:] openssl: OpenSSL 3.3.0 9 Apr 2024, platform: linux-aarch64
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "I", "FileName": "log_client_version", "Line": "1719", "Module": "client"}
+
+2025-08-04 11:18:00 [I][client  ][log_client_version                 : 1720][:][:][_:] --------------------------------------
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "I", "FileName": "log_client_version", "Line": "1720", "Module": "client"}
+
+# Linux debug logs with signal handling
+2025-08-04 11:18:00 [D][client  ][setup_signal                       :  107][:][:][_:] setting sigaction for signal 1...
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "D", "FileName": "setup_signal", "Line": "107", "Module": "client"}
+
+2025-08-04 11:18:00 [D][client  ][setup_signal                       :  107][:][:][_:] setting sigaction for signal 2...
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "D", "FileName": "setup_signal", "Line": "107", "Module": "client"}
+
+2025-08-04 11:18:00 [D][client  ][setup_signal                       :  107][:][:][_:] setting sigaction for signal 15...
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "D", "FileName": "setup_signal", "Line": "107", "Module": "client"}
+
+2025-08-04 11:18:00 [D][client  ][setup_signal                       :  107][:][:][_:] setting sigaction for signal 10...
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "D", "FileName": "setup_signal", "Line": "107", "Module": "client"}
+
+# Linux SSL and network initialization
+2025-08-04 11:18:00 [I][ssl     ][cato_ssl_init                      :  153][:][:][_:] init ssl
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "I", "FileName": "cato_ssl_init", "Line": "153", "Module": "ssl"}
+
+2025-08-04 11:18:00 [D][network_][cato_dns_init                      :   31][:][:][_:] ares_library_init succeeded
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "D", "FileName": "cato_dns_init", "Line": "31", "Module": "network_"}
+
+# Linux telemetry logs
+2025-08-04 11:18:00 [I][telemetr][init_notifications                 :  171][:][:][_:] Notifications size 2
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "I", "FileName": "init_notifications", "Line": "171", "Module": "telemetr"}
+
+2025-08-04 11:18:00 [D][telemetr][telemetry_init                     :  151][:][:][_:] telemetry_init: telemetry initialized
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "D", "FileName": "telemetry_init", "Line": "151", "Module": "telemetr"}
+
+2025-08-04 11:18:00 [D][telemetr][telemetry_on_process_init          : 1291][:][:][_:] telemetry_on_process_init
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "D", "FileName": "telemetry_on_process_init", "Line": "1291", "Module": "telemetr"}
+
+2025-08-04 11:18:00 [I][telemetr][telemetry_handle_event_with_extra_d:  510][:][:][_:] >>>>>>> telemetry state changed: UNKNOWN -> DISCONNECTED_IDLE
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "I", "FileName": "telemetry_handle_event_with_extra_d", "Line": "510", "Module": "telemetr"}
+
+# Linux configuration and log levels
+2025-08-04 11:18:00 [D][client  ][load_ld_config                     :  178][:][:][_:] no log configuration file, using defaults
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "D", "FileName": "load_ld_config", "Line": "178", "Module": "client"}
+
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  209][:][:][_:] log levels:
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "D", "FileName": "print_ld_levels", "Line": "209", "Module": "client"}
+
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] catoloop = 1
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "D", "FileName": "print_ld_levels", "Line": "212", "Module": "client"}
+
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] catocert = 0
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "D", "FileName": "print_ld_levels", "Line": "212", "Module": "client"}
+
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] tdtserv = 2
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "D", "FileName": "print_ld_levels", "Line": "212", "Module": "client"}
+
+# Linux warning logs
+2025-08-04 11:18:00 [W][catoos  ][posture_setup_proc                 :  728][:][:][_:] posture_setup_proc
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "W", "FileName": "posture_setup_proc", "Line": "728", "Module": "catoos"}
+
+# Linux API logs
+2025-08-04 11:18:00 [I][catoapi ][cato_dev_posture_setup             :  178][:][:][_:] cato_dev_posture_setup
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "I", "FileName": "cato_dev_posture_setup", "Line": "178", "Module": "catoapi"}
+
+# Linux module logging with various components
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] network_dns = 1
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "D", "FileName": "print_ld_levels", "Line": "212", "Module": "client"}
+
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] tnls_dp = 2
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "D", "FileName": "print_ld_levels", "Line": "212", "Module": "client"}
+
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] tnlss = 1
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "D", "FileName": "print_ld_levels", "Line": "212", "Module": "client"}
+
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] ua = 2
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "D", "FileName": "print_ld_levels", "Line": "212", "Module": "client"}
+
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] settings = 1
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "D", "FileName": "print_ld_levels", "Line": "212", "Module": "client"}
+
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] network = 1
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "D", "FileName": "print_ld_levels", "Line": "212", "Module": "client"}
+
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] steering = 1
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "D", "FileName": "print_ld_levels", "Line": "212", "Module": "client"}
+
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] tunnel = 1
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "D", "FileName": "print_ld_levels", "Line": "212", "Module": "client"}
+
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] telemetry = 1
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "D", "FileName": "print_ld_levels", "Line": "212", "Module": "client"}
+
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] posture = 1
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "D", "FileName": "print_ld_levels", "Line": "212", "Module": "client"}
+
+# Linux SSL and security logs
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] ssl_data = 1
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "D", "FileName": "print_ld_levels", "Line": "212", "Module": "client"}
+
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] ssl = 2
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "D", "FileName": "print_ld_levels", "Line": "212", "Module": "client"}
+
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] gcfg = 1
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "D", "FileName": "print_ld_levels", "Line": "212", "Module": "client"}
+
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] catoapi = 1
+{"Date": "2025-08-04", "Time": "11:18:00", "ProcessId": null, "ThreadID": "_", "logLevel": "D", "FileName": "print_ld_levels", "Line": "212", "Module": "client"}
+
+# Linux error logs
+2025-08-04 11:18:05 [E][client  ][connection_failed                  :  445][:][:][_:] Connection failed: timeout after 30 seconds
+{"Date": "2025-08-04", "Time": "11:18:05", "ProcessId": null, "ThreadID": "_", "logLevel": "E", "FileName": "connection_failed", "Line": "445", "Module": "client"}
+
+2025-08-04 11:18:05 [E][ssl     ][ssl_handshake_error                :  892][:][:][_:] SSL handshake failed: certificate verification error
+{"Date": "2025-08-04", "Time": "11:18:05", "ProcessId": null, "ThreadID": "_", "logLevel": "E", "FileName": "ssl_handshake_error", "Line": "892", "Module": "ssl"}
+
+2025-08-04 11:18:05 [W][network ][dns_resolution_failed              :  334][:][:][_:] DNS resolution failed for hostname: gateway.cato.com
+{"Date": "2025-08-04", "Time": "11:18:05", "ProcessId": null, "ThreadID": "_", "logLevel": "W", "FileName": "dns_resolution_failed", "Line": "334", "Module": "network"}
+2025-08-04 11:18:00 [I][client  ][log_client_version                 : 1718][:][:][_:] client:  5.5.0.2620 [34a42e447e] - Jul  6 2025, 10:32:53 pbs:[be90267a]
+2025-08-04 11:18:00 [I][client  ][log_client_version                 : 1719][:][:][_:] openssl: OpenSSL 3.3.0 9 Apr 2024, platform: linux-aarch64
+2025-08-04 11:18:00 [I][client  ][log_client_version                 : 1720][:][:][_:] --------------------------------------
+
+# Linux debug logs with signal handling
+2025-08-04 11:18:00 [D][client  ][setup_signal                       :  107][:][:][_:] setting sigaction for signal 1...
+2025-08-04 11:18:00 [D][client  ][setup_signal                       :  107][:][:][_:] setting sigaction for signal 2...
+2025-08-04 11:18:00 [D][client  ][setup_signal                       :  107][:][:][_:] setting sigaction for signal 15...
+2025-08-04 11:18:00 [D][client  ][setup_signal                       :  107][:][:][_:] setting sigaction for signal 10...
+
+# Linux SSL and network initialization
+2025-08-04 11:18:00 [I][ssl     ][cato_ssl_init                      :  153][:][:][_:] init ssl
+2025-08-04 11:18:00 [D][network_][cato_dns_init                      :   31][:][:][_:] ares_library_init succeeded
+
+# Linux telemetry logs
+2025-08-04 11:18:00 [I][telemetr][init_notifications                 :  171][:][:][_:] Notifications size 2
+2025-08-04 11:18:00 [D][telemetr][telemetry_init                     :  151][:][:][_:] telemetry_init: telemetry initialized
+2025-08-04 11:18:00 [D][telemetr][telemetry_on_process_init          : 1291][:][:][_:] telemetry_on_process_init
+2025-08-04 11:18:00 [I][telemetr][telemetry_handle_event_with_extra_d:  510][:][:][_:] >>>>>>> telemetry state changed: UNKNOWN -> DISCONNECTED_IDLE
+
+# Linux configuration and log levels
+2025-08-04 11:18:00 [D][client  ][load_ld_config                     :  178][:][:][_:] no log configuration file, using defaults
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  209][:][:][_:] log levels:
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] catoloop = 1
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] catocert = 0
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] tdtserv = 2
+
+# Linux warning logs
+2025-08-04 11:18:00 [W][catoos  ][posture_setup_proc                 :  728][:][:][_:] posture_setup_proc
+
+# Linux API logs
+2025-08-04 11:18:00 [I][catoapi ][cato_dev_posture_setup             :  178][:][:][_:] cato_dev_posture_setup
+
+# Linux module logging with various components
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] network_dns = 1
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] tnls_dp = 2
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] tnlss = 1
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] ua = 2
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] settings = 1
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] network = 1
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] steering = 1
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] tunnel = 1
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] telemetry = 1
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] posture = 1
+
+# Linux SSL and security logs
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] ssl_data = 1
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] ssl = 2
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] gcfg = 1
+2025-08-04 11:18:00 [D][client  ][print_ld_levels                    :  212][:][:][_:] catoapi = 1
+
+# Linux error logs
+2025-08-04 11:18:05 [E][client  ][connection_failed                  :  445][:][:][_:] Connection failed: timeout after 30 seconds
+2025-08-04 11:18:05 [E][ssl     ][ssl_handshake_error                :  892][:][:][_:] SSL handshake failed: certificate verification error
+2025-08-04 11:18:05 [W][network ][dns_resolution_failed              :  334][:][:][_:] DNS resolution failed for hostname: gateway.cato.com

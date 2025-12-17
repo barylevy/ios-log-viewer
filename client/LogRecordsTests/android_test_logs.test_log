@@ -1,0 +1,111 @@
+# Android Log Test Samples with Expected Parse Results
+# Various formats found in Android application and system logs
+
+# Standard Android app format: [YYYY-MMM-DD HH:MM:SS.SSS] [Thread] [Module] - [Level] - Message
+[2025-Jul-28 22:34:49.399] [main           ] [cato                     ] - [D] - * set local Constants *
+{"Date": "2025-Jul-28", "Time": "22:34:49.399", "ProcessId": null, "ThreadID": "main", "logLevel": "D", "FileName": null, "Line": null, "Module": "cato"}
+
+[2025-Jul-28 22:34:49.403] [main           ] [cato                     ] - [D] - -------------------------------------------------
+{"Date": "2025-Jul-28", "Time": "22:34:49.403", "ProcessId": null, "ThreadID": "main", "logLevel": "D", "FileName": null, "Line": null, "Module": "cato"}
+
+[2025-Jul-28 22:34:49.406] [main           ] [CatoSettings             ] - [D] - setting LOG_HISTORY to false
+{"Date": "2025-Jul-28", "Time": "22:34:49.406", "ProcessId": null, "ThreadID": "main", "logLevel": "D", "FileName": null, "Line": null, "Module": "CatoSettings"}
+
+[2025-Jul-28 22:34:49.406] [main           ] [CatoSettings             ] - [D] - setting CAPTIVE_PORTAL_DETECTION to true
+{"Date": "2025-Jul-28", "Time": "22:34:49.406", "ProcessId": null, "ThreadID": "main", "logLevel": "D", "FileName": null, "Line": null, "Module": "CatoSettings"}
+
+[2025-Jul-28 22:34:49.406] [main           ] [CatoSettings             ] - [D] - setting DISPLAY_OVER_APPS to true
+{"Date": "2025-Jul-28", "Time": "22:34:49.406", "ProcessId": null, "ThreadID": "main", "logLevel": "D", "FileName": null, "Line": null, "Module": "CatoSettings"}
+
+# Android activity lifecycle logs
+[2025-Jul-28 22:34:49.546] [main           ] [SelectorActivity         ] - [D] - *** onResume selector activity ***
+{"Date": "2025-Jul-28", "Time": "22:34:49.546", "ProcessId": null, "ThreadID": "main", "logLevel": "D", "FileName": null, "Line": null, "Module": "SelectorActivity"}
+
+[2025-Jul-28 22:34:49.569] [main           ] [SelectorActivity         ] - [D] - *** onPause ***
+{"Date": "2025-Jul-28", "Time": "22:34:49.569", "ProcessId": null, "ThreadID": "main", "logLevel": "D", "FileName": null, "Line": null, "Module": "SelectorActivity"}
+
+[2025-Jul-28 22:34:49.608] [main           ] [HomeContainerFragment    ] - [D] - *** onAttach ***
+{"Date": "2025-Jul-28", "Time": "22:34:49.608", "ProcessId": null, "ThreadID": "main", "logLevel": "D", "FileName": null, "Line": null, "Module": "HomeContainerFragment"}
+
+[2025-Jul-28 22:34:49.608] [main           ] [HomeContainerFragment    ] - [D] - *** onCreate ***
+{"Date": "2025-Jul-28", "Time": "22:34:49.608", "ProcessId": null, "ThreadID": "main", "logLevel": "D", "FileName": null, "Line": null, "Module": "HomeContainerFragment"}
+
+[2025-Jul-28 22:34:49.609] [main           ] [HomeMainFragment         ] - [D] - *** onAttach ***
+{"Date": "2025-Jul-28", "Time": "22:34:49.609", "ProcessId": null, "ThreadID": "main", "logLevel": "D", "FileName": null, "Line": null, "Module": "HomeMainFragment"}
+
+# Android service logs
+[2025-Jul-28 22:34:49.735] [main           ] [CatoVpnService           ] - [D] - setting connState to 0
+{"Date": "2025-Jul-28", "Time": "22:34:49.735", "ProcessId": null, "ThreadID": "main", "logLevel": "D", "FileName": null, "Line": null, "Module": "CatoVpnService"}
+
+[2025-Jul-28 22:34:49.735] [main           ] [SigninLoader             ] - [I] - call start Service from createSetMessengerIntent from sign in loader
+{"Date": "2025-Jul-28", "Time": "22:34:49.735", "ProcessId": null, "ThreadID": "main", "logLevel": "I", "FileName": null, "Line": null, "Module": "SigninLoader"}
+
+[2025-Jul-28 22:34:49.786] [main           ] [CatoVpnService           ] - [D] - *** onCreate ***
+{"Date": "2025-Jul-28", "Time": "22:34:49.786", "ProcessId": null, "ThreadID": "main", "logLevel": "D", "FileName": null, "Line": null, "Module": "CatoVpnService"}
+
+[2025-Jul-28 22:34:49.808] [main           ] [CatoVpnService           ] - [D] - Hello from JNI !  Compiled with ABI arm64-v8a.
+{"Date": "2025-Jul-28", "Time": "22:34:49.808", "ProcessId": null, "ThreadID": "main", "logLevel": "D", "FileName": null, "Line": null, "Module": "CatoVpnService"}
+
+# Android threading logs
+[2025-Jul-28 22:34:49.826] [cato_h_thread  ] [CatoVpnService           ] - [D] - handling message in cato service handler
+{"Date": "2025-Jul-28", "Time": "22:34:49.826", "ProcessId": null, "ThreadID": "cato_h_thread", "logLevel": "D", "FileName": null, "Line": null, "Module": "CatoVpnService"}
+
+[2025-Jul-28 22:34:49.823] [main           ] [CatoVpnService           ] - [D] - setting messenger "SIGNIN_LOADER_MSNGR_1"
+{"Date": "2025-Jul-28", "Time": "22:34:49.823", "ProcessId": null, "ThreadID": "main", "logLevel": "D", "FileName": null, "Line": null, "Module": "CatoVpnService"}
+
+# Android system logs format: MM-DD HH:MM:SS.SSS PID TID Level Tag: Message
+07-12 03:47:27.277  5121  5190 I DisplayManager: Choreographer implicitly registered for the refresh rate.
+{"Date": "07-12", "Time": "03:47:27.277", "ProcessId": "5121", "ThreadID": "5190", "logLevel": "I", "FileName": null, "Line": null, "Module": "DisplayManager"}
+
+07-12 03:47:36.581  5121  5121 D InsetsController: Setting requestedVisibleTypes to -1 (was -9)
+{"Date": "07-12", "Time": "03:47:36.581", "ProcessId": "5121", "ThreadID": "5121", "logLevel": "D", "FileName": null, "Line": null, "Module": "InsetsController"}
+
+07-12 04:09:40.355  6399  6426 I DisplayManager: Choreographer implicitly registered for the refresh rate.
+{"Date": "07-12", "Time": "04:09:40.355", "ProcessId": "6399", "ThreadID": "6426", "logLevel": "I", "FileName": null, "Line": null, "Module": "DisplayManager"}
+
+07-12 04:09:59.806  6399  6399 D ActivityThread: Package [com.android.vending] reported as REPLACED, but missing application info.
+{"Date": "07-12", "Time": "04:09:59.806", "ProcessId": "6399", "ThreadID": "6399", "logLevel": "D", "FileName": null, "Line": null, "Module": "ActivityThread"}
+
+# Android debug/crash logs
+07-28 12:47:13.603 13148 13362 F libc    : Fatal signal 11 (SIGSEGV), code 1 (SEGV_MAPERR), fault addr 0x0 in tid 13362 (conn_thread)
+{"Date": "07-28", "Time": "12:47:13.603", "ProcessId": "13148", "ThreadID": "13362", "logLevel": "F", "FileName": null, "Line": null, "Module": "libc"}
+
+07-28 12:47:14.023 13380 13380 F DEBUG   : *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
+{"Date": "07-28", "Time": "12:47:14.023", "ProcessId": "13380", "ThreadID": "13380", "logLevel": "F", "FileName": null, "Line": null, "Module": "DEBUG"}
+
+07-28 12:47:14.024 13380 13380 F DEBUG   : Build fingerprint: 'google/sdk_gphone64_arm64/emu64a:16/BP22.250325.006/13344233:user/release-keys'
+{"Date": "07-28", "Time": "12:47:14.024", "ProcessId": "13380", "ThreadID": "13380", "logLevel": "F", "FileName": null, "Line": null, "Module": "DEBUG"}
+
+07-28 12:47:14.024 13380 13380 F DEBUG   : Cmdline: com.catonetworks.vpnclient.debug
+{"Date": "07-28", "Time": "12:47:14.024", "ProcessId": "13380", "ThreadID": "13380", "logLevel": "F", "FileName": null, "Line": null, "Module": "DEBUG"}
+
+07-28 12:47:14.024 13380 13380 F DEBUG   : pid: 13148, tid: 13362, name: conn_thread  >>> com.catonetworks.vpnclient.debug <<<
+{"Date": "07-28", "Time": "12:47:14.024", "ProcessId": "13380", "ThreadID": "13380", "logLevel": "F", "FileName": null, "Line": null, "Module": "DEBUG"}
+
+# Android version and status logs
+[2025-Jul-28 22:34:49.742] [main           ] [VersionController        ] - [I] - current version=5.2.0.124-debug, new version=4.0.0.74
+{"Date": "2025-Jul-28", "Time": "22:34:49.742", "ProcessId": null, "ThreadID": "main", "logLevel": "I", "FileName": null, "Line": null, "Module": "VersionController"}
+
+[2025-Jul-28 22:34:49.743] [main           ] [VersionController        ] - [D] - no newer version! The published version is older than the current version!
+{"Date": "2025-Jul-28", "Time": "22:34:49.743", "ProcessId": null, "ThreadID": "main", "logLevel": "D", "FileName": null, "Line": null, "Module": "VersionController"}
+
+[2025-Jul-28 22:34:49.744] [main           ] [LoginManager             ] - [D] - setStatus: 0
+{"Date": "2025-Jul-28", "Time": "22:34:49.744", "ProcessId": null, "ThreadID": "main", "logLevel": "D", "FileName": null, "Line": null, "Module": "LoginManager"}
+
+# Android verbose logs
+[2025-Jul-28 22:34:49.608] [main           ] [HomeContainerFragment    ] - [V] - no saved instance
+{"Date": "2025-Jul-28", "Time": "22:34:49.608", "ProcessId": null, "ThreadID": "main", "logLevel": "V", "FileName": null, "Line": null, "Module": "HomeContainerFragment"}
+
+[2025-Jul-28 22:34:49.822] [main           ] [CatoVpnService           ] - [V] - onStartCommand intent=catovpnservice.setmessenger, id=1
+{"Date": "2025-Jul-28", "Time": "22:34:49.822", "ProcessId": null, "ThreadID": "main", "logLevel": "V", "FileName": null, "Line": null, "Module": "CatoVpnService"}
+
+# Android warning logs
+[2025-Jul-28 22:34:50.892] [main           ] [NetworkSecurityConfig    ] - [W] - Network security config: No Network Security Config specified, using platform default
+{"Date": "2025-Jul-28", "Time": "22:34:50.892", "ProcessId": null, "ThreadID": "main", "logLevel": "W", "FileName": null, "Line": null, "Module": "NetworkSecurityConfig"}
+
+# Android error logs
+[2025-Jul-28 22:35:15.445] [main           ] [CatoVpnService           ] - [E] - Failed to connect to tunnel server
+{"Date": "2025-Jul-28", "Time": "22:35:15.445", "ProcessId": null, "ThreadID": "main", "logLevel": "E", "FileName": null, "Line": null, "Module": "CatoVpnService"}
+
+[2025-Jul-28 22:35:15.446] [main           ] [ConnectionManager        ] - [E] - Connection timeout after 30 seconds
+{"Date": "2025-Jul-28", "Time": "22:35:15.446", "ProcessId": null, "ThreadID": "main", "logLevel": "E", "FileName": null, "Line": null, "Module": "ConnectionManager"}

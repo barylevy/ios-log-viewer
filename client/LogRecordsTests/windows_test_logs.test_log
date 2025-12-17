@@ -1,0 +1,101 @@
+# Windows Log Test Samples with Expected Parse Results
+# Various formats found in Windows application logs
+
+# Standard Windows format: [MM/DD/YY HH:MM:SS.SSS] [Level] [Module] [ProcessID] [ThreadID] [File:Line] Message
+[08/31/25 16:27:00.072] [I] [main      ] [22840] [10636] [DEMModule.cpp:156] DeviceID [7744074422038765289] Version:[5.17.3.8236]
+{"Date": "08/31/25", "Time": "16:27:00.072", "ProcessId": "22840", "ThreadID": "10636", "logLevel": "I", "FileName": "DEMModule.cpp", "Line": "156", "Module": "main"}
+
+[08/31/25 16:27:00.072] [I] [main      ] [22840] [10636] [DEMModule.cpp:180] DEMModule::start: _spm_enabled=true
+{"Date": "08/31/25", "Time": "16:27:00.072", "ProcessId": "22840", "ThreadID": "10636", "logLevel": "I", "FileName": "DEMModule.cpp", "Line": "180", "Module": "main"}
+
+[08/31/25 16:27:00.072] [I] [main      ] [22840] [10636] [DEMModule.cpp:489] createConfigFetcher: Done
+{"Date": "08/31/25", "Time": "16:27:00.072", "ProcessId": "22840", "ThreadID": "10636", "logLevel": "I", "FileName": "DEMModule.cpp", "Line": "489", "Module": "main"}
+
+[08/31/25 16:27:00.102] [I] [main      ] [22840] [10636] [DEMModule.cpp:194] Running loop tid: 27184
+{"Date": "08/31/25", "Time": "16:27:00.102", "ProcessId": "22840", "ThreadID": "10636", "logLevel": "I", "FileName": "DEMModule.cpp", "Line": "194", "Module": "main"}
+
+[09/01/25 09:27:31.052] [I] [main      ] [22840] [28760] [DEMModule.cpp:239] update state[in_office]; conf interval[30]
+{"Date": "09/01/25", "Time": "09:27:31.052", "ProcessId": "22840", "ThreadID": "28760", "logLevel": "I", "FileName": "DEMModule.cpp", "Line": "239", "Module": "main"}
+
+# Windows communication logs
+[09/01/25 09:27:31.181] [I] [comm      ] [22840] [27184] [catodCommConfig.cpp:110] catod get config(/office_info): OK (200)
+{"Date": "09/01/25", "Time": "09:27:31.181", "ProcessId": "22840", "ThreadID": "27184", "logLevel": "I", "FileName": "catodCommConfig.cpp", "Line": "110", "Module": "comm"}
+
+[09/01/25 09:27:31.181] [I] [comm      ] [22840] [27184] [catodCommConfig.cpp:50] office info: account_id[42]; user_id[optional(1000944)]
+{"Date": "09/01/25", "Time": "09:27:31.181", "ProcessId": "22840", "ThreadID": "27184", "logLevel": "I", "FileName": "catodCommConfig.cpp", "Line": "50", "Module": "comm"}
+
+[09/01/25 09:27:31.226] [I] [comm      ] [22840] [27184] [catodCommConfig.cpp:110] catod get config(/dem_configuration.json): OK (200)
+{"Date": "09/01/25", "Time": "09:27:31.226", "ProcessId": "22840", "ThreadID": "27184", "logLevel": "I", "FileName": "catodCommConfig.cpp", "Line": "110", "Module": "comm"}
+
+# Windows hardware logs
+[09/01/25 09:27:31.226] [I] [hrdw      ] [22840] [27184] [HWMetricAction.cpp:175] Set identification: 42 1000944 1000000070
+{"Date": "09/01/25", "Time": "09:27:31.226", "ProcessId": "22840", "ThreadID": "27184", "logLevel": "I", "FileName": "HWMetricAction.cpp", "Line": "175", "Module": "hrdw"}
+
+[09/01/25 09:27:31.226] [I] [main      ] [22840] [27184] [DEMModule.cpp:711] creating HW collector task
+{"Date": "09/01/25", "Time": "09:27:31.226", "ProcessId": "22840", "ThreadID": "27184", "logLevel": "I", "FileName": "DEMModule.cpp", "Line": "711", "Module": "main"}
+
+[09/01/25 09:27:31.226] [I] [main      ] [22840] [27184] [DEMModule.cpp:716] Starting HW Collector
+{"Date": "09/01/25", "Time": "09:27:31.226", "ProcessId": "22840", "ThreadID": "27184", "logLevel": "I", "FileName": "DEMModule.cpp", "Line": "716", "Module": "main"}
+
+# Windows probe logs
+[09/01/25 09:27:32.259] [W] [prob      ] [22840] [27184] [DEMModule.cpp:389] skip pop probe creation - invalid state
+{"Date": "09/01/25", "Time": "09:27:32.259", "ProcessId": "22840", "ThreadID": "27184", "logLevel": "W", "FileName": "DEMModule.cpp", "Line": "389", "Module": "prob"}
+
+[09/01/25 09:27:32.261] [I] [prob      ] [22840] [27184] [DEMModule.cpp:777] host: "10.20.0.254"
+{"Date": "09/01/25", "Time": "09:27:32.261", "ProcessId": "22840", "ThreadID": "27184", "logLevel": "I", "FileName": "DEMModule.cpp", "Line": "777", "Module": "prob"}
+
+# Chrome/Windows format: [ProcessID:ThreadID:MMDD/HHMMSS.SSS:LEVEL:file.cc(line)] [Optional timestamp] Message
+[25572:26172:0831/192716.223:ERROR:google_update_settings.cc(265)] Failed opening key Software\Chromium to set usagestats; result: 5
+{"Date": "08/31", "Time": "19:27:16.223", "ProcessId": "25572", "ThreadID": "26172", "logLevel": "ERROR", "FileName": "google_update_settings.cc", "Line": "265", "Module": null}
+
+[25572:21228:0831/192716.301:WARNING:account_consistency_mode_manager.cc(72)] Desktop Identity Consistency cannot be enabled as no OAuth client ID
+{"Date": "08/31", "Time": "19:27:16.301", "ProcessId": "25572", "ThreadID": "21228", "logLevel": "WARNING", "FileName": "account_consistency_mode_manager.cc", "Line": "72", "Module": null}
+
+[25572:21228:0831/192716.584:ERROR:device_event_log_impl.cc(202)] [19:27:16.584] Display: display_layout.cc:556 PlacementList must be sorted by first 8 bits of display_id
+{"Date": "08/31", "Time": "19:27:16.584", "ProcessId": "25572", "ThreadID": "21228", "logLevel": "ERROR", "FileName": "device_event_log_impl.cc", "Line": "202", "Module": null}
+
+[20564:21096:0831/192716.943:ERROR:viz_main_impl.cc(183)] Exiting GPU process due to errors during initialization
+{"Date": "08/31", "Time": "19:27:16.943", "ProcessId": "20564", "ThreadID": "21096", "logLevel": "ERROR", "FileName": "viz_main_impl.cc", "Line": "183", "Module": null}
+
+[25596:19552:0831/192717.956:ERROR:gpu_channel_manager.cc(962)] Failed to create GLES3 context, fallback to GLES2.
+{"Date": "08/31", "Time": "19:27:17.956", "ProcessId": "25596", "ThreadID": "19552", "logLevel": "ERROR", "FileName": "gpu_channel_manager.cc", "Line": "962", "Module": null}
+
+# Chrome DNS and config errors
+[25572:26172:0831/211702.560:ERROR:dns_config_service.cc(273)] DNS config watch failed.
+{"Date": "08/31", "Time": "21:17:02.560", "ProcessId": "25572", "ThreadID": "26172", "logLevel": "ERROR", "FileName": "dns_config_service.cc", "Line": "273", "Module": null}
+
+[10120:15100:0831/211702.560:ERROR:dns_config_service.cc(273)] DNS config watch failed.
+{"Date": "08/31", "Time": "21:17:02.560", "ProcessId": "10120", "ThreadID": "15100", "logLevel": "ERROR", "FileName": "dns_config_service.cc", "Line": "273", "Module": null}
+
+[25572:1360:0831/222329.030:WARNING:dns_config_service_win.cc(605)] Failed to read DnsConfig.
+{"Date": "08/31", "Time": "22:23:29.030", "ProcessId": "25572", "ThreadID": "1360", "logLevel": "WARNING", "FileName": "dns_config_service_win.cc", "Line": "605", "Module": null}
+
+[10120:15100:0831/222329.045:WARNING:dns_config_service_win.cc(605)] Failed to read DnsConfig.
+{"Date": "08/31", "Time": "22:23:29.045", "ProcessId": "10120", "ThreadID": "15100", "logLevel": "WARNING", "FileName": "dns_config_service_win.cc", "Line": "605", "Module": null}
+
+# Chrome display and USB errors
+[25572:21228:0901/075808.289:ERROR:device_event_log_impl.cc(202)] [07:58:08.289] Display: display_layout.cc:556 PlacementList must be sorted by first 8 bits of display_id
+{"Date": "09/01", "Time": "07:58:08.289", "ProcessId": "25572", "ThreadID": "21228", "logLevel": "ERROR", "FileName": "device_event_log_impl.cc", "Line": "202", "Module": null}
+
+[25572:21228:0901/075811.606:ERROR:device_event_log_impl.cc(202)] [07:58:11.605] USB: usb_service_win.cc:105 SetupDiGetDeviceProperty failed: Element not found. (0x490)
+{"Date": "09/01", "Time": "07:58:11.606", "ProcessId": "25572", "ThreadID": "21228", "logLevel": "ERROR", "FileName": "device_event_log_impl.cc", "Line": "202", "Module": null}
+
+[25572:21228:0901/075812.100:ERROR:device_event_log_impl.cc(202)] [07:58:12.097] USB: usb_service_win.cc:105 SetupDiGetDeviceProperty failed: Element not found. (0x490)
+{"Date": "09/01", "Time": "07:58:12.100", "ProcessId": "25572", "ThreadID": "21228", "logLevel": "ERROR", "FileName": "device_event_log_impl.cc", "Line": "202", "Module": null}
+
+# Windows hex process/thread IDs
+[29/06/25 10:32:49.408] [W] [TunnelCfg ] [150C:2878] [getConfig                          :  227] [:] [:] [getConfig: No valid tunnelless configuration. Return val: 78
+{"Date": "29/06/25", "Time": "10:32:49.408", "ProcessId": "150C", "ThreadID": "2878", "logLevel": "W", "FileName": "getConfig", "Line": "227", "Module": "TunnelCfg"}
+
+[29/06/25 10:32:49.408] [I] [main      ] [150C:2878] [DEMModule.cpp:45] Bad addr family: 0
+{"Date": "29/06/25", "Time": "10:32:49.408", "ProcessId": "150C", "ThreadID": "2878", "logLevel": "I", "FileName": "DEMModule.cpp", "Line": "45", "Module": "main"}
+
+[29/06/25 10:32:49.409] [E] [comm      ] [150C:2878] [catodCommConfig.cpp:47] Connection timeout occurred
+{"Date": "29/06/25", "Time": "10:32:49.409", "ProcessId": "150C", "ThreadID": "2878", "logLevel": "E", "FileName": "catodCommConfig.cpp", "Line": "47", "Module": "comm"}
+
+# Windows with different date formats
+[10/31/24 06:46:06.772] [I] [comm      ] [6572] [9068] [catodCommConfig.cpp:47] office info: account_id[8519]; user_id[optional(1000000)]
+{"Date": "10/31/24", "Time": "06:46:06.772", "ProcessId": "6572", "ThreadID": "9068", "logLevel": "I", "FileName": "catodCommConfig.cpp", "Line": "47", "Module": "comm"}
+
+[10/31/24 06:43:36.452] [W] [main      ] [6572] [9528] [DEMModule.cpp:45] Bad addr family: 0
+{"Date": "10/31/24", "Time": "06:43:36.452", "ProcessId": "6572", "ThreadID": "9528", "logLevel": "W", "FileName": "DEMModule.cpp", "Line": "45", "Module": "main"}

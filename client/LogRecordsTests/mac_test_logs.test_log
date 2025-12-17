@@ -1,0 +1,91 @@
+# Mac/iOS Log Test Samples with Expected Parse Results
+# Various formats found in Mac application and daemon logs
+
+# Standard Mac app format: timestamp [module:line] [thread] [process] message
+2025-08-04 07:10:36:859 [AppDelegate:694] [6381] [759] Sleep listener: Application woke up
+{"Date": "2025-08-04", "Time": "07:10:36:859", "ProcessId": "759", "ThreadID": "6381", "logLevel": null, "FileName": "AppDelegate", "Line": "694", "Module": "AppDelegate"}
+
+2025-08-04 07:10:36:859 [CNSharedManager+macOS:1118] [6381] [759] vpnStatusDidChange: same state as current state: (Disconnected), ignore
+{"Date": "2025-08-04", "Time": "07:10:36:859", "ProcessId": "759", "ThreadID": "6381", "logLevel": null, "FileName": "CNSharedManager+macOS", "Line": "1118", "Module": "CNSharedManager+macOS"}
+
+2025-08-04 07:12:40:996 [ConnectionViewModel:154] [6381] [759] connectionState didSet:connecting
+{"Date": "2025-08-04", "Time": "07:12:40:996", "ProcessId": "759", "ThreadID": "6381", "logLevel": null, "FileName": "ConnectionViewModel", "Line": "154", "Module": "ConnectionViewModel"}
+
+2025-08-04 07:12:40:996 [ConnectionViewModel:394] [6381] [759] vpnStatus (/substatus) changed, from: Disconnected, to: Connecting
+{"Date": "2025-08-04", "Time": "07:12:40:996", "ProcessId": "759", "ThreadID": "6381", "logLevel": null, "FileName": "ConnectionViewModel", "Line": "394", "Module": "ConnectionViewModel"}
+
+2025-08-04 07:12:40:997 [CNSharedManager+macOS:1135] [6381] [759] vpnStatusDidChange: Connecting
+{"Date": "2025-08-04", "Time": "07:12:40:997", "ProcessId": "759", "ThreadID": "6381", "logLevel": null, "FileName": "CNSharedManager+macOS", "Line": "1135", "Module": "CNSharedManager+macOS"}
+
+# Mac daemon format: timestamp [module:line] [process] [thread] message
+2025-08-04 07:14:30:419 [DaemonCommands:592] [304996] [540] at XPC listener
+{"Date": "2025-08-04", "Time": "07:14:30:419", "ProcessId": "304996", "ThreadID": "540", "logLevel": null, "FileName": "DaemonCommands", "Line": "592", "Module": "DaemonCommands"}
+
+2025-08-04 07:14:30:435 [DaemonCommands:597] [304996] [540] XPC listener: validation succeeded
+{"Date": "2025-08-04", "Time": "07:14:30:435", "ProcessId": "304996", "ThreadID": "540", "logLevel": null, "FileName": "DaemonCommands", "Line": "597", "Module": "DaemonCommands"}
+
+2025-08-04 07:14:30:435 [DaemonCommands:516] [304996] [540] at getDevicePosturePB
+{"Date": "2025-08-04", "Time": "07:14:30:435", "ProcessId": "304996", "ThreadID": "540", "logLevel": null, "FileName": "DaemonCommands", "Line": "516", "Module": "DaemonCommands"}
+
+2025-08-04 07:14:30:436 [DevicePostureManager:124] [306627] [540] DevicePostureManager getDevicePostureCheck ------>
+{"Date": "2025-08-04", "Time": "07:14:30:436", "ProcessId": "306627", "ThreadID": "540", "logLevel": null, "FileName": "DevicePostureManager", "Line": "124", "Module": "DevicePostureManager"}
+
+# Mac system log format with cato-ios_logger
+2025-08-04 07:14:30:436 [cato_dev_posture_run:984] [306627] [540] I catoapi: cato_dev_posture_run...
+{"Date": "2025-08-04", "Time": "07:14:30:436", "ProcessId": "306627", "ThreadID": "540", "logLevel": "I", "FileName": "cato_dev_posture_run", "Line": "984", "Module": "cato_dev_posture_run"}
+
+2025-08-04 07:14:30:437 [cato_dev_posture_run:1026] [306627] [540]  D posture: posture products: 18446744073709551615
+{"Date": "2025-08-04", "Time": "07:14:30:437", "ProcessId": "306627", "ThreadID": "540", "logLevel": "D", "FileName": "cato_dev_posture_run", "Line": "1026", "Module": "cato_dev_posture_run"}
+
+2025-08-04 07:14:30:437 [cato-ios_logger:81] [306627] [540]  E posture: Failed to get domain data - uninitialized cb
+{"Date": "2025-08-04", "Time": "07:14:30:437", "ProcessId": "306627", "ThreadID": "540", "logLevel": "E", "FileName": "cato-ios_logger", "Line": "81", "Module": "cato-ios_logger"}
+
+# Mac log with complex module names
+2025-08-04 07:12:47:940 [IPCConnection:74] [6381] [759] Mach service name is: CKGSB8CH43.com.catonetworks.mac.CatoClient.CatoClientSysExtension.5173
+{"Date": "2025-08-04", "Time": "07:12:47:940", "ProcessId": "759", "ThreadID": "6381", "logLevel": null, "FileName": "IPCConnection", "Line": "74", "Module": "IPCConnection"}
+
+2025-08-04 07:12:47:941 [IPCConnection:115] [6381] [759] register: Mach Service Name: CKGSB8CH43.com.catonetworks.mac.CatoClient.CatoClientSysExtension.5173
+{"Date": "2025-08-04", "Time": "07:12:47:941", "ProcessId": "759", "ThreadID": "6381", "logLevel": null, "FileName": "IPCConnection", "Line": "115", "Module": "IPCConnection"}
+
+2025-08-04 07:14:36:501 [CNBlacklistingManager:245] [6381] [759] deleteRealmBlacklistUser: failed deleting realm - user: bsevilla@navan.com.navan not exists
+{"Date": "2025-08-04", "Time": "07:14:36:501", "ProcessId": "759", "ThreadID": "6381", "logLevel": null, "FileName": "CNBlacklistingManager", "Line": "245", "Module": "CNBlacklistingManager"}
+
+# Mac log with authentication info
+2025-08-04 07:14:29:864 [CNVpnConfManager:812] [300015] [759] at getToken (containing app)
+{"Date": "2025-08-04", "Time": "07:14:29:864", "ProcessId": "300015", "ThreadID": "759", "logLevel": null, "FileName": "CNVpnConfManager", "Line": "812", "Module": "CNVpnConfManager"}
+
+2025-08-04 07:14:29:867 [AuthenticationCredentialsProvider:166] [300015] [759] getData: success
+{"Date": "2025-08-04", "Time": "07:14:29:867", "ProcessId": "759", "ThreadID": "300015", "logLevel": null, "FileName": "AuthenticationCredentialsProvider", "Line": "166", "Module": "AuthenticationCredentialsProvider"}
+
+2025-08-04 07:14:36:207 [AuthenticationCredentialsProvider:36] [305524] [759] save password
+{"Date": "2025-08-04", "Time": "07:14:36:207", "ProcessId": "759", "ThreadID": "305524", "logLevel": null, "FileName": "AuthenticationCredentialsProvider", "Line": "36", "Module": "AuthenticationCredentialsProvider"}
+
+2025-08-04 07:14:36:211 [AuthenticationCredentialsProvider:104] [305524] [759] savePassword: data was updated successfully
+{"Date": "2025-08-04", "Time": "07:14:36:211", "ProcessId": "759", "ThreadID": "305524", "logLevel": null, "FileName": "AuthenticationCredentialsProvider", "Line": "104", "Module": "AuthenticationCredentialsProvider"}
+
+# Mac log with network information
+2025-08-04 07:14:36:518 [HardwareMetricsManager:93] [6381] [759] DEM using gateway IP: 10.0.1.1
+{"Date": "2025-08-04", "Time": "07:14:36:518", "ProcessId": "759", "ThreadID": "6381", "logLevel": null, "FileName": "HardwareMetricsManager", "Line": "93", "Module": "HardwareMetricsManager"}
+
+2025-08-04 07:14:36:518 [HardwareMetricsManager:242] [6381] [759] DEM found utun4 with IPv4 Address: 172.31.63.184
+{"Date": "2025-08-04", "Time": "07:14:36:518", "ProcessId": "6381", "ThreadID": "759", "logLevel": null, "FileName": "HardwareMetricsManager", "Line": "242", "Module": "HardwareMetricsManager"}
+
+2025-08-04 07:14:36:519 [ConnectionViewModel:152] [6381] [759] connectionState didSet:connected, subtitle:alwaysOnActivated
+{"Date": "2025-08-04", "Time": "07:14:36:519", "ProcessId": "6381", "ThreadID": "759", "logLevel": null, "FileName": "ConnectionViewModel", "Line": "152", "Module": "ConnectionViewModel"}
+
+# Mac log with error handling
+2025-08-04 07:13:16:691 [CNSharedManager+macOS:121] [6381] [759] connectionError msg recieved: Connection error. Trying to reconnect...
+{"Date": "2025-08-04", "Time": "07:13:16:691", "ProcessId": "6381", "ThreadID": "759", "logLevel": null, "FileName": "CNSharedManager+macOS", "Line": "121", "Module": "CNSharedManager+macOS"}
+
+2025-08-04 07:13:16:691 [CNSharedManager+macOS:125] [6381] [759] Error: got message: Connection error. Trying to reconnect...
+{"Date": "2025-08-04", "Time": "07:13:16:691", "ProcessId": "6381", "ThreadID": "759", "logLevel": null, "FileName": "CNSharedManager+macOS", "Line": "125", "Module": "CNSharedManager+macOS"}
+
+# Mac log with state changes
+2025-08-04 07:14:29:708 [CNSharedManager+macOS:93] [6381] [759] connectingState msg recieved: connected
+{"Date": "2025-08-04", "Time": "07:14:29:708", "ProcessId": "6381", "ThreadID": "759", "logLevel": null, "FileName": "CNSharedManager+macOS", "Line": "93", "Module": "CNSharedManager+macOS"}
+
+2025-08-04 07:14:29:708 [CNSharedManager+macOS:97] [6381] [759] set state as connected
+{"Date": "2025-08-04", "Time": "07:14:29:708", "ProcessId": "6381", "ThreadID": "759", "logLevel": null, "FileName": "CNSharedManager+macOS", "Line": "97", "Module": "CNSharedManager+macOS"}
+
+2025-08-04 07:14:36:499 [CNSharedManager+macOS:152] [6381] [759] * got notification from extension:tunnelBecameAuth*
+{"Date": "2025-08-04", "Time": "07:14:36:499", "ProcessId": "6381", "ThreadID": "759", "logLevel": null, "FileName": "CNSharedManager+macOS", "Line": "152", "Module": "CNSharedManager+macOS"}
