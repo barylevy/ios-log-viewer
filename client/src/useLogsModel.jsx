@@ -511,9 +511,22 @@ const useLogsModel = () => {
           if (!matchesAnyInclude) return;
         }
       }
-      // Log level filter - support multiple levels
-      if (!filters.logLevel.includes('all') && !filters.logLevel.includes(log.level)) {
-        return;
+      
+      // Log level filter - support multiple levels using LOG_LEVEL_MATRIX
+      if (!filters.logLevel.includes('all')) {
+        if (!log.level) return; // Skip logs without a level
+        
+        // Find which normalized level this log belongs to using LOG_LEVEL_MATRIX
+        const normalizedLogLevel = LOG_LEVEL_MATRIX.find(levelGroup => 
+          levelGroup.some(variant => 
+            variant.toLowerCase().trim() === log.level.toLowerCase().trim()
+          )
+        )?.[0]; // Get the first element (normalized name) from the matching group
+        
+        // Check if the normalized log level matches any selected filter
+        if (!normalizedLogLevel || !filters.logLevel.includes(normalizedLogLevel)) {
+          return;
+        }
       }
 
       // This log matches all filters
