@@ -392,14 +392,16 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
   return (
     <>
       <div
-        className={`border-b border-gray-100 dark:border-gray-800 px-3 py-1.5 cursor-pointer transition-colors ${log.isContextLine
+        className={`border-b border-gray-100 dark:border-gray-800 px-3 py-1.5 cursor-pointer transition-colors ${hasSticky ? 'font-bold' : ''} ${log.isContextLine
           ? 'bg-gray-50 dark:bg-gray-800 opacity-75'
           : index % 2 === 1
             ? 'bg-gray-50 dark:bg-gray-800'
             : 'bg-white dark:bg-gray-900'
-          } ${pivotLog && pivotLog.id === log.id ? 'ring-2 ring-orange-400 dark:ring-orange-500' : ''}`}
+          } ${pivotLog && pivotLog.id === log.id ? 'ring-2 ring-orange-400 dark:ring-orange-500' : ''} ${hasSticky ? 'ring-2 ring-blue-400 dark:ring-blue-500' : ''}`}
         style={{
-          backgroundColor: pivotLog && pivotLog.id === log.id
+          backgroundColor: hasSticky
+            ? (document.documentElement.classList.contains('dark') ? '#854D0E' : '#FEF9C3')
+            : pivotLog && pivotLog.id === log.id
             ? (document.documentElement.classList.contains('dark') ? '#EA580C' : '#FED7AA')
             : isHighlighted
               ? (document.documentElement.classList.contains('dark') ? CATO_COLORS.DARK_HIGHLIGHT_BG : CATO_COLORS.LIGHT_HIGHLIGHT_BG)
@@ -408,7 +410,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
                 : undefined,
         }}
         onMouseEnter={(e) => {
-          if (!isHighlighted && !isSelected && !(pivotLog && pivotLog.id === log.id)) {
+          if (!isHighlighted && !isSelected && !(pivotLog && pivotLog.id === log.id) && !hasSticky) {
             // Check if dark mode is active
             const isDarkMode = document.documentElement.classList.contains('dark');
             e.currentTarget.style.backgroundColor = isDarkMode ? CATO_COLORS.PRIMARY_DARK : CATO_COLORS.LIGHT_BG;
@@ -416,8 +418,8 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
           onHover(log);
         }}
         onMouseLeave={(e) => {
-          // Always reset inline styles on mouse leave unless it's a pivot log
-          if (!(pivotLog && pivotLog.id === log.id)) {
+          // Always reset inline styles on mouse leave unless it's a pivot log or sticky log
+          if (!(pivotLog && pivotLog.id === log.id) && !hasSticky) {
             e.currentTarget.style.backgroundColor = '';
           }
           onHover(null);
