@@ -118,6 +118,30 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
     setShowDropdown(false);
   };
 
+  const handleClearCache = () => {
+    // Get API key before clearing (to preserve it)
+    const apiKey = localStorage.getItem('openai_api_key');
+    
+    // Clear all localStorage
+    localStorage.clear();
+    
+    // Restore API key if it existed
+    if (apiKey) {
+      localStorage.setItem('openai_api_key', apiKey);
+    }
+    
+    // Restore theme preference
+    localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
+    
+    setShowDropdown(false);
+    
+    // Show confirmation
+    alert('Cache cleared successfully! The page will reload.');
+    
+    // Reload the page to reset all state
+    window.location.reload();
+  };
+
   const handleOpenAIChatNewWindow = () => {
     if (currentLogs && currentFileName) {
       openAIChatInNewWindow(currentLogs, currentFileName);
@@ -278,6 +302,12 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
                     className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   >
                     AI Config
+                  </button>
+                  <button
+                    onClick={handleClearCache}
+                    className="block w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                  >
+                    Clear Cache
                   </button>
                   <div className="border-t border-gray-200 dark:border-gray-600 my-1"></div>
                   <button
