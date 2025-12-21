@@ -203,7 +203,6 @@ const LogViewer = () => {
   // Watch for when logs are restored and switch to the pending active file
   useEffect(() => {
     if (pendingActiveFileId && allFileLogs[pendingActiveFileId]) {
-      console.log(`Logs now available for pending active file: ${pendingActiveFileId}, switching...`);
       switchToFile(pendingActiveFileId);
       setPendingActiveFileId(null);
       setIsRestoringSession(false);
@@ -217,13 +216,8 @@ const LogViewer = () => {
       const session = await loadSession();
       
       if (session && session.files && session.files.length > 0) {
-        console.log('Restoring session with', session.files.length, 'files');
-        console.log('Restoring active tab index:', session.activeFileIndex);
-        console.log('Session allFileLogs keys:', session.allFileLogs ? Object.keys(session.allFileLogs) : 'none');
-        
         // Restore UI state first
         const restoredActiveIndex = session.activeFileIndex || 0;
-        console.log(`Setting activeFileIndex to: ${restoredActiveIndex} (total files: ${session.files.length})`);
         setFiles(session.files);
         setActiveFileIndex(restoredActiveIndex);
         setShowingCombinedView(session.showingCombinedView || false);
@@ -233,24 +227,20 @@ const LogViewer = () => {
         if (session.allFileLogs) {
           // First, restore all logs
           Object.entries(session.allFileLogs).forEach(([fileId, logs]) => {
-            console.log(`Restoring ${logs.length} logs for file: ${fileId}`);
             setLogsForFile(fileId, logs);
           });
           
           // Set the pending active file - the useEffect above will switch to it once logs are available
           const activeFile = session.files[restoredActiveIndex];
           if (activeFile) {
-            console.log(`Setting pending active file: ${activeFile.id}`);
             setPendingActiveFileId(activeFile.id);
           } else {
-            console.log('No active file found');
             setIsRestoringSession(false);
           }
         } else {
           setIsRestoringSession(false);
         }
       } else {
-        console.log('No session found to restore');
         setIsRestoringSession(false);
       }
     };
@@ -278,10 +268,6 @@ const LogViewer = () => {
           }
         });
         
-        const logsCount = Object.keys(logsToSave).length;
-        const totalLogs = Object.values(logsToSave).reduce((sum, logs) => sum + logs.length, 0);
-        console.log(`Saving session with ${filesToSave.length} files, ${logsCount} log sets, ${totalLogs} total logs`);
-        console.log('Files to save:', filesToSave.map(f => f.id));
         
         saveSession({
           files: filesToSave,
@@ -377,7 +363,6 @@ const LogViewer = () => {
   }, [logs, files, activeFileIndex, getCurrentFileHeaders]);
 
   const handleFileSelect = useCallback((index) => {
-    console.log(`User selected tab at index: ${index}`);
     setActiveFileIndex(index);
     setShowingCombinedView(false);
 
@@ -397,7 +382,7 @@ const LogViewer = () => {
     // Clean up stored logs for the closed file first
     if (fileToClose) {
       removeLogsForFile(fileToClose.id);
-      console.log(`Removed logs for closed file: ${fileToClose.id}`);
+
     }
 
     setFiles(prev => {
@@ -425,7 +410,6 @@ const LogViewer = () => {
             allFileLogs: logsToSave
           });
         } else {
-          console.log('All files closed - clearing session');
           clearSession();
         }
       }, 50);

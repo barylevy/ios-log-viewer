@@ -56,25 +56,20 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
   };
 
   const handleFilesSelected = (event) => {
-    console.debug('handleFilesSelected triggered');
     const files = Array.from(event.target.files);
-    console.debug('Files selected:', files);
 
     // Sort files by name before loading
     const sortedFiles = files.sort((a, b) => a.name.localeCompare(b.name));
 
     // Load all files
     sortedFiles.forEach(file => {
-      console.debug('Loading file:', file.name);
       onFileLoad(file);
     });
     event.target.value = '';
   };
 
   const handleDirectorySelected = (event) => {
-    console.debug('handleDirectorySelected triggered');
     const files = Array.from(event.target.files);
-    console.debug('Directory files selected:', files);
 
     // Clear previous files when loading new directory
     if (onClearTabs) {
@@ -86,7 +81,6 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
 
     // Load all files
     sortedFiles.forEach(file => {
-      console.debug('Loading file:', file.name);
       onFileLoad(file);
     });
     event.target.value = '';
