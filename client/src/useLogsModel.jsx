@@ -722,6 +722,15 @@ const useLogsModel = () => {
     setHighlightedLogId(null);
   }, [allFileLogs, allFileFilters]);
 
+  // Remove logs for a specific file (when closing a tab)
+  const removeLogsForFile = useCallback((fileName) => {
+    setAllFileLogs(prev => {
+      const newLogs = { ...prev };
+      delete newLogs[fileName];
+      return newLogs;
+    });
+  }, []);
+
   // Clear all saved filters from localStorage
   const clearSavedFilters = useCallback(() => {
     try {
@@ -788,6 +797,7 @@ const useLogsModel = () => {
     getCurrentFileHeaders,
     setLogsForFile,
     switchToFile,
+    removeLogsForFile,
     clearSavedFilters,
     getFileDisplayName,
     addStickyLog,

@@ -4,6 +4,7 @@ import AboutModal from './AboutModal';
 import AIConfigSettings from './Settings';
 import { CATO_COLORS } from './constants';
 import { openAIChatInNewWindow, openAIChatInNewTab } from './utils/aiChatUtils';
+import { clearSession } from './utils/sessionStorage';
 
 const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, currentFileHeaders, onClearTabs, currentLogs, currentFileName }) => {
   const fileInputRef = useRef(null);
@@ -124,6 +125,9 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
     
     // Clear all localStorage
     localStorage.clear();
+    
+    // Clear session storage (IndexedDB)
+    clearSession();
     
     // Restore API key if it existed
     if (apiKey) {

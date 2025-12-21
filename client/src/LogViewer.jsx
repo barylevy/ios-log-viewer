@@ -6,6 +6,7 @@ import LogViewerFilters from './LogViewerFilters';
 import LogTabs from './LogTabs';
 import AIChat from './AIChat';
 import useLogsModel, { getFileIdentifier } from './useLogsModel';
+import { saveSession, loadSession, clearSession } from './utils/sessionStorage';
 
 const LogViewer = () => {
   const {
@@ -27,6 +28,7 @@ const LogViewer = () => {
     getCurrentFileHeaders,
     setLogsForFile,
     switchToFile,
+    removeLogsForFile,
     addStickyLog,
     removeStickyLog,
     clearAllStickyLogs,
@@ -189,11 +191,109 @@ const LogViewer = () => {
       return terms.some(term => msg.includes(term)) ? cnt + 1 : cnt;
     }, 0);
   }, [filters.searchQuery, filteredLogs]);
+  
   // Multi-file support
   const [files, setFiles] = useState([]);
   const [activeFileIndex, setActiveFileIndex] = useState(0);
   const [combinedViewLoaded, setCombinedViewLoaded] = useState(false);
   const [showingCombinedView, setShowingCombinedView] = useState(false);
+  const [isRestoringSession, setIsRestoringSession] = useState(false);
+  const [pendingActiveFileId, setPendingActiveFileId] = useState(null);
+
+  // Watch for when logs are restored and switch to the pending active file
+  useEffect(() => {
+    if (pendingActiveFileId && allFileLogs[pendingActiveFileId]) {
+      console.log(`Logs now available for pending active file: ${pendingActiveFileId}, switching...`);
+      switchToFile(pendingActiveFileId);
+      setPendingActiveFileId(null);
+      setIsRestoringSession(false);
+    }
+  }, [allFileLogs, pendingActiveFileId, switchToFile]);
+
+  // Restore session on mount
+  useEffect(() => {
+    const restoreSession = async () => {
+      setIsRestoringSession(true);
+      const session = await loadSession();
+      
+      if (session && session.files && session.files.length > 0) {
+        console.log('Restoring session with', session.files.length, 'files');
+        console.log('Restoring active tab index:', session.activeFileIndex);
+        console.log('Session allFileLogs keys:', session.allFileLogs ? Object.keys(session.allFileLogs) : 'none');
+        
+        // Restore UI state first
+        const restoredActiveIndex = session.activeFileIndex || 0;
+        console.log(`Setting activeFileIndex to: ${restoredActiveIndex} (total files: ${session.files.length})`);
+        setFiles(session.files);
+        setActiveFileIndex(restoredActiveIndex);
+        setShowingCombinedView(session.showingCombinedView || false);
+        setHasUserInteracted(true); // Mark as interacted so saves will work
+        
+        // Restore all logs for all files
+        if (session.allFileLogs) {
+          // First, restore all logs
+          Object.entries(session.allFileLogs).forEach(([fileId, logs]) => {
+            console.log(`Restoring ${logs.length} logs for file: ${fileId}`);
+            setLogsForFile(fileId, logs);
+          });
+          
+          // Set the pending active file - the useEffect above will switch to it once logs are available
+          const activeFile = session.files[restoredActiveIndex];
+          if (activeFile) {
+            console.log(`Setting pending active file: ${activeFile.id}`);
+            setPendingActiveFileId(activeFile.id);
+          } else {
+            console.log('No active file found');
+            setIsRestoringSession(false);
+          }
+        } else {
+          setIsRestoringSession(false);
+        }
+      } else {
+        console.log('No session found to restore');
+        setIsRestoringSession(false);
+      }
+    };
+    
+    restoreSession();
+  }, []); // Run only once on mount
+
+  // Save session when state changes
+  useEffect(() => {
+    // Don't save during restoration or if no user interaction yet
+    if (isRestoringSession || !hasUserInteracted) return;
+    
+    // Debounce saves to avoid too frequent writes
+    const timeoutId = setTimeout(() => {
+      if (files.length > 0) {
+        // Only save files that are currently open (in files array)
+        // This ensures closed tabs don't get restored
+        const filesToSave = files.map(f => ({ name: f.name, id: f.id }));
+        
+        // Only save logs for currently open files
+        const logsToSave = {};
+        files.forEach(f => {
+          if (allFileLogs[f.id]) {
+            logsToSave[f.id] = allFileLogs[f.id];
+          }
+        });
+        
+        const logsCount = Object.keys(logsToSave).length;
+        const totalLogs = Object.values(logsToSave).reduce((sum, logs) => sum + logs.length, 0);
+        console.log(`Saving session with ${filesToSave.length} files, ${logsCount} log sets, ${totalLogs} total logs`);
+        console.log('Files to save:', filesToSave.map(f => f.id));
+        
+        saveSession({
+          files: filesToSave,
+          activeFileIndex,
+          showingCombinedView,
+          allFileLogs: logsToSave
+        });
+      }
+    }, 1000); // Save after 1 second of inactivity
+    
+    return () => clearTimeout(timeoutId);
+  }, [files, activeFileIndex, showingCombinedView, allFileLogs, hasUserInteracted, isRestoringSession]);
 
   // Clear existing tabs before loading a new folder
   const handleClearTabs = useCallback(() => {
@@ -277,6 +377,7 @@ const LogViewer = () => {
   }, [logs, files, activeFileIndex, getCurrentFileHeaders]);
 
   const handleFileSelect = useCallback((index) => {
+    console.log(`User selected tab at index: ${index}`);
     setActiveFileIndex(index);
     setShowingCombinedView(false);
 
@@ -293,8 +394,42 @@ const LogViewer = () => {
   const handleFileClose = useCallback((index) => {
     const fileToClose = files[index];
 
+    // Clean up stored logs for the closed file first
+    if (fileToClose) {
+      removeLogsForFile(fileToClose.id);
+      console.log(`Removed logs for closed file: ${fileToClose.id}`);
+    }
+
     setFiles(prev => {
       const newFiles = prev.filter((_, i) => i !== index);
+      
+      // Immediately save or clear session
+      setTimeout(() => {
+        if (newFiles.length > 0) {
+          const logsToSave = {};
+          newFiles.forEach(f => {
+            if (allFileLogs[f.id]) {
+              logsToSave[f.id] = allFileLogs[f.id];
+            }
+          });
+          
+          const newIndex = activeFileIndex >= index && activeFileIndex > 0 
+            ? activeFileIndex - 1 
+            : Math.min(activeFileIndex, newFiles.length - 1);
+          
+          console.log(`Immediately saving session after closing file. Remaining files: ${newFiles.length}`);
+          saveSession({
+            files: newFiles.map(f => ({ name: f.name, id: f.id })),
+            activeFileIndex: newIndex,
+            showingCombinedView: newFiles.length < 2 ? false : showingCombinedView,
+            allFileLogs: logsToSave
+          });
+        } else {
+          console.log('All files closed - clearing session');
+          clearSession();
+        }
+      }, 50);
+      
       if (newFiles.length === 0) {
         setHasUserInteracted(false);
         setActiveFileIndex(0);
@@ -328,13 +463,7 @@ const LogViewer = () => {
 
       return newFiles;
     });
-
-    // Clean up stored logs for the closed file
-    if (fileToClose) {
-      // Use a workaround since setAllFileLogs isn't available directly
-      // The cleanup will happen naturally when the component re-renders
-    }
-  }, [activeFileIndex, files, switchToFile, showingCombinedView]);
+  }, [activeFileIndex, files, switchToFile, showingCombinedView, removeLogsForFile, allFileLogs, saveSession]);
 
   const handleCombinedViewSelect = useCallback(() => {
     setShowingCombinedView(true);
