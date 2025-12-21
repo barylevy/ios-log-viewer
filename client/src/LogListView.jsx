@@ -182,7 +182,10 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
 
   const finalResult = result.join(' || ');
   return finalResult;
-}; const LogItem = memo(({ log, onClick, isHighlighted, isSelected, filters, index, onFiltersChange, previousLog, contextMenu, setContextMenu, onHover, pivotLog, stickyLogs }) => {
+};
+
+// Component definition
+const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, index, onFiltersChange, previousLog, contextMenu, setContextMenu, onHover, pivotLog, stickyLogs, visibleColumns = {} }) => {
   // Process the log message and extract file info - memoized by log.id to prevent recalculation
   const cleanedMessage = useMemo(() => cleanMessage(log.message), [log.message]);
   const fileInfo = useMemo(() => extractFileInfo(log), [log.message, log.timestamp]);
@@ -429,6 +432,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
       >
         <div className="flex items-start gap-2">
           {/* Timestamp */}
+          {visibleColumns.timestamp !== false && (
           <div className={`flex-shrink-0 text-xs font-mono min-w-14 ${hasSticky ? 'underline decoration-solid decoration-1' : ''} ${timeInfo === '--:--:--.---'
             ? 'text-gray-300 dark:text-gray-600 opacity-50'
             : timeGapInfo.hasGap
@@ -437,16 +441,21 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
             }`}>
             {timeInfo}
           </div>
+          )}
 
           {/* Line Number */}
+          {visibleColumns.lineNumber !== false && (
           <div className="flex-shrink-0 text-xs text-gray-400 dark:text-gray-500 font-mono min-w-12 text-right mr-3">
             {log.lineNumber}
           </div>
+          )}
 
           {/* Log Level Indicator */}
+          {visibleColumns.logLevel !== false && (
           <div className={`flex-shrink-0 text-xs font-semibold uppercase min-w-8 ${logLevelColor}`}>
             {logLevel.charAt(0).toUpperCase()}
           </div>
+          )}
 
           {/* Context Line Indicator */}
           {log.isContextLine && (
@@ -466,10 +475,10 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
             />
 
             {/* Process/Thread info with gap time at the end */}
-            {(fileInfo || timeGapInfo.hasGap) && (
+            {((visibleColumns.processThread !== false && fileInfo) || (visibleColumns.timeGap !== false && timeGapInfo.hasGap)) && (
               <div className="flex-shrink-0 flex items-center gap-3 pr-2">
                 {/* Time Gap Indicator */}
-                {timeGapInfo.hasGap && (
+                {visibleColumns.timeGap !== false && timeGapInfo.hasGap && (
                   <div className="text-xs text-orange-600 dark:text-orange-400 font-mono bg-orange-100 dark:bg-orange-900/30 px-1 rounded">
                     +{timeGapInfo.gapSeconds >= 60
                       ? `${Math.floor(timeGapInfo.gapSeconds / 60)}m${Math.floor(timeGapInfo.gapSeconds % 60)}s`
@@ -479,7 +488,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
                 )}
 
                 {/* Process/Thread info */}
-                {fileInfo && (
+                {visibleColumns.processThread !== false && fileInfo && (
                   <div className="text-xs text-gray-400 dark:text-gray-500 font-mono">
                     {fileInfo}
                   </div>
@@ -491,11 +500,14 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
       </div>
     </>
   );
-});
+};
+
+// Memoize component for performance
+const LogItem = memo(LogItemComponent);
 
 LogItem.displayName = 'LogItem';
 
-const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filters, onFiltersChange, onSearchMatchUpdate, onHover, pivotLog, onSetPivot, onClearPivot, stickyLogs, onAddStickyLog, highlightLog }) => {
+const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filters, onFiltersChange, onSearchMatchUpdate, onHover, pivotLog, onSetPivot, onClearPivot, stickyLogs, onAddStickyLog, highlightLog, visibleColumns = {} }) => {
   const virtuosoRef = useRef(null);
   // Refs for each item element to allow focus
   const itemRefs = useRef({});
@@ -1189,6 +1201,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
                   onHover={handleHover}
                   pivotLog={pivotLog}
                   stickyLogs={stickyLogs}
+                  visibleColumns={visibleColumns}
                 />
               </div>
             );

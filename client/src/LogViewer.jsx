@@ -7,6 +7,7 @@ import LogTabs from './LogTabs';
 import AIChat from './AIChat';
 import useLogsModel, { getFileIdentifier } from './useLogsModel';
 import { saveSession, loadSession, clearSession } from './utils/sessionStorage';
+import { AVAILABLE_COLUMNS } from './ColumnSettings';
 
 const LogViewer = () => {
   const {
@@ -39,6 +40,29 @@ const LogViewer = () => {
   const [pivotLog, setPivotLog] = useState(null);
   const [hoveredLog, setHoveredLog] = useState(null);
   const [lastHoveredLog, setLastHoveredLog] = useState(null);
+
+  // Column visibility state
+  const [visibleColumns, setVisibleColumns] = useState(() => {
+    const saved = localStorage.getItem('logViewerColumns');
+    if (saved) {
+      return JSON.parse(saved);
+    }
+    // Default columns
+    const defaultColumns = {};
+    AVAILABLE_COLUMNS.forEach(col => {
+      defaultColumns[col.id] = col.defaultVisible;
+    });
+    return defaultColumns;
+  });
+
+  // Column change version to force re-render
+  const [columnVersion, setColumnVersion] = useState(0);
+
+  // Handler that updates columns and increments version
+  const handleColumnsChange = useCallback((newColumns) => {
+    setVisibleColumns(newColumns);
+    setColumnVersion(prev => prev + 1);
+  }, []);
 
   // Update lastHoveredLog whenever hoveredLog changes to a non-null value
   useEffect(() => {
@@ -638,9 +662,10 @@ const LogViewer = () => {
         stickyLogs={stickyLogs}
         onAddStickyLog={addStickyLog}
         highlightLog={highlightLog}
+        visibleColumns={visibleColumns}
       />
     );
-  }, [hasUserInteracted, files.length, filteredLogs, handleLogClick, highlightedLogId, filters, pivotLog, setPivotTime, clearPivotTime, stickyLogs, addStickyLog, highlightLog, setSearchPos, setSearchTotal, updateFilters, setHoveredLog]);
+  }, [hasUserInteracted, files.length, filteredLogs, handleLogClick, highlightedLogId, filters, pivotLog, setPivotTime, clearPivotTime, stickyLogs, addStickyLog, highlightLog, setSearchPos, setSearchTotal, updateFilters, setHoveredLog, visibleColumns, columnVersion]);
 
   // Remove old currentFileHeaders logic - now using headerState
 
@@ -666,6 +691,8 @@ const LogViewer = () => {
         currentFileHeaders={headerState}
         currentLogs={currentDisplayContext.logs}
         currentFileName={currentDisplayContext.fileName}
+        visibleColumns={visibleColumns}
+        onColumnsChange={handleColumnsChange}
       />
 
       {/* Main content area - Split panel container */}

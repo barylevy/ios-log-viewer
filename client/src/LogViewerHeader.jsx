@@ -1,16 +1,18 @@
 import React, { useRef, useState, useEffect } from 'react';
 import AboutModal from './AboutModal';
 import AIConfigSettings from './Settings';
+import ColumnSettings, { AVAILABLE_COLUMNS } from './ColumnSettings';
 import { CATO_COLORS } from './constants';
 import { openAIChatInNewWindow, openAIChatInNewTab } from './utils/aiChatUtils';
 import { clearSession } from './utils/sessionStorage';
 
-const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, currentFileHeaders, onClearTabs, currentLogs, currentFileName }) => {
+const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, currentFileHeaders, onClearTabs, currentLogs, currentFileName, visibleColumns, onColumnsChange }) => {
   const fileInputRef = useRef(null);
   const directoryInputRef = useRef(null);
   const [showFileDropdown, setShowFileDropdown] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showColumnSettings, setShowColumnSettings] = useState(false);
   const [showAIChatDropdown, setShowAIChatDropdown] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(
@@ -108,6 +110,11 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
 
   const handleAIConfigClick = () => {
     setShowSettings(true);
+    setShowDropdown(false);
+  };
+
+  const handleColumnSettingsClick = () => {
+    setShowColumnSettings(true);
     setShowDropdown(false);
   };
 
@@ -340,6 +347,15 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
                     {isDarkMode ? 'Light Mode' : 'Dark Mode'}
                   </button>
                   <button
+                    onClick={handleColumnSettingsClick}
+                    className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+                    </svg>
+                    Column Settings
+                  </button>
+                  <button
                     onClick={handleClearCache}
                     className="block w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                   >
@@ -381,6 +397,14 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
 
       {/* AI Config Settings Modal */}
       <AIConfigSettings isOpen={showSettings} onClose={() => setShowSettings(false)} />
+
+      {/* Column Settings Modal */}
+      <ColumnSettings
+        isOpen={showColumnSettings}
+        onClose={() => setShowColumnSettings(false)}
+        visibleColumns={visibleColumns}
+        onColumnsChange={onColumnsChange}
+      />
     </header>
   );
 };
