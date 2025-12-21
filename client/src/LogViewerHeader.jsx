@@ -1,5 +1,4 @@
 import React, { useRef, useState, useEffect } from 'react';
-import FileSelectionModal from './FileSelectionModal';
 import AboutModal from './AboutModal';
 import AIConfigSettings from './Settings';
 import { CATO_COLORS } from './constants';
@@ -9,7 +8,7 @@ import { clearSession } from './utils/sessionStorage';
 const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, currentFileHeaders, onClearTabs, currentLogs, currentFileName }) => {
   const fileInputRef = useRef(null);
   const directoryInputRef = useRef(null);
-  const [showFileSelectionModal, setShowFileSelectionModal] = useState(false);
+  const [showFileDropdown, setShowFileDropdown] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showAIChatDropdown, setShowAIChatDropdown] = useState(false);
@@ -28,11 +27,14 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
       if (showAIChatDropdown && !event.target.closest('.ai-chat-dropdown')) {
         setShowAIChatDropdown(false);
       }
+      if (showFileDropdown && !event.target.closest('.file-dropdown')) {
+        setShowFileDropdown(false);
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showDropdown, showAIChatDropdown]);
+  }, [showDropdown, showAIChatDropdown, showFileDropdown]);
 
   // Apply theme on mount and when theme changes
   useEffect(() => {
@@ -47,12 +49,12 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
 
   const handleChooseFiles = () => {
     fileInputRef.current?.click();
-    setShowFileSelectionModal(false);
+    setShowFileDropdown(false);
   };
 
   const handleChooseDirectory = () => {
     directoryInputRef.current?.click();
-    setShowFileSelectionModal(false);
+    setShowFileDropdown(false);
   };
 
   const handleFilesSelected = (event) => {
@@ -87,11 +89,12 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
   };
 
   const handleLoadFilesClick = () => {
-    setShowFileSelectionModal(true);
+    // Default action: open file picker
+    handleChooseFiles();
   };
 
-  const handleCloseModal = () => {
-    setShowFileSelectionModal(false);
+  const handleFileDropdownToggle = () => {
+    setShowFileDropdown(!showFileDropdown);
   };
 
   const handleDropdownToggle = () => {
@@ -208,13 +211,54 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
           </div>
         </div>
 
-        <div className="flex items-center space-x-3 flex-shrink-0">
-          <button
-            onClick={handleLoadFilesClick}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
-          >
-            Open Files
-          </button>
+        <div className="flex items-center gap-3">
+        <div className="relative file-dropdown">
+            <div className="flex">
+              {/* Main Button */}
+              <button
+                onClick={handleLoadFilesClick}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-l-md text-sm font-medium transition-colors"
+              >
+                Open Files
+              </button>
+              
+              {/* Dropdown Arrow Button */}
+              <button
+                onClick={handleFileDropdownToggle}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-2 rounded-r-md text-sm font-medium transition-colors border-l border-blue-700"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            </div>
+            
+            {/* Dropdown Menu */}
+            {showFileDropdown && (
+              <div className="absolute left-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-600 z-50">
+                <div className="py-1">
+                  <button
+                    onClick={handleChooseFiles}
+                    className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Choose Files
+                  </button>
+                  <button
+                    onClick={handleChooseDirectory}
+                    className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                    </svg>
+                    Choose Folder
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
           {hasLogs && (
             <div className="relative ai-chat-dropdown">
@@ -296,12 +340,6 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
                     {isDarkMode ? 'Light Mode' : 'Dark Mode'}
                   </button>
                   <button
-                    onClick={handleAIConfigClick}
-                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                  >
-                    AI Config
-                  </button>
-                  <button
                     onClick={handleClearCache}
                     className="block w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                   >
@@ -338,12 +376,6 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
         style={{ display: 'none' }}
       />
 
-      <FileSelectionModal
-        isOpen={showFileSelectionModal}
-        onClose={handleCloseModal}
-        onChooseFiles={handleChooseFiles}
-        onChooseDirectory={handleChooseDirectory}
-      />
       {/* About Modal */}
       <AboutModal isOpen={showAbout} onClose={() => setShowAbout(false)} />
 
