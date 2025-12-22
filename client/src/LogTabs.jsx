@@ -1,12 +1,12 @@
 import React from 'react';
 import { getFileDisplayName, getFileFullName } from './useLogsModel';
 
-const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCombinedView, onCombinedViewSelect, allFileLogs = {}, isFileLoading }) => {
+const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCombinedView, onCombinedViewSelect, allFileLogs = {}, isFileLoading, onCloseAll }) => {
     return (
         <div className="bg-white dark:bg-gray-900">
             <div className="flex items-center overflow-x-auto p-2 pb-0">
                 {/* File Tabs */}
-                <div className="flex overflow-x-auto w-full">
+                <div className="flex overflow-x-auto flex-1">
                     {files.map((file, index) => {
                         const loading = isFileLoading ? isFileLoading(file.id) : false;
                         return (
@@ -59,6 +59,17 @@ const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCom
                         </div>
                     )}
                 </div>
+
+                {/* Close All Button */}
+                {files.length > 0 && (
+                    <button
+                        onClick={onCloseAll}
+                        className="flex-shrink-0 ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-lg"
+                        title="Close all files"
+                    >
+                        ×
+                    </button>
+                )}
             </div>
             {/* Bottom border that connects to content */}
             <div className="border-b border-gray-200 dark:border-gray-700"></div>

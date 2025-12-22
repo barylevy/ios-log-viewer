@@ -473,6 +473,24 @@ const LogViewer = () => {
     });
   }, [activeFileIndex, files, switchToFile, showingCombinedView, removeLogsForFile, allFileLogs, saveSession]);
 
+  const handleCloseAll = useCallback(() => {
+    // Remove logs for all files
+    files.forEach(file => {
+      removeLogsForFile(file.id);
+    });
+
+    // Clear all state
+    setFiles([]);
+    setHasUserInteracted(false);
+    setActiveFileIndex(0);
+    setShowingCombinedView(false);
+    setCombinedViewLoaded(false);
+    setHeaderState(null);
+    
+    // Clear session storage
+    clearSession();
+  }, [files, removeLogsForFile, clearSession]);
+
   const handleCombinedViewSelect = useCallback(() => {
     setShowingCombinedView(true);
 
@@ -717,6 +735,7 @@ const LogViewer = () => {
                 onCombinedViewSelect={handleCombinedViewSelect}
                 allFileLogs={allFileLogs}
                 isFileLoading={isFileLoading}
+                onCloseAll={handleCloseAll}
               />
             )}
 
