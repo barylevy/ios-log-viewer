@@ -186,10 +186,16 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
 
 // Component definition
 const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, index, onFiltersChange, previousLog, contextMenu, setContextMenu, onHover, pivotLog, stickyLogs, visibleColumns = {} }) => {
+  // State for expanded/collapsed message
+  const [isExpanded, setIsExpanded] = useState(false);
+  
   // Process the log message and extract file info - memoized by log.id to prevent recalculation
   const cleanedMessage = useMemo(() => cleanMessage(log.message), [log.message]);
   const fileInfo = useMemo(() => extractFileInfo(log), [log.message, log.timestamp]);
   const timeInfo = useMemo(() => extractTimeFromTimestamp(log.timestamp || log.message) || '--:--:--.---', [log.timestamp, log.message]);
+
+  // Check if message is long enough to need expand button (more than 3 lines ~200 chars)
+  const isLongMessage = useMemo(() => cleanedMessage.length > 200, [cleanedMessage]);
 
   // Check if this log has a sticky label
   const hasSticky = useMemo(() => {
@@ -466,13 +472,26 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
 
           {/* Message content */}
           <div className="flex-1 flex items-start justify-between gap-2 min-w-0">
-            <div
-              className={`text-xs break-words ${log.isContextLine
-                ? 'text-gray-600 dark:text-gray-400'
-                : 'text-gray-800 dark:text-gray-200'
-                }`}
-              dangerouslySetInnerHTML={{ __html: highlightedMessage }}
-            />
+            <div className="flex-1 min-w-0">
+              <div
+                className={`text-xs break-words ${log.isContextLine
+                  ? 'text-gray-600 dark:text-gray-400'
+                  : 'text-gray-800 dark:text-gray-200'
+                  } ${!isExpanded && isLongMessage ? 'line-clamp-3' : ''}`}
+                dangerouslySetInnerHTML={{ __html: highlightedMessage }}
+              />
+              {isLongMessage && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsExpanded(!isExpanded);
+                  }}
+                  className="mt-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline"
+                >
+                  {isExpanded ? 'Show less' : 'Show more'}
+                </button>
+              )}
+            </div>
 
             <div className="flex-shrink-0 flex items-center gap-3">
               {/* Module/File Name - trailing after message */}
