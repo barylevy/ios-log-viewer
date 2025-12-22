@@ -28,6 +28,7 @@ const LogViewer = () => {
     clearHighlight,
     getCurrentFileHeaders,
     setLogsForFile,
+    setLogFileHeaders,
     switchToFile,
     removeLogsForFile,
     addStickyLog,
@@ -254,6 +255,11 @@ const LogViewer = () => {
             setLogsForFile(fileId, logs);
           });
           
+          // Restore log file headers if available
+          if (session.logFileHeaders) {
+            setLogFileHeaders(session.logFileHeaders);
+          }
+          
           // Set the pending active file - the useEffect above will switch to it once logs are available
           const activeFile = session.files[restoredActiveIndex];
           if (activeFile) {
@@ -297,7 +303,8 @@ const LogViewer = () => {
           files: filesToSave,
           activeFileIndex,
           showingCombinedView,
-          allFileLogs: logsToSave
+          allFileLogs: logsToSave,
+          logFileHeaders
         });
       }
     }, 1000); // Save after 1 second of inactivity

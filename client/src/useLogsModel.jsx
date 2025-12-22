@@ -796,6 +796,7 @@ const useLogsModel = () => {
     clearHighlight,
     getCurrentFileHeaders,
     setLogsForFile,
+    setLogFileHeaders,
     switchToFile,
     removeLogsForFile,
     clearSavedFilters,
