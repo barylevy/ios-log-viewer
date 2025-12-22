@@ -201,6 +201,7 @@ const LogViewer = () => {
   const [searchTotal, setSearchTotal] = useState(0);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const [headerState, setHeaderState] = useState(null);
+  const [logDuration, setLogDuration] = useState(null);
   const [notification, setNotification] = useState(null);
 
   // Compute number of search matches
@@ -392,6 +393,22 @@ const LogViewer = () => {
       }
     }
   }, [logs, files, activeFileIndex, getCurrentFileHeaders]);
+
+  // Calculate log time range (start - end)
+  useEffect(() => {
+    if (logs && logs.length > 0) {
+      const firstLog = logs[0];
+      const lastLog = logs[logs.length - 1];
+      
+      if (firstLog.timestamp && lastLog.timestamp) {
+        setLogDuration(`${firstLog.timestamp} → ${lastLog.timestamp}`);
+      } else {
+        setLogDuration(null);
+      }
+    } else {
+      setLogDuration(null);
+    }
+  }, [logs]);
 
   const handleFileSelect = useCallback((index) => {
     setActiveFileIndex(index);
@@ -718,6 +735,7 @@ const LogViewer = () => {
         currentFileName={currentDisplayContext.fileName}
         visibleColumns={visibleColumns}
         onColumnsChange={handleColumnsChange}
+        logDuration={logDuration}
       />
 
       {/* Main content area - Split panel container */}

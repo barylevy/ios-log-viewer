@@ -6,7 +6,7 @@ import { CATO_COLORS } from './constants';
 import { openAIChatInNewWindow, openAIChatInNewTab } from './utils/aiChatUtils';
 import { clearSession } from './utils/sessionStorage';
 
-const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, currentFileHeaders, onClearTabs, currentLogs, currentFileName, visibleColumns, onColumnsChange }) => {
+const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, currentFileHeaders, onClearTabs, currentLogs, currentFileName, visibleColumns, onColumnsChange, logDuration }) => {
   const fileInputRef = useRef(null);
   const directoryInputRef = useRef(null);
   const [showFileDropdown, setShowFileDropdown] = useState(false);
@@ -169,11 +169,12 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
       <div className="flex items-center justify-between flex-nowrap gap-4">
         <div className="flex items-center space-x-3 min-w-0 flex-1">
           <img src="/cato-logo.svg" alt="Cato Networks" className="h-8 w-auto flex-shrink-0" />
-          <div className="flex items-baseline space-x-3">
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-white whitespace-nowrap">Cato Client Log Viewer</h1>
-            {/* User Details */}
-            {currentFileHeaders && Object.keys(currentFileHeaders).length > 0 && (
-              <div className="flex items-baseline gap-3 text-sm text-gray-600 dark:text-gray-400">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-baseline space-x-3">
+              <h1 className="text-xl font-semibold text-gray-900 dark:text-white whitespace-nowrap">Cato Client Log Viewer</h1>
+              {/* User Details */}
+              {currentFileHeaders && Object.keys(currentFileHeaders).length > 0 && (
+                <div className="flex items-baseline gap-3 text-sm text-gray-600 dark:text-gray-400">
                 {currentFileHeaders.user && (
                   <>
                     <span className="flex items-baseline gap-1">
@@ -213,6 +214,13 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
                     <span className="font-medium">{currentFileHeaders.osVersion}</span>
                   </span>
                 )}
+                </div>
+              )}
+            </div>
+            {/* Log Time Range */}
+            {logDuration && (
+              <div className="text-xs text-gray-500 dark:text-gray-400 ml-1">
+                <span className="font-medium">{logDuration}</span>
               </div>
             )}
           </div>
