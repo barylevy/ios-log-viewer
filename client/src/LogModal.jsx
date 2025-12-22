@@ -214,7 +214,7 @@ const LogModal = ({ log, onClose, onAddStickyLog, onNext, onPrev, hasNext, hasPr
           {viewMode === 'json' && hasJsonContent ? (
             <JsonTreeViewer data={jsonData} />
           ) : (
-            <pre className="whitespace-pre-wrap font-mono text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-900 p-4 rounded border">
+            <pre className="whitespace-pre-wrap break-words font-mono text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-900 p-4 rounded border overflow-x-auto">
               {log.raw}
             </pre>
           )}
