@@ -812,7 +812,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
           virtuosoRef.current.scrollToIndex({
             index: 0,
             align: 'start',
-            behavior: 'smooth'
+            behavior: 'auto'
           });
         }
         return;
@@ -825,7 +825,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
           virtuosoRef.current.scrollToIndex({
             index: flatLogs.length - 1,
             align: 'end',
-            behavior: 'smooth'
+            behavior: 'auto'
           });
         }
         return;
