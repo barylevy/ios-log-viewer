@@ -186,13 +186,38 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
 
 // Component definition
 const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, index, onFiltersChange, previousLog, contextMenu, setContextMenu, onHover, pivotLog, stickyLogs, visibleColumns = {}, isExpanded, onToggleExpanded }) => {
+  // Ref to measure content height
+  const contentRef = useRef(null);
+  const [needsExpand, setNeedsExpand] = useState(false);
+  
   // Process the log message and extract file info - memoized by log.id to prevent recalculation
   const cleanedMessage = useMemo(() => cleanMessage(log.message), [log.message]);
   const fileInfo = useMemo(() => extractFileInfo(log), [log.message, log.timestamp]);
   const timeInfo = useMemo(() => extractTimeFromTimestamp(log.timestamp || log.message) || '--:--:--.---', [log.timestamp, log.message]);
 
-  // Check if message is long enough to need expand button (more than 3 lines ~200 chars)
-  const isLongMessage = useMemo(() => cleanedMessage.length > 200, [cleanedMessage]);
+  // Check if content exceeds 3 lines after render
+  useEffect(() => {
+    if (contentRef.current) {
+      const element = contentRef.current;
+      // Temporarily remove line-clamp to check natural height
+      const hadClamp = element.classList.contains('line-clamp-3');
+      if (hadClamp) {
+        element.classList.remove('line-clamp-3');
+      }
+      
+      // Check if scrollHeight (full content height) is greater than what 3 lines would be
+      // Line height is approximately 1.5em = 18px for text-xs, so 3 lines ≈ 54px
+      const threeLineHeight = 54;
+      const isOverflowing = element.scrollHeight > threeLineHeight;
+      
+      // Restore line-clamp if needed
+      if (hadClamp && !isExpanded) {
+        element.classList.add('line-clamp-3');
+      }
+      
+      setNeedsExpand(isOverflowing);
+    }
+  }, [cleanedMessage, isExpanded]);
 
   // Check if this log has a sticky label
   const hasSticky = useMemo(() => {
@@ -471,13 +496,14 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
           <div className="flex-1 flex items-start justify-between gap-2 min-w-0">
             <div className="flex-1 min-w-0">
               <div
+                ref={contentRef}
                 className={`text-xs break-words ${log.isContextLine
                   ? 'text-gray-600 dark:text-gray-400'
                   : 'text-gray-800 dark:text-gray-200'
-                  } ${!isExpanded && isLongMessage ? 'line-clamp-3' : ''}`}
+                  } ${!isExpanded ? 'line-clamp-3' : ''}`}
                 dangerouslySetInnerHTML={{ __html: highlightedMessage }}
               />
-              {isLongMessage && (
+              {needsExpand && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
