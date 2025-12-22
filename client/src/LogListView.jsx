@@ -185,10 +185,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
 };
 
 // Component definition
-const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, index, onFiltersChange, previousLog, contextMenu, setContextMenu, onHover, pivotLog, stickyLogs, visibleColumns = {} }) => {
-  // State for expanded/collapsed message
-  const [isExpanded, setIsExpanded] = useState(false);
-  
+const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, index, onFiltersChange, previousLog, contextMenu, setContextMenu, onHover, pivotLog, stickyLogs, visibleColumns = {}, isExpanded, onToggleExpanded }) => {
   // Process the log message and extract file info - memoized by log.id to prevent recalculation
   const cleanedMessage = useMemo(() => cleanMessage(log.message), [log.message]);
   const fileInfo = useMemo(() => extractFileInfo(log), [log.message, log.timestamp]);
@@ -484,7 +481,7 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    setIsExpanded(!isExpanded);
+                    onToggleExpanded(log.id);
                   }}
                   className="mt-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline"
                 >
@@ -552,6 +549,15 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
   const [currentMatchIndex, setCurrentMatchIndex] = useState(-1);
   // Track if initial scroll position has been restored
   const scrollRestoredRef = useRef(false);
+  // Track expanded log messages - persisted in localStorage
+  const [expandedLogs, setExpandedLogs] = useState(() => {
+    try {
+      const saved = localStorage.getItem('logViewerExpandedLogs');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
   // Shared context menu state for all log items
   const [contextMenu, setContextMenu] = useState(null);
   // Track which log item is currently being hovered
@@ -571,6 +577,19 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
       onHover(log); // Pass full log object to parent
     }
   }, [onHover]);
+
+  // Save expanded logs to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('logViewerExpandedLogs', JSON.stringify(expandedLogs));
+  }, [expandedLogs]);
+
+  // Toggle expanded state for a log
+  const toggleLogExpanded = useCallback((logId) => {
+    setExpandedLogs(prev => ({
+      ...prev,
+      [logId]: !prev[logId]
+    }));
+  }, []);
 
   // Group logs by date for sticky headers
   const groupedLogs = useMemo(() => {
@@ -1301,6 +1320,8 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
                   pivotLog={pivotLog}
                   stickyLogs={stickyLogs}
                   visibleColumns={visibleColumns}
+                  isExpanded={expandedLogs[log.id] || false}
+                  onToggleExpanded={toggleLogExpanded}
                 />
               </div>
             );
