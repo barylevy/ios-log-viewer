@@ -531,6 +531,8 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
   const [targetNavigationDate, setTargetNavigationDate] = useState(null);
   // Search navigation state
   const [currentMatchIndex, setCurrentMatchIndex] = useState(-1);
+  // Track if initial scroll position has been restored
+  const scrollRestoredRef = useRef(false);
   // Shared context menu state for all log items
   const [contextMenu, setContextMenu] = useState(null);
   // Track which log item is currently being hovered
@@ -837,6 +839,68 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [hoveredLogId, selectedLogId, highlightedLogId, logs, onLogClick, flatLogs]);
+
+  // ===== SCROLL POSITION PERSISTENCE =====
+  // Save scroll position continuously as user scrolls (with debounce via useEffect dependencies)
+  useEffect(() => {
+    if (visibleRange && flatLogs.length > 0) {
+      const scrollData = {
+        startIndex: visibleRange.startIndex,
+        endIndex: visibleRange.endIndex,
+        timestamp: Date.now()
+      };
+      localStorage.setItem('logViewerScrollPosition', JSON.stringify(scrollData));
+    }
+  }, [visibleRange, flatLogs]);
+
+  // Also save on page unload to catch any last-minute changes
+  useEffect(() => {
+    const saveScrollPosition = () => {
+      if (visibleRange && flatLogs.length > 0) {
+        const scrollData = {
+          startIndex: visibleRange.startIndex,
+          endIndex: visibleRange.endIndex,
+          timestamp: Date.now()
+        };
+        localStorage.setItem('logViewerScrollPosition', JSON.stringify(scrollData));
+      }
+    };
+
+    window.addEventListener('beforeunload', saveScrollPosition);
+    return () => window.removeEventListener('beforeunload', saveScrollPosition);
+  }, [visibleRange, flatLogs]);
+
+  // Restore scroll position after page load
+  useEffect(() => {
+    if (virtuosoRef.current && flatLogs.length > 0 && !scrollRestoredRef.current) {
+      const savedScrollData = localStorage.getItem('logViewerScrollPosition');
+      
+      if (savedScrollData) {
+        try {
+          const { startIndex, timestamp } = JSON.parse(savedScrollData);
+          
+          // Only restore if saved within the last 24 hours
+          const twentyFourHours = 24 * 60 * 60 * 1000;
+          if (Date.now() - timestamp < twentyFourHours && startIndex < flatLogs.length) {
+            // Delay scroll restoration to ensure Virtuoso is fully initialized
+            setTimeout(() => {
+              virtuosoRef.current?.scrollToIndex({
+                index: startIndex,
+                align: 'start',
+                behavior: 'auto'
+              });
+              scrollRestoredRef.current = true;
+            }, 100);
+          }
+        } catch (error) {
+          console.error('Failed to restore scroll position:', error);
+        }
+      } else {
+        // Mark as restored even if no saved position exists
+        scrollRestoredRef.current = true;
+      }
+    }
+  }, [flatLogs]);
 
   // ===== STICKY LOG SCROLL LISTENER =====
   useEffect(() => {
