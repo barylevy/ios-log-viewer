@@ -618,7 +618,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
                       e.stopPropagation();
                       onRemoveStickyLog(sticky.id);
                     }}
-                    className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors border border-gray-300 dark:border-gray-600"
+                    className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
                     title="Remove sticky log"
                   >
                     <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
