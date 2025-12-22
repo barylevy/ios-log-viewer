@@ -112,8 +112,8 @@ export const extractModule = (line) => {
     return module.trim();
   }
 
-  // iOS/macOS format: [ModuleName:line] [thread] [process] - extract module before colon
-  const iosModuleMatch = line.match(/\[([^:\]]+):\d+\]/);
+  // iOS/macOS format: [ModuleName:line] [thread] [process] - extract module with line number
+  const iosModuleMatch = line.match(/\[([^:\]]+:\d+)\]/);
   if (iosModuleMatch) {
     return iosModuleMatch[1].trim();
   }

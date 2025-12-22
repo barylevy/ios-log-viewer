@@ -445,7 +445,7 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
 
           {/* Line Number */}
           {visibleColumns.lineNumber !== false && (
-          <div className="flex-shrink-0 text-xs text-gray-400 dark:text-gray-500 font-mono min-w-12 text-right mr-3">
+          <div className="flex-shrink-0 text-xs text-gray-400 dark:text-gray-500 font-mono min-w-16 text-right mr-3">
             {log.lineNumber}
           </div>
           )}
@@ -465,7 +465,7 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
           )}
 
           {/* Message content */}
-          <div className="flex-1 flex items-start justify-between gap-1 min-w-0">
+          <div className="flex-1 flex items-start justify-between gap-2 min-w-0">
             <div
               className={`text-xs break-words ${log.isContextLine
                 ? 'text-gray-600 dark:text-gray-400'
@@ -474,27 +474,43 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
               dangerouslySetInnerHTML={{ __html: highlightedMessage }}
             />
 
-            {/* Process/Thread info with gap time at the end */}
-            {((visibleColumns.processThread !== false && fileInfo) || (visibleColumns.timeGap !== false && timeGapInfo.hasGap)) && (
-              <div className="flex-shrink-0 flex items-center gap-3 pr-2">
-                {/* Time Gap Indicator */}
-                {visibleColumns.timeGap !== false && timeGapInfo.hasGap && (
-                  <div className="text-xs text-orange-600 dark:text-orange-400 font-mono bg-orange-100 dark:bg-orange-900/30 px-1 rounded">
-                    +{timeGapInfo.gapSeconds >= 60
-                      ? `${Math.floor(timeGapInfo.gapSeconds / 60)}m${Math.floor(timeGapInfo.gapSeconds % 60)}s`
-                      : `${Math.floor(timeGapInfo.gapSeconds)}s`
-                    }
-                  </div>
-                )}
+            <div className="flex-shrink-0 flex items-center gap-3">
+              {/* Module/File Name - trailing after message */}
+              {visibleColumns.module !== false && log.module && (
+                <div className="text-xs text-blue-600 dark:text-blue-400 font-mono bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 whitespace-nowrap" title={`Module: ${log.module}`}>
+                  {log.module}
+                </div>
+              )}
+              
+              {/* DEBUG: Show when module column should appear but doesn't */}
+              {visibleColumns.module !== false && !log.module && (
+                <div className="text-xs text-red-500 font-mono px-2 py-0.5" title="Module data missing">
+                  [no module]
+                </div>
+              )}
 
-                {/* Process/Thread info */}
-                {visibleColumns.processThread !== false && fileInfo && (
-                  <div className="text-xs text-gray-400 dark:text-gray-500 font-mono">
-                    {fileInfo}
-                  </div>
-                )}
-              </div>
-            )}
+              {/* Process/Thread info with gap time at the end */}
+              {((visibleColumns.processThread !== false && fileInfo) || (visibleColumns.timeGap !== false && timeGapInfo.hasGap)) && (
+                <div className="flex items-center gap-3 pr-2">
+                  {/* Time Gap Indicator */}
+                  {visibleColumns.timeGap !== false && timeGapInfo.hasGap && (
+                    <div className="text-xs text-orange-600 dark:text-orange-400 font-mono bg-orange-100 dark:bg-orange-900/30 px-1 rounded">
+                      +{timeGapInfo.gapSeconds >= 60
+                        ? `${Math.floor(timeGapInfo.gapSeconds / 60)}m${Math.floor(timeGapInfo.gapSeconds % 60)}s`
+                        : `${Math.floor(timeGapInfo.gapSeconds)}s`
+                      }
+                    </div>
+                  )}
+
+                  {/* Process/Thread info */}
+                  {visibleColumns.processThread !== false && fileInfo && (
+                    <div className="text-xs text-gray-400 dark:text-gray-500 font-mono">
+                      {fileInfo}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

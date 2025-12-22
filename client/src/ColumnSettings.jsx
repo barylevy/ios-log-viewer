@@ -5,9 +5,9 @@ const AVAILABLE_COLUMNS = [
   { id: 'lineNumber', label: 'Line Number', defaultVisible: true },
   { id: 'logLevel', label: 'Log Level', defaultVisible: true },
   { id: 'message', label: 'Message', defaultVisible: true, disabled: true }, // Message is always visible
+  { id: 'module', label: 'Module/File', defaultVisible: true },
   { id: 'processThread', label: 'Process/Thread', defaultVisible: true },
   { id: 'timeGap', label: 'Time Gap', defaultVisible: true },
-  { id: 'module', label: 'Module', defaultVisible: false },
 ];
 
 const ColumnSettings = ({ isOpen, onClose, visibleColumns, onColumnsChange }) => {
