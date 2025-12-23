@@ -321,6 +321,7 @@ const LogViewer = () => {
     setCombinedViewLoaded(false);
     setHasUserInteracted(false);
     setHeaderState(null); // Clear header details
+    setLogDuration(null); // Clear time range
   }, []);
 
   // AI Chat
@@ -438,7 +439,15 @@ const LogViewer = () => {
       const lastLog = logs[logs.length - 1];
       
       if (firstLog.timestamp && lastLog.timestamp) {
-        setLogDuration(`${firstLog.timestamp} → ${lastLog.timestamp}`);
+        // Remove milliseconds from timestamps (everything after the last colon if it's 3 digits)
+        const formatTimestamp = (ts) => {
+          // Match pattern like "2025-08-04 07:10:36:859" and remove the ":859" part
+          return ts.replace(/:\d{3}$/, '');
+        };
+        
+        const startTime = formatTimestamp(firstLog.timestamp);
+        const endTime = formatTimestamp(lastLog.timestamp);
+        setLogDuration(`${startTime} → ${endTime}`);
       } else {
         setLogDuration(null);
       }
@@ -505,6 +514,7 @@ const LogViewer = () => {
         setShowingCombinedView(false);
         setCombinedViewLoaded(false);
         setHeaderState(null); // Clear header details when last tab is closed
+        setLogDuration(null); // Clear time range when last tab is closed
         return [];
       }
 
