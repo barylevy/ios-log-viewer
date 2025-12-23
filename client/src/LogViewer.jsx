@@ -394,6 +394,43 @@ const LogViewer = () => {
     }
   }, [logs, files, activeFileIndex, getCurrentFileHeaders]);
 
+  // Get folder name from current file
+  const currentFolderName = useMemo(() => {
+    if (!files || files.length === 0) return null;
+    
+    // Try to get folder from any file (they should all be from the same folder)
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      
+      // Check webkitRelativePath - return the full path without the filename
+      if (file && file.fileObj && file.fileObj.webkitRelativePath) {
+        const pathParts = file.fileObj.webkitRelativePath.split('/');
+        // Return the full path excluding the filename (last part)
+        if (pathParts.length > 1) {
+          return pathParts.slice(0, -1).join('/');
+        }
+      }
+      
+      // Also try extracting from file.id if it contains path
+      if (file && file.id && file.id.includes('/')) {
+        const pathParts = file.id.split('/');
+        if (pathParts.length > 1) {
+          return pathParts.slice(0, -1).join('/');
+        }
+      }
+      
+      // Try to get path from fileObj.path (some browsers/contexts provide this)
+      if (file && file.fileObj && file.fileObj.path) {
+        const pathParts = file.fileObj.path.split('/');
+        if (pathParts.length > 1) {
+          return pathParts.slice(0, -1).join('/');
+        }
+      }
+    }
+    
+    return null;
+  }, [files]);
+
   // Calculate log time range (start - end)
   useEffect(() => {
     if (logs && logs.length > 0) {
@@ -736,6 +773,7 @@ const LogViewer = () => {
         visibleColumns={visibleColumns}
         onColumnsChange={handleColumnsChange}
         logDuration={logDuration}
+        folderName={currentFolderName}
       />
 
       {/* Main content area - Split panel container */}

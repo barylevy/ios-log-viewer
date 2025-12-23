@@ -6,7 +6,7 @@ import { CATO_COLORS } from './constants';
 import { openAIChatInNewWindow, openAIChatInNewTab } from './utils/aiChatUtils';
 import { clearSession } from './utils/sessionStorage';
 
-const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, currentFileHeaders, onClearTabs, currentLogs, currentFileName, visibleColumns, onColumnsChange, logDuration }) => {
+const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, currentFileHeaders, onClearTabs, currentLogs, currentFileName, visibleColumns, onColumnsChange, logDuration, folderName }) => {
   const fileInputRef = useRef(null);
   const directoryInputRef = useRef(null);
   const [showFileDropdown, setShowFileDropdown] = useState(false);
@@ -217,12 +217,19 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
                 </div>
               )}
             </div>
-            {/* Log Time Range */}
-            {logDuration && (
-              <div className="text-xs text-gray-500 dark:text-gray-400 ml-1">
+            {/* Log Time Range and Folder Name */}
+            <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 ml-1">
+              {logDuration && (
                 <span className="font-medium">{logDuration}</span>
-              </div>
-            )}
+              )}
+              {folderName && logDuration && <span className="text-gray-400">•</span>}
+              {folderName && (
+                <span className="flex items-baseline gap-1">
+                  <span className="text-gray-500 dark:text-gray-500">Folder:</span>
+                  <span className="font-medium text-blue-600 dark:text-blue-400">{folderName}</span>
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
