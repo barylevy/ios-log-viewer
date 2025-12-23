@@ -43,20 +43,73 @@ const LogModal = ({ log, onClose, onAddStickyLog, onNext, onPrev, hasNext, hasPr
     navigator.clipboard.writeText(contentToCopy);
   };
 
-  // Check if log content contains "jsonString:" phrase and extract JSON data
+  // Check if log content contains JSON and extract it
   const getJsonData = () => {
     if (!log.raw) return null;
 
-    const jsonStringIndex = log.raw.indexOf('jsonString:');
-    if (jsonStringIndex === -1) return null;
+    let jsonStartIndex = -1;
+    let jsonEndIndex = -1;
+    let extractedJson = null;
 
-    // Extract everything after "jsonString:"
-    const jsonData = log.raw.substring(jsonStringIndex + 'jsonString:'.length).trim();
-    return jsonData;
+    // Enhanced JSON detection: Try to extract JSON by finding braces/brackets
+    // Strategy: Look for JSON patterns that start with [ or { followed by typical JSON content
+    
+    // Try to find array: Look for [{ or [whitespace{ pattern (array of objects)
+    const arrayOfObjectsMatch = log.raw.match(/\[\s*\{/);
+    if (arrayOfObjectsMatch && arrayOfObjectsMatch.index !== undefined) {
+      const startIdx = arrayOfObjectsMatch.index;
+      const lastBracket = log.raw.lastIndexOf(']');
+      
+      if (lastBracket > startIdx) {
+        const potentialJson = log.raw.substring(startIdx, lastBracket + 1);
+        try {
+          JSON.parse(potentialJson);
+          return {
+            json: potentialJson,
+            startIndex: startIdx,
+            endIndex: lastBracket + 1,
+            prefix: log.raw.substring(0, startIdx),
+            suffix: log.raw.substring(lastBracket + 1)
+          };
+        } catch (e) {
+          // Not valid JSON
+        }
+      }
+    }
+
+    // Try to find object: first '{' to last '}'
+    const firstBrace = log.raw.indexOf('{');
+    const lastBrace = log.raw.lastIndexOf('}');
+    
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      const potentialJson = log.raw.substring(firstBrace, lastBrace + 1);
+      try {
+        // Try to parse it to verify it's valid JSON
+        JSON.parse(potentialJson);
+        jsonStartIndex = firstBrace;
+        jsonEndIndex = lastBrace + 1;
+        extractedJson = potentialJson;
+      } catch (e) {
+        // Not valid JSON, continue to next method
+      }
+    }
+
+    if (extractedJson) {
+      return {
+        json: extractedJson,
+        startIndex: jsonStartIndex,
+        endIndex: jsonEndIndex,
+        prefix: log.raw.substring(0, jsonStartIndex),
+        suffix: log.raw.substring(jsonEndIndex)
+      };
+    }
+
+    return null;
   };
 
-  const hasJsonContent = log.raw && log.raw.includes('jsonString:');
-  const jsonData = hasJsonContent ? getJsonData() : null;
+  const jsonDataResult = getJsonData();
+  const hasJsonContent = jsonDataResult !== null;
+  const jsonData = jsonDataResult?.json;
 
   const formatTimestamp = (timestamp) => {
     if (!timestamp) return timestamp;
@@ -204,7 +257,7 @@ const LogModal = ({ log, onClose, onAddStickyLog, onNext, onPrev, hasNext, hasPr
                     : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
                     }`}
                 >
-                  JSON Tree
+                  JSON
                 </button>
               </div>
             </div>
@@ -212,7 +265,31 @@ const LogModal = ({ log, onClose, onAddStickyLog, onNext, onPrev, hasNext, hasPr
 
           {/* Content Display */}
           {viewMode === 'json' && hasJsonContent ? (
-            <JsonTreeViewer data={jsonData} />
+            <div>
+              {/* Show prefix text if exists */}
+              {jsonDataResult?.prefix && (
+                <div className="mb-3">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Message prefix:</div>
+                  <pre className="whitespace-pre-wrap break-words font-mono text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-900 p-3 rounded border">
+                    {jsonDataResult.prefix}
+                  </pre>
+                </div>
+              )}
+              {/* JSON Tree */}
+              <div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">JSON content:</div>
+                <JsonTreeViewer data={jsonData} />
+              </div>
+              {/* Show suffix text if exists */}
+              {jsonDataResult?.suffix && jsonDataResult.suffix.trim() && (
+                <div className="mt-3">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Message suffix:</div>
+                  <pre className="whitespace-pre-wrap break-words font-mono text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-900 p-3 rounded border">
+                    {jsonDataResult.suffix}
+                  </pre>
+                </div>
+              )}
+            </div>
           ) : (
             <pre className="whitespace-pre-wrap break-words font-mono text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-900 p-4 rounded border overflow-x-auto">
               {log.raw}
