@@ -140,11 +140,13 @@ const AIConfigSettings = ({ isOpen, onClose }) => {
 
                     {/* Help Text */}
                     <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded text-sm">
-                        <h4 className="font-medium text-blue-800 dark:text-blue-200 mb-1">How to get an API key:</h4>
+                        <h4 className="font-medium text-blue-800 dark:text-blue-200 mb-1">
+                            How to get an OpenAI API key:
+                        </h4>
                         <ol className="text-blue-700 dark:text-blue-300 space-y-1 list-decimal list-inside">
                             <li>Visit <a href="https://platform.openai.com" target="_blank" rel="noopener noreferrer" className="font-mono text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline cursor-pointer">platform.openai.com</a></li>
                             <li>Sign up or log in to your account</li>
-                            <li>Go directly to <a href="https://platform.openai.com/settings/organization/api-keys" target="_blank" rel="noopener noreferrer" className="font-mono text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline cursor-pointer">API keys page</a></li>
+                            <li>Go to <a href="https://platform.openai.com/settings/organization/api-keys" target="_blank" rel="noopener noreferrer" className="font-mono text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline cursor-pointer">API keys page</a></li>
                             <li>Create a new API key</li>
                             <li>Copy and paste it here</li>
                         </ol>

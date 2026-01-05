@@ -75,7 +75,7 @@ const AIChat = ({ logs, fileName, isOpen, onClose, isFullWidth, onToggleFullWidt
             const currentKey = retrieveApiKey();
             setApiKey(currentKey);
         }
-    }, [isOpen, settingsOpen]); // Re-check when settings modal closes
+    }, [isOpen, settingsOpen]);
 
     // Scroll to the latest message when messages change
     useEffect(() => {
@@ -135,10 +135,7 @@ const AIChat = ({ logs, fileName, isOpen, onClose, isFullWidth, onToggleFullWidt
                 body: JSON.stringify({
                     model: "gpt-4o-mini",
                     messages: [
-                        {
-                            role: "system",
-                            content: systemMessage
-                        },
+                        { role: "system", content: systemMessage },
                         { role: "user", content: userMessage }
                     ],
                     temperature: 0.3,
@@ -147,8 +144,16 @@ const AIChat = ({ logs, fileName, isOpen, onClose, isFullWidth, onToggleFullWidt
             });
 
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error?.message || `API error: ${response.status}`);
+                let errorMessage = `API error: ${response.status}`;
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.error?.message || errorData.message || errorMessage;
+                } catch (e) {
+                    const text = await response.text();
+                    if (text) errorMessage = text;
+                }
+                console.error(`${provider} API Error:`, errorMessage);
+                throw new Error(errorMessage);
             }
 
             const data = await response.json();
@@ -246,7 +251,7 @@ const AIChat = ({ logs, fileName, isOpen, onClose, isFullWidth, onToggleFullWidt
                             </h3>
                             <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
                                 <p>To use AI chat, please configure your OpenAI API key in Settings.</p>
-                                <p className="mt-1 text-xs">Click the "Settings" button in the top toolbar to get started.</p>
+                                <p className="mt-1 text-xs">Click the "Settings" button (⚙️) to get started.</p>
                             </div>
                         </div>
                     </div>
