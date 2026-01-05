@@ -166,13 +166,15 @@ const JsonNode = ({ data, path, level, expandedPaths, onToggle, searchQuery, mat
                 return <span className="text-gray-600 dark:text-gray-400">[]</span>;
             }
 
+            const isCurrentExpanded = expandedPaths.has(currentPath);
+
             return (
                 <div>
                     <button
                         onClick={() => onToggle(currentPath)}
                         className="flex items-center gap-1 text-orange-600 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-200"
                     >
-                        <span className={`transform transition-transform text-xs ${isExpanded ? 'rotate-90' : ''}`}>
+                        <span className={`transform transition-transform text-xs ${isCurrentExpanded ? 'rotate-90' : ''}`}>
                             ▶
                         </span>
                         <span className={matchesSearch(`Array[${value.length}]`) ? 'bg-yellow-200 dark:bg-yellow-800' : ''}>
@@ -180,7 +182,7 @@ const JsonNode = ({ data, path, level, expandedPaths, onToggle, searchQuery, mat
                         </span>
                     </button>
 
-                    {isExpanded && (
+                    {isCurrentExpanded && (
                         <div style={{ marginLeft: `${indent + 16}px` }} className="mt-1">
                             {value.map((item, index) => {
                                 const itemPath = `${currentPath}[${index}]`;
@@ -204,13 +206,15 @@ const JsonNode = ({ data, path, level, expandedPaths, onToggle, searchQuery, mat
                 return <span className="text-gray-600 dark:text-gray-400">{'{}'}</span>;
             }
 
+            const isCurrentExpanded = expandedPaths.has(currentPath);
+
             return (
                 <div>
                     <button
                         onClick={() => onToggle(currentPath)}
                         className="flex items-center gap-1 text-orange-600 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-200"
                     >
-                        <span className={`transform transition-transform text-xs ${isExpanded ? 'rotate-90' : ''}`}>
+                        <span className={`transform transition-transform text-xs ${isCurrentExpanded ? 'rotate-90' : ''}`}>
                             ▶
                         </span>
                         <span className={matchesSearch(`Object (${keys.length} keys)`) ? 'bg-yellow-200 dark:bg-yellow-800' : ''}>
@@ -218,7 +222,7 @@ const JsonNode = ({ data, path, level, expandedPaths, onToggle, searchQuery, mat
                         </span>
                     </button>
 
-                    {isExpanded && (
+                    {isCurrentExpanded && (
                         <div style={{ marginLeft: `${indent + 16}px` }} className="mt-1">
                             {keys.map((objKey) => {
                                 const keyPath = `${currentPath}.${objKey}`;
