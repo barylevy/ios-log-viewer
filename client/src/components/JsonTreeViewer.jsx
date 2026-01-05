@@ -3,6 +3,7 @@ import React, { useState, useMemo } from 'react';
 const JsonTreeViewer = ({ data, searchTerm = '', onSearchChange }) => {
     const [searchQuery, setSearchQuery] = useState(searchTerm);
     const [expandedPaths, setExpandedPaths] = useState(new Set(['root'])); // Start with root expanded
+    const [isAllExpanded, setIsAllExpanded] = useState(false); // Track expand/collapse state
 
     // Parse JSON if it's a string
     const parsedData = useMemo(() => {
@@ -44,7 +45,12 @@ const JsonTreeViewer = ({ data, searchTerm = '', onSearchChange }) => {
         const allPaths = new Set();
         const collectPaths = (obj, path = 'root') => {
             allPaths.add(path);
-            if (typeof obj === 'object' && obj !== null) {
+            if (Array.isArray(obj)) {
+                obj.forEach((item, index) => {
+                    const newPath = `${path}[${index}]`;
+                    collectPaths(item, newPath);
+                });
+            } else if (typeof obj === 'object' && obj !== null) {
                 Object.keys(obj).forEach(key => {
                     const newPath = `${path}.${key}`;
                     collectPaths(obj[key], newPath);
@@ -53,11 +59,22 @@ const JsonTreeViewer = ({ data, searchTerm = '', onSearchChange }) => {
         };
         collectPaths(parsedData);
         setExpandedPaths(allPaths);
+        setIsAllExpanded(true);
     };
 
     // Collapse all nodes
     const collapseAll = () => {
         setExpandedPaths(new Set(['root']));
+        setIsAllExpanded(false);
+    };
+
+    // Toggle expand/collapse all
+    const toggleExpandCollapse = () => {
+        if (isAllExpanded) {
+            collapseAll();
+        } else {
+            expandAll();
+        }
     };
 
     // Check if text matches search
@@ -83,16 +100,10 @@ const JsonTreeViewer = ({ data, searchTerm = '', onSearchChange }) => {
             <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-200 dark:border-gray-600">
                 <div className="flex items-center gap-2">
                     <button
-                        onClick={expandAll}
+                        onClick={toggleExpandCollapse}
                         className="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
                     >
-                        Expand All
-                    </button>
-                    <button
-                        onClick={collapseAll}
-                        className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                    >
-                        Collapse All
+                        {isAllExpanded ? 'Collapse All' : 'Expand All'}
                     </button>
                 </div>
 
