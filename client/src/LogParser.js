@@ -143,6 +143,12 @@ export const extractModule = (line) => {
  * @returns {string} - The thread ID or empty string
  */
 export const extractThread = (line) => {
+  // Mac/iOS explicit format: [module:line] [level] [t:thread] [p:process]
+  const macExplicitMatch = line.match(/\[t:(\d+)\]/);
+  if (macExplicitMatch) {
+    return macExplicitMatch[1];
+  }
+
   // Android format: [date] [thread] [domain] - [level] - message
   const androidMatch = line.match(/^\[[\w-]+\s[\d:.]+\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+-\s+\[[DWE]\]\s+-/);
   if (androidMatch) {
@@ -227,6 +233,12 @@ export const extractThread = (line) => {
  * @returns {string} - The process ID or process:thread combination
  */
 export const extractProcess = (line) => {
+  // Mac/iOS explicit format: [module:line] [level] [t:thread] [p:process]
+  const macExplicitMatch = line.match(/\[p:(\d+)\]/);
+  if (macExplicitMatch) {
+    return macExplicitMatch[1];
+  }
+
   // Try to extract process ID - look for patterns like pid:12345, process:12345, or [pid:12345]
   const processMatch = line.match(/(?:pid|process)[:\s]*(\d+)/i) ||
     line.match(/\[(?:pid|process)[:\s]*(\d+)\]/i);
@@ -433,6 +445,20 @@ export const parseLogContent = (content, headerLines = []) => {
  * @returns {Object|null} - Parsed components or null if not a recognized format
  */
 export const parseLogFormat = (line) => {
+  // iOS/macOS explicit format: date time [module:line] [level] [t:thread] [p:process] message
+  const iosExplicitMatch = line.match(/^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}:\d{3})\s+\[([^\]]+)\]\s+\[([DIWEVT])\]\s+\[t:(\d+)\]\s+\[p:(\d+)\]\s+(.*)$/);
+  if (iosExplicitMatch) {
+    return {
+      format: 'ios-macos-explicit',
+      dateTime: iosExplicitMatch[1],
+      moduleInfo: iosExplicitMatch[2].trim(),
+      logLevel: iosExplicitMatch[3],
+      threadId: iosExplicitMatch[4],
+      processId: iosExplicitMatch[5],
+      message: iosExplicitMatch[6]
+    };
+  }
+
   // iOS/macOS format: date time [module:line] [thread] [process] message
   const iosMatch = line.match(/^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}:\d{3})\s+\[([^\]]+)\]\s+\[(\d+)\]\s+\[(\d+)\]\s+(.*)$/);
   if (iosMatch) {

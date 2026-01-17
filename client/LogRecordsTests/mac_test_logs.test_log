@@ -55,13 +55,13 @@
 {"Date": "2025-08-04", "Time": "07:14:29:864", "ProcessId": "300015", "ThreadID": "759", "logLevel": null, "FileName": "CNVpnConfManager", "Line": "812", "Module": "CNVpnConfManager"}
 
 2025-08-04 07:14:29:867 [AuthenticationCredentialsProvider:166] [300015] [759] getData: success
-{"Date": "2025-08-04", "Time": "07:14:29:867", "ProcessId": "759", "ThreadID": "300015", "logLevel": null, "FileName": "AuthenticationCredentialsProvider", "Line": "166", "Module": "AuthenticationCredentialsProvider"}
+{"Date": "2025-08-04", "Time": "07:14:29:867", "ProcessId": "300015", "ThreadID": "759", "logLevel": null, "FileName": "AuthenticationCredentialsProvider", "Line": "166", "Module": "AuthenticationCredentialsProvider"}
 
 2025-08-04 07:14:36:207 [AuthenticationCredentialsProvider:36] [305524] [759] save password
 {"Date": "2025-08-04", "Time": "07:14:36:207", "ProcessId": "759", "ThreadID": "305524", "logLevel": null, "FileName": "AuthenticationCredentialsProvider", "Line": "36", "Module": "AuthenticationCredentialsProvider"}
 
 2025-08-04 07:14:36:211 [AuthenticationCredentialsProvider:104] [305524] [759] savePassword: data was updated successfully
-{"Date": "2025-08-04", "Time": "07:14:36:211", "ProcessId": "759", "ThreadID": "305524", "logLevel": null, "FileName": "AuthenticationCredentialsProvider", "Line": "104", "Module": "AuthenticationCredentialsProvider"}
+{"Date": "2025-08-04", "Time": "07:14:36:211", "ProcessId": "305524", "ThreadID": "759", "logLevel": null, "FileName": "AuthenticationCredentialsProvider", "Line": "104", "Module": "AuthenticationCredentialsProvider"}
 
 # Mac log with network information
 2025-08-04 07:14:36:518 [HardwareMetricsManager:93] [6381] [759] DEM using gateway IP: 10.0.1.1
@@ -71,21 +71,39 @@
 {"Date": "2025-08-04", "Time": "07:14:36:518", "ProcessId": "6381", "ThreadID": "759", "logLevel": null, "FileName": "HardwareMetricsManager", "Line": "242", "Module": "HardwareMetricsManager"}
 
 2025-08-04 07:14:36:519 [ConnectionViewModel:152] [6381] [759] connectionState didSet:connected, subtitle:alwaysOnActivated
-{"Date": "2025-08-04", "Time": "07:14:36:519", "ProcessId": "6381", "ThreadID": "759", "logLevel": null, "FileName": "ConnectionViewModel", "Line": "152", "Module": "ConnectionViewModel"}
+{"Date": "2025-08-04", "Time": "07:14:36:519", "ProcessId": "759", "ThreadID": "6381", "logLevel": null, "FileName": "ConnectionViewModel", "Line": "152", "Module": "ConnectionViewModel"}
 
 # Mac log with error handling
 2025-08-04 07:13:16:691 [CNSharedManager+macOS:121] [6381] [759] connectionError msg recieved: Connection error. Trying to reconnect...
-{"Date": "2025-08-04", "Time": "07:13:16:691", "ProcessId": "6381", "ThreadID": "759", "logLevel": null, "FileName": "CNSharedManager+macOS", "Line": "121", "Module": "CNSharedManager+macOS"}
+{"Date": "2025-08-04", "Time": "07:13:16:691", "ProcessId": "759", "ThreadID": "6381", "logLevel": null, "FileName": "CNSharedManager+macOS", "Line": "121", "Module": "CNSharedManager+macOS"}
 
 2025-08-04 07:13:16:691 [CNSharedManager+macOS:125] [6381] [759] Error: got message: Connection error. Trying to reconnect...
 {"Date": "2025-08-04", "Time": "07:13:16:691", "ProcessId": "6381", "ThreadID": "759", "logLevel": null, "FileName": "CNSharedManager+macOS", "Line": "125", "Module": "CNSharedManager+macOS"}
 
 # Mac log with state changes
 2025-08-04 07:14:29:708 [CNSharedManager+macOS:93] [6381] [759] connectingState msg recieved: connected
-{"Date": "2025-08-04", "Time": "07:14:29:708", "ProcessId": "6381", "ThreadID": "759", "logLevel": null, "FileName": "CNSharedManager+macOS", "Line": "93", "Module": "CNSharedManager+macOS"}
+{"Date": "2025-08-04", "Time": "07:14:29:708", "ProcessId": "759", "ThreadID": "6381", "logLevel": null, "FileName": "CNSharedManager+macOS", "Line": "93", "Module": "CNSharedManager+macOS"}
 
 2025-08-04 07:14:29:708 [CNSharedManager+macOS:97] [6381] [759] set state as connected
-{"Date": "2025-08-04", "Time": "07:14:29:708", "ProcessId": "6381", "ThreadID": "759", "logLevel": null, "FileName": "CNSharedManager+macOS", "Line": "97", "Module": "CNSharedManager+macOS"}
+{"Date": "2025-08-04", "Time": "07:14:29:708", "ProcessId": "759", "ThreadID": "6381", "logLevel": null, "FileName": "CNSharedManager+macOS", "Line": "97", "Module": "CNSharedManager+macOS"}
 
 2025-08-04 07:14:36:499 [CNSharedManager+macOS:152] [6381] [759] * got notification from extension:tunnelBecameAuth*
 {"Date": "2025-08-04", "Time": "07:14:36:499", "ProcessId": "6381", "ThreadID": "759", "logLevel": null, "FileName": "CNSharedManager+macOS", "Line": "152", "Module": "CNSharedManager+macOS"}
+
+2025-12-11 08:35:19:101 [CNSharedManager+macOS:25] [I] [t:22659] [p:2017] init shared manager
+{"Date": "2025-12-11", "Time": "08:35:19:101", "ProcessId": "2017", "ThreadID": "22659", "logLevel": "I", "FileName": "CNSharedManager+macOS", "Line": "25", "Module": "CNSharedManager+macOS"}
+
+2026-01-05 12:38:40:050 [AppDelegate:244] [D] [t:4463273] [p:65440] *** applicationDidFinishLaunching - version:5.11.0 (7519) ***
+{"Date": "2026-01-05", "Time": "12:38:40:050", "ProcessId": "65440", "ThreadID": "4463273", "logLevel": "D", "FileName": "AppDelegate", "Line": "244", "Module": "AppDelegate"}
+
+2026-01-05 12:38:40:051 [CNSharedManager+macOS:28] [I] [t:4463273] [p:65440] init realm start
+{"Date": "2026-01-05", "Time": "12:38:40:051", "ProcessId": "65440", "ThreadID": "4463273", "logLevel": "I", "FileName": "CNSharedManager+macOS", "Line": "28", "Module": "CNSharedManager+macOS"}
+
+2026-01-05 12:38:40:126 [CNVpnConfManager:189] [D] [t:4463273] [p:65440] loadCatoVpnConf
+{"Date": "2026-01-05", "Time": "12:38:40:126", "ProcessId": "65440", "ThreadID": "4463273", "logLevel": "D", "FileName": "CNVpnConfManager", "Line": "189", "Module": "CNVpnConfManager"}
+
+2026-01-05 12:38:40:127 [CNVpnConfManager:197] [E] [t:4463273] [p:65440] Error loading VPN config: file not found
+{"Date": "2026-01-05", "Time": "12:38:40:127", "ProcessId": "65440", "ThreadID": "4463273", "logLevel": "E", "FileName": "CNVpnConfManager", "Line": "197", "Module": "CNVpnConfManager"}
+
+2026-01-05 12:38:40:128 [NetworkManager:42] [W] [t:999999] [p:888888] Connection timeout after 30s
+{"Date": "2026-01-05", "Time": "12:38:40:128", "ProcessId": "888888", "ThreadID": "999999", "logLevel": "W", "FileName": "NetworkManager", "Line": "42", "Module": "NetworkManager"}

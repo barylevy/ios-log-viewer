@@ -66,6 +66,21 @@ function transformToExpectedFormat(result) {
 
   // Handle different format outputs
   switch (result.format) {
+    case 'ios-macos-explicit':
+      // Mac explicit format with [t:thread] and [p:process]
+      if (result.moduleInfo) {
+        const moduleMatch = result.moduleInfo.match(/^([^:]+):(\d+)$/);
+        if (moduleMatch) {
+          transformed.FileName = moduleMatch[1];
+          transformed.Line = moduleMatch[2];
+          transformed.Module = moduleMatch[1];
+        }
+      }
+      transformed.ProcessId = result.processId;
+      transformed.ThreadID = result.threadId;
+      transformed.logLevel = result.logLevel || null;
+      break;
+
     case 'ios-macos':
       // Mac format
       if (result.moduleInfo) {
