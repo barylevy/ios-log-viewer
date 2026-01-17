@@ -12,21 +12,93 @@ import {
 } from './dateTimeUtils';
 import { cleanMessage } from './utils/logLevelColors';
 
+// Color palette for thread/process IDs (avoiding red, blue, green which have semantic meaning)
+const PROCESS_THREAD_COLORS = [
+  '#8B5CF6', // violet-500
+  '#F59E0B', // amber-500
+  '#EC4899', // pink-500
+  '#14B8A6', // teal-500
+  '#F97316', // orange-500
+  '#A855F7', // purple-500
+  '#06B6D4', // cyan-500
+  '#D946EF', // fuchsia-500
+  '#EAB308', // yellow-500
+  '#78716C', // stone-500
+];
+
+// Separate maps to store colors for process and thread IDs
+const processColorMap = new Map();
+const threadColorMap = new Map();
+let processColorIndex = 0;
+let threadColorIndex = 0;
+
+// Helper function to get color for a process ID
+const getColorForProcess = (processId) => {
+  if (!processId) return null;
+  
+  if (!processColorMap.has(processId)) {
+    processColorMap.set(processId, PROCESS_THREAD_COLORS[processColorIndex % PROCESS_THREAD_COLORS.length]);
+    processColorIndex++;
+  }
+  
+  return processColorMap.get(processId);
+};
+
+// Helper function to get color for a thread ID
+const getColorForThread = (threadId) => {
+  if (!threadId) return null;
+  
+  if (!threadColorMap.has(threadId)) {
+    threadColorMap.set(threadId, PROCESS_THREAD_COLORS[threadColorIndex % PROCESS_THREAD_COLORS.length]);
+    threadColorIndex++;
+  }
+  
+  return threadColorMap.get(threadId);
+};
+
 // Helper function to extract process and thread information for display
-const extractFileInfo = (log) => {
+const extractFileInfo = (log, previousLog) => {
+  // Check if thread ID or process ID changed from previous log
+  const threadChanged = previousLog && log.thread && log.thread !== previousLog.thread;
+  const processChanged = previousLog && log.process && log.process !== previousLog.process;
+  const hasChange = threadChanged || processChanged;
+
+  // Get colors for process and thread separately
+  const processColor = getColorForProcess(log.process);
+  const threadColor = getColorForThread(log.thread);
+
   // Display both process ID and thread ID if both are available
   if (log.process && log.thread) {
-    return `[${log.process}:${log.thread}]`;
+    const text = `[${log.process}:${log.thread}]`;
+    const tooltip = `Process ID: ${log.process} | Thread ID: ${log.thread}`;
+    const html = `[<span style="color: ${processColor}" title="${tooltip}">${log.process}</span>:<span style="color: ${threadColor}" title="${tooltip}">${log.thread}</span>]`;
+    return { 
+      text,
+      html,
+      hasChange
+    };
   }
 
   // Fallback to just thread if only thread is available
   if (log.thread) {
-    return `[${log.thread}]`;
+    const text = `[${log.thread}]`;
+    const html = `<span style="color: ${threadColor}" title="Thread ID: ${log.thread}">[${log.thread}]</span>`;
+    return {
+      text,
+      html,
+      hasChange
+    };
   }
 
   // Fallback to just process if only process is available
   if (log.process) {
-    return `[${log.process}]`;
+    const text = `[${log.process}]`;
+    const html = `<span style="color: ${processColor}" title="Process ID: ${log.process}">[${log.process}]</span>`;
+    return {
+      text,
+      html,
+      hasChange
+    };
   }
 
   return null;
@@ -192,7 +264,7 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
   
   // Process the log message and extract file info - memoized by log.id to prevent recalculation
   const cleanedMessage = useMemo(() => cleanMessage(log.message), [log.message]);
-  const fileInfo = useMemo(() => extractFileInfo(log), [log.message, log.timestamp]);
+  const fileInfo = useMemo(() => extractFileInfo(log, previousLog), [log.message, log.timestamp, log.thread, log.process, previousLog?.thread, previousLog?.process]);
   const timeInfo = useMemo(() => extractTimeFromTimestamp(log.timestamp || log.message) || '--:--:--.---', [log.timestamp, log.message]);
 
   // Check if content exceeds 3 lines after render
@@ -546,9 +618,10 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
 
                   {/* Process/Thread info */}
                   {visibleColumns.processThread !== false && fileInfo && (
-                    <div className="text-xs text-gray-400 dark:text-gray-500 font-mono">
-                      {fileInfo}
-                    </div>
+                    <div 
+                      className="text-xs text-gray-400 dark:text-gray-500 font-mono"
+                      dangerouslySetInnerHTML={{ __html: fileInfo.html }}
+                    />
                   )}
                 </div>
               )}
