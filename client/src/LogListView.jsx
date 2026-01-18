@@ -530,10 +530,22 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
         onClick={() => onClick({ ...log, lineIndex: index + 1 })}
         onContextMenu={handleContextMenu}
       >
-        <div className="flex items-start gap-2">
+        <div 
+          style={{ 
+            display: 'grid', 
+            gridTemplateColumns: [
+              visibleColumns.timestamp !== false ? '80px' : '',
+              visibleColumns.lineNumber !== false ? '40px' : '',
+              visibleColumns.logLevel !== false ? '20px' : '',
+              '1fr'
+            ].filter(Boolean).join(' '),
+            gap: '1.5rem',
+            alignItems: 'start'
+          }}
+        >
           {/* Timestamp */}
           {visibleColumns.timestamp !== false && (
-          <div className={`flex-shrink-0 text-xs font-mono min-w-14 ${hasSticky ? 'underline decoration-solid decoration-1' : ''} ${timeInfo === '--:--:--.---'
+          <div className={`text-xs font-mono text-center ${hasSticky ? 'underline decoration-solid decoration-1' : ''} ${timeInfo === '--:--:--.---'
             ? 'text-gray-300 dark:text-gray-600 opacity-50'
             : timeGapInfo.hasGap
               ? 'text-orange-600 dark:text-orange-400 font-semibold'
@@ -545,27 +557,20 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
 
           {/* Line Number */}
           {visibleColumns.lineNumber !== false && (
-          <div className="flex-shrink-0 text-xs text-gray-400 dark:text-gray-500 font-mono min-w-16 text-right mr-3">
+          <div className="text-xs text-gray-400 dark:text-gray-500 font-mono text-center">
             {log.lineNumber}
           </div>
           )}
 
           {/* Log Level Indicator */}
           {visibleColumns.logLevel !== false && (
-          <div className={`flex-shrink-0 text-xs font-semibold uppercase min-w-8 ${logLevelColor}`}>
+          <div className={`text-xs font-semibold uppercase text-center ${logLevelColor}`}>
             {logLevel.charAt(0).toUpperCase()}
           </div>
           )}
 
-          {/* Context Line Indicator */}
-          {log.isContextLine && (
-            <div className="flex-shrink-0 text-xs text-gray-400 dark:text-gray-500 font-mono">
-              ~
-            </div>
-          )}
-
           {/* Message content */}
-          <div className="flex-1 flex items-start justify-between gap-2 min-w-0">
+          <div className="flex items-start justify-between gap-2 min-w-0">
             <div className="flex-1 min-w-0">
               <div
                 ref={contentRef}
@@ -573,8 +578,12 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
                   ? 'text-gray-600 dark:text-gray-400'
                   : 'text-gray-800 dark:text-gray-200'
                   } ${!isExpanded ? 'line-clamp-3' : ''}`}
-                dangerouslySetInnerHTML={{ __html: highlightedMessage }}
-              />
+              >
+                {log.isContextLine && (
+                  <span className="text-gray-400 dark:text-gray-500 font-mono mr-1">~</span>
+                )}
+                <span dangerouslySetInnerHTML={{ __html: highlightedMessage }} />
+              </div>
               {needsExpand && (
                 <button
                   onClick={(e) => {
@@ -1373,6 +1382,56 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
           </div>
         </div>
       )}
+
+      {/* Column Headers - Fixed */}
+      <div className="px-3 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
+        <div 
+          style={{ 
+            display: 'grid', 
+            gridTemplateColumns: [
+              visibleColumns.timestamp !== false ? '80px' : '',
+              visibleColumns.lineNumber !== false ? '50px' : '',
+              visibleColumns.logLevel !== false ? '40px' : '',
+              '1fr'
+            ].filter(Boolean).join(' '),
+            gap: '1rem',
+            alignItems: 'start'
+          }}
+        >
+          {visibleColumns.timestamp !== false && (
+            <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 font-mono text-center" title="Timestamp of the log entry">
+              Time
+            </div>
+          )}
+          {visibleColumns.lineNumber !== false && (
+            <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 font-mono text-center" title="Line number in the log file">
+              Line
+            </div>
+          )}
+          {visibleColumns.logLevel !== false && (
+            <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 font-mono text-center" title="Log level (Error, Warning, Info, etc.)">
+              Lvl
+            </div>
+          )}
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-xs font-semibold text-gray-700 dark:text-gray-300" title="Log message content">
+              Message
+            </div>
+            <div className="flex items-center gap-3">
+              {visibleColumns.module !== false && (
+                <div className="text-xs font-semibold text-gray-700 dark:text-gray-300" title="Source file and line number">
+                  Source File
+                </div>
+              )}
+              {visibleColumns.processThread !== false && (
+                <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 pr-2" title="Process ID and Thread ID">
+                  Process:Thread
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* React Virtuoso List - NO CUSTOM VIRTUAL SCROLLING! */}
       <div className="flex-1">
