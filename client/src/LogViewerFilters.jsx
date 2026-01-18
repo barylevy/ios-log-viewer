@@ -162,7 +162,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
-        (dropdownRef.current && dropdownRef.current.contains(event.target)) ||
+        (portalRef.current && portalRef.current.contains(event.target)) ||
         (buttonRef.current && buttonRef.current.contains(event.target))
       ) {
         return; // Click is inside the level dropdown, do nothing
