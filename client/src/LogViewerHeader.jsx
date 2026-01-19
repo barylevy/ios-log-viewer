@@ -5,6 +5,7 @@ import ColumnSettings, { AVAILABLE_COLUMNS } from './ColumnSettings';
 import { CATO_COLORS } from './constants';
 import { openAIChatInNewWindow, openAIChatInNewTab } from './utils/aiChatUtils';
 import { clearSession } from './utils/sessionStorage';
+import { groupFilesByPrefix, getGroupDisplayName } from './utils/fileGrouping';
 
 const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, currentFileHeaders, onClearTabs, currentLogs, currentFileName, visibleColumns, onColumnsChange, logDuration, folderName }) => {
   const fileInputRef = useRef(null);
@@ -80,13 +81,31 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
       onClearTabs();
     }
 
-    // Sort files by name before loading
-    const sortedFiles = files.sort((a, b) => a.name.localeCompare(b.name));
+    // Group files by prefix for Windows logs
+    const fileGroups = groupFilesByPrefix(files);
 
-    // Load all files
-    sortedFiles.forEach(file => {
-      onFileLoad(file);
-    });
+    // If all files are in a single group (no grouping needed), load normally
+    if (fileGroups.size === 1 && fileGroups.values().next().value.length === files.length) {
+      // Sort files by name before loading
+      const sortedFiles = files.sort((a, b) => a.name.localeCompare(b.name));
+      
+      // Load all files
+      sortedFiles.forEach(file => {
+        onFileLoad(file);
+      });
+    } else {
+      // Multiple groups detected - load as grouped files
+      fileGroups.forEach((groupFiles, prefix) => {
+        if (groupFiles.length === 1) {
+          // Single file in group - load normally
+          onFileLoad(groupFiles[0]);
+        } else {
+          // Multiple files in group - load as merged group
+          onFileLoad(groupFiles, false, prefix);
+        }
+      });
+    }
+    
     event.target.value = '';
   };
 

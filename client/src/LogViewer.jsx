@@ -330,17 +330,27 @@ const LogViewer = () => {
   const [isResizing, setIsResizing] = useState(false);
   const [isAIChatFullWidth, setIsAIChatFullWidth] = useState(false);
 
-  const handleFileLoad = useCallback((file, clearTabsFirst = false) => {
+  const handleFileLoad = useCallback((fileOrFiles, clearTabsFirst = false, groupPrefix = null) => {
+    // Support both single file and array of files (for grouped Windows logs)
+    const isFileArray = Array.isArray(fileOrFiles);
+    const firstFile = isFileArray ? fileOrFiles[0] : fileOrFiles;
+    
     // Only load .txt files or .log files
-    if (!file.name.toLowerCase().endsWith('.txt') && !file.name.toLowerCase().endsWith('.log')) {
+    if (!firstFile.name.toLowerCase().endsWith('.txt') && !firstFile.name.toLowerCase().endsWith('.log')) {
       return;
     }
-    const fileId = getFileIdentifier(file);
+    
     // Optionally clear all tabs before loading (for new folder)
     if (clearTabsFirst) {
       handleClearTabs();
     }
-    // Check if file already exists
+    
+    // For grouped files, use the prefix with file count as the identifier
+    const fileId = isFileArray && groupPrefix 
+      ? `${groupPrefix} (${fileOrFiles.length})` 
+      : getFileIdentifier(firstFile);
+    
+    // Check if file/group already exists
     const existingIndex = files.findIndex(f => f.id === fileId);
     if (existingIndex >= 0) {
       setActiveFileIndex(existingIndex);
@@ -348,14 +358,27 @@ const LogViewer = () => {
       switchToFile(fileId);
       return;
     }
+    
     setFiles(prev => {
-      const newFiles = [...prev, { name: file.name, id: fileId, fileObj: file }];
+      const displayName = isFileArray && groupPrefix
+        ? `${groupPrefix} (${fileOrFiles.length})`
+        : firstFile.name;
+      
+      const newFiles = [...prev, { 
+        name: displayName, 
+        id: fileId, 
+        fileObj: fileOrFiles, // Store array or single file
+        isGroup: isFileArray,
+        groupPrefix: groupPrefix
+      }];
       const newIndex = newFiles.length - 1;
 
       // Always set the newly loaded file as active
       setActiveFileIndex(newIndex);
       setShowingCombinedView(false);
-      requestFileLoad(fileId, file);
+      
+      // Request load with proper file(s)
+      requestFileLoad(fileId, fileOrFiles);
 
       // Switch to the new file to show its logs
       setTimeout(() => {

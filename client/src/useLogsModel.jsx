@@ -277,39 +277,110 @@ const useLogsModel = () => {
     return { headerData, headerLines };
   };
 
-  // Internal: load logs for a file object (async)
-  const loadLogs = useCallback((file) => {
-    const fileId = getFileIdentifier(file);
+  // Internal: load logs for a file object or array of files (async)
+  const loadLogs = useCallback((fileOrFiles) => {
+    const isFileArray = Array.isArray(fileOrFiles);
+    const firstFile = isFileArray ? fileOrFiles[0] : fileOrFiles;
+    const fileId = getFileIdentifier(firstFile);
+    
     // Mark loading as started
     setFileLoadingState(prev => ({ ...prev, [fileId]: true }));
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const content = e.target.result;
-      // Parse header information from start of file
-      const { headerData, headerLines } = parseHeaderInfo(content);
-      setLogFileHeaders(prev => {
-        const existingHeaders = prev[fileId] || {};
-        const hasNewHeaders = headerData && Object.keys(headerData).length > 0;
-        const hasExistingHeaders = Object.keys(existingHeaders).length > 0;
-        if (hasExistingHeaders && !hasNewHeaders) return prev;
-        if (hasNewHeaders) {
-          return { ...prev, [fileId]: headerData };
-        }
-        if (!hasExistingHeaders && !hasNewHeaders) return prev;
-        return prev;
+    
+    if (isFileArray) {
+      // Load multiple files and merge them
+      const fileReadPromises = fileOrFiles.map(file => {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const content = e.target.result;
+            const { headerData, headerLines } = parseHeaderInfo(content);
+            const logs = parseLogContent(content, headerLines);
+            resolve({ logs, headerData, fileName: file.name });
+          };
+          reader.readAsText(file);
+        });
       });
       
-      // Parse the log content using the dedicated parser
-      const logs = parseLogContent(content, headerLines);
-      
-      setAllFileLogs(prev => ({ ...prev, [fileId]: logs }));
-      setLogs(logs);
-      setSelectedLog(null);
-      setHighlightedLogId(null);
-      setCurrentFileName(fileId);
-      setFileLoadingState(prev => ({ ...prev, [fileId]: false }));
-    };
-    reader.readAsText(file);
+      Promise.all(fileReadPromises).then(results => {
+        // Merge all logs from all files
+        const allLogs = results.flatMap((result, index) => 
+          result.logs.map(log => ({
+            ...log,
+            id: `${index}_${log.id}`, // Ensure unique IDs across files
+            sourceFile: result.fileName // Track which file each log came from
+          }))
+        );
+        
+        // Sort by timestamp using existing parseTimestampToMs function
+        allLogs.sort((a, b) => {
+          if (a.timestamp && b.timestamp) {
+            const msA = parseTimestampToMs(a.timestamp);
+            const msB = parseTimestampToMs(b.timestamp);
+            
+            if (msA !== null && msB !== null) {
+              return msA - msB;
+            }
+            
+            // Fallback to string comparison if parsing fails
+            return a.timestamp.localeCompare(b.timestamp);
+          }
+          return 0;
+        });
+        
+        // Merge headers from all files (prefer non-empty values)
+        const mergedHeaders = results.reduce((acc, result) => {
+          if (result.headerData) {
+            Object.entries(result.headerData).forEach(([key, value]) => {
+              if (value && !acc[key]) {
+                acc[key] = value;
+              }
+            });
+          }
+          return acc;
+        }, {});
+        
+        if (Object.keys(mergedHeaders).length > 0) {
+          setLogFileHeaders(prev => ({ ...prev, [fileId]: mergedHeaders }));
+        }
+        
+        setAllFileLogs(prev => ({ ...prev, [fileId]: allLogs }));
+        setLogs(allLogs);
+        setSelectedLog(null);
+        setHighlightedLogId(null);
+        setCurrentFileName(fileId);
+        setFileLoadingState(prev => ({ ...prev, [fileId]: false }));
+      });
+    } else {
+      // Single file - original logic
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = e.target.result;
+        // Parse header information from start of file
+        const { headerData, headerLines } = parseHeaderInfo(content);
+        setLogFileHeaders(prev => {
+          const existingHeaders = prev[fileId] || {};
+          const hasNewHeaders = headerData && Object.keys(headerData).length > 0;
+          const hasExistingHeaders = Object.keys(existingHeaders).length > 0;
+          if (hasExistingHeaders && !hasNewHeaders) return prev;
+          if (hasNewHeaders) {
+            return { ...prev, [fileId]: headerData };
+          }
+          if (!hasExistingHeaders && !hasNewHeaders) return prev;
+          return prev;
+        });
+        
+        // Parse the log content using the dedicated parser
+        const logs = parseLogContent(content, headerLines);
+        
+        setAllFileLogs(prev => ({ ...prev, [fileId]: logs }));
+        setLogs(logs);
+        setSelectedLog(null);
+        setHighlightedLogId(null);
+        setCurrentFileName(fileId);
+        setFileLoadingState(prev => ({ ...prev, [fileId]: false }));
+      };
+      reader.readAsText(fileOrFiles);
+    }
   }, []);
 
   // Request file load if not loaded yet

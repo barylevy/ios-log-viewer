@@ -48,17 +48,26 @@ export const extractTimestamp = (line) => {
     if (!line) return '';
 
     // Try to extract timestamp from common log formats with milliseconds
+    // Order matters! Check Windows/DD/MM/YY formats FIRST before generic ISO dates
     const timestampPatterns = [
+        // Windows formats at the beginning of line (prioritize these)
+        /^\[(\d{2}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})\]/,  // [23/08/25 20:12:54.294] at start
+        /^(\d{2}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})/,  // 19/08/25 08:38:58.203 at start
+        /^(\d{2}\/\d{2}\/\d{4}\s\d{2}:\d{2}:\d{2}\.\d{3})/,  // 19/08/2025 08:38:58.203 at start
+        // ISO formats with milliseconds
+        /^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}:\d{3})/,  // 2025-08-02 23:54:57:514 at start
+        /^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3,6})/,  // 2025-08-02 23:54:57.514 at start
+        /^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})/,        // 2025-08-02 23:54:57 at start
+        // Android format
+        /\[(\d{4}-[A-Za-z]{3}-\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})\]/,  // [2025-Jul-28 22:34:49.399]
+        // Generic patterns (fallback - may match anywhere in line)
         /(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}:\d{3})/,  // 2025-08-02 23:54:57:514
-        /(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3,6})/,  // 2025-08-02 23:54:57.514 or .514123
-        /(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})/,        // 2025-08-02 23:54:57 (fallback without ms)
-        /\[(\d{4}-[A-Za-z]{3}-\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})\]/,  // [2025-Jul-28 22:34:49.399] (Android format)
-        /(\d{2}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})/,  // 19/08/25 08:38:58.203
-        /(\d{2}\/\d{2}\/\d{4}\s\d{2}:\d{2}:\d{2}\.\d{3})/,  // 19/08/2025 08:38:58.203
+        /(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3,6})/,  // 2025-08-02 23:54:57.514
+        /(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})/,        // 2025-08-02 23:54:57
         /(\d{2}:\d{2}:\d{2}:\d{3})/,                      // 23:54:57:514
-        /(\d{2}:\d{2}:\d{2}\.\d{3,6})/,                   // 23:54:57.514 or .514123
+        /(\d{2}:\d{2}:\d{2}\.\d{3,6})/,                   // 23:54:57.514
         /(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3,6})/,  // 2025-08-02T23:54:57.514
-        /(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/          // 2025-08-02T23:54:57 (fallback without ms)
+        /(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/          // 2025-08-02T23:54:57
     ];
 
     for (const pattern of timestampPatterns) {

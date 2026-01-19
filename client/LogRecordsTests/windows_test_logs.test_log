@@ -99,3 +99,10 @@
 
 [10/31/24 06:43:36.452] [W] [main      ] [6572] [9528] [DEMModule.cpp:45] Bad addr family: 0
 {"Date": "10/31/24", "Time": "06:43:36.452", "ProcessId": "6572", "ThreadID": "9528", "logLevel": "W", "FileName": "DEMModule.cpp", "Line": "45", "Module": "main"}
+
+# Windows log with commit timestamp in message (should extract log timestamp, not commit timestamp)
+23/08/25 20:12:54.294 [E] [          ] [1820:1824] [CreateVersionsLog                  :   81] [:] [:] [ :] CreateVersionsLog:			cato-pbs git revision socket-nonprod-37489-0-gff58a936 commited 2025-07-27 11:06:22
+{"Date": "23/08/25", "Time": "20:12:54.294", "ProcessId": "1820", "ThreadID": "1824", "logLevel": "E", "FileName": "CreateVersionsLog", "Line": "81", "Module": null}
+
+[24/08/25 08:15:22.103] [I] [testmod   ] [2048:4096] [TestFile.cpp:100] Another log line with embedded date 2024-01-15 12:00:00 in message
+{"Date": "24/08/25", "Time": "08:15:22.103", "ProcessId": "2048", "ThreadID": "4096", "logLevel": "I", "FileName": "TestFile.cpp", "Line": "100", "Module": "testmod"}
