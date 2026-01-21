@@ -111,12 +111,6 @@ const LogModal = ({ log, onClose, onAddStickyLog, onNext, onPrev, hasNext, hasPr
   const hasJsonContent = jsonDataResult !== null;
   const jsonData = jsonDataResult?.json;
 
-  const formatTimestamp = (timestamp) => {
-    if (!timestamp) return timestamp;
-    // Convert milliseconds format from HH:MM:SS:mmm to HH:MM:SS.mmm
-    return timestamp.replace(/(\d{2}:\d{2}:\d{2}):(\d{3})/, '$1.$2');
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={onClose}>
       <div
@@ -181,10 +175,12 @@ const LogModal = ({ log, onClose, onAddStickyLog, onNext, onPrev, hasNext, hasPr
           <div className="p-4 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
             <div className="grid grid-cols-[auto_auto_auto] gap-x-8 gap-y-2 text-sm">
               {/* First Row - Left: Timestamp (auto-sized) */}
-              {log.timestamp && (
+              {(log.displayDate || log.displayTime || log.timestamp) && (
                 <div className="whitespace-nowrap">
                   <span className="font-medium text-gray-600 dark:text-gray-400">Timestamp:</span>
-                  <span className="ml-2 font-mono text-gray-900 dark:text-white">{formatTimestamp(log.timestamp)}</span>
+                  <span className="ml-2 font-mono text-gray-900 dark:text-white">
+                    {log.displayDate && log.displayTime ? `${log.displayDate} ${log.displayTime}` : log.timestamp}
+                  </span>
                 </div>
               )}
 

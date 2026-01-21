@@ -1,25 +1,5 @@
 // Centralized date/time parsing utilities for the log viewer
 
-// Compiled regex patterns for better performance
-export const DATE_PATTERNS = {
-    ISO_DATE: /(\d{4}-\d{2}-\d{2})/,
-    BRACKET_DATE: /\[(\d{2})\/(\d{2})\/(\d{2})/,
-    ALT_DATE: /(\d{2}\/\d{2}\/\d{4})/,
-    SHORT_DATE: /(\d{2}\/\d{2}\/\d{2})/
-};
-
-export const TIME_PATTERNS = {
-    WITH_MS: /(\d{2}:\d{2}:\d{2})[:.](\d{3,6})/,
-    WITHOUT_MS: /(\d{2}:\d{2}:\d{2})/
-};
-
-export const TIMESTAMP_PATTERNS = {
-    FULL_TIMESTAMP: /(\d{4})-(\d{2})-(\d{2})\s(\d{2}):(\d{2}):(\d{2})[:.](\d{3})/,
-    DATE_TIME: /(\d{4}-\d{2}-\d{2}).*?(\d{2}:\d{2}:\d{2})/,
-    DD_MM_YY: /(\d{2})\/(\d{2})\/(\d{2})\s(\d{2}):(\d{2}):(\d{2})\.(\d{3})/,
-    DD_MM_YYYY: /(\d{2})\/(\d{2})\/(\d{4})\s(\d{2}):(\d{2}):(\d{2})\.(\d{3})/
-};
-
 // Compiled patterns for cleanMessage function
 export const CLEAN_PATTERNS = {
     DATE_TIME_PREFIX: /^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}[:\.]?\d*\s*/,
@@ -38,6 +18,105 @@ export const CLEAN_PATTERNS = {
 };
 
 export const GAP_PATTERN = /#gap=(\d+(?:\.\d+)?)/i;
+
+/**
+ * Format a YYYY-MM-DD date string to human-readable format with month name
+ * @param {string} dateStr - Date in YYYY-MM-DD format (e.g., "2025-05-23")
+ * @returns {string} - Formatted date (e.g., "23-May-2025")
+ */
+export const formatDateWithMonthName = (dateStr) => {
+  if (!dateStr || typeof dateStr !== 'string') return dateStr;
+  
+  // Parse YYYY-MM-DD format
+  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return dateStr;
+  
+  const [, year, month, day] = match;
+  
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  
+  const monthIndex = parseInt(month, 10) - 1;
+  if (monthIndex < 0 || monthIndex > 11) return dateStr;
+  
+  const monthName = monthNames[monthIndex];
+  const dayNum = parseInt(day, 10);
+  
+  return `${dayNum}-${monthName}-${year}`;
+};
+
+/**
+ * Detect date format (MM/DD/YY vs DD/MM/YY) from log content
+ * Strategy:
+ * 1. First look for dates where one value > 12 (unambiguous)
+ * 2. If all dates ambiguous, check chronological ordering
+ * @param {string} content - Log file content
+ * @returns {'MM/DD/YY' | 'DD/MM/YY'} - Detected format
+ */
+export const detectDateFormat = (content) => {
+    const lines = content.split('\n');
+    let mmddyyCount = 0;
+    let ddmmyyCount = 0;
+    const ambiguousDates = [];
+    
+    for (const line of lines) {
+        // Only look for dates at the START of the line (with or without brackets)
+        const bracketedMatch = line.match(/^\[(\d{2})\/(\d{2})\/(\d{2})\s\d{2}:\d{2}:\d{2}\.\d{3}\]/);
+        const plainMatch = line.match(/^(\d{2})\/(\d{2})\/(\d{2})\s\d{2}:\d{2}:\d{2}\.\d{3}/);
+        
+        const match = bracketedMatch || plainMatch;
+        if (match) {
+            const first = parseInt(match[1]);
+            const second = parseInt(match[2]);
+            const year = parseInt(match[3]);
+            
+            // If first > 12, must be DD/MM/YY (day can't be month)
+            if (first > 12) {
+                ddmmyyCount++;
+            }
+            // If second > 12, must be MM/DD/YY (month can't be > 12)
+            else if (second > 12) {
+                mmddyyCount++;
+            }
+            // If both <= 12, save for chronological check
+            else if (ambiguousDates.length < 1000) { // Limit sample size
+                ambiguousDates.push({ first, second, year });
+            }
+        }
+    }
+    
+    // If we found clear indicators, use them
+    if (mmddyyCount > 0 || ddmmyyCount > 0) {
+        return mmddyyCount >= ddmmyyCount ? 'MM/DD/YY' : 'DD/MM/YY';
+    }
+    
+    // All dates ambiguous - check chronological ordering
+    if (ambiguousDates.length > 1) {
+        let mmddyyInversions = 0;
+        let ddmmyyInversions = 0;
+        
+        for (let i = 1; i < ambiguousDates.length; i++) {
+            const prev = ambiguousDates[i - 1];
+            const curr = ambiguousDates[i];
+            
+            // Check MM/DD/YY interpretation (first=month, second=day)
+            const prevMmDdYy = prev.year * 10000 + prev.first * 100 + prev.second;
+            const currMmDdYy = curr.year * 10000 + curr.first * 100 + curr.second;
+            if (prevMmDdYy > currMmDdYy) mmddyyInversions++;
+            
+            // Check DD/MM/YY interpretation (first=day, second=month)
+            const prevDdMmYy = prev.year * 10000 + prev.second * 100 + prev.first;
+            const currDdMmYy = curr.year * 10000 + curr.second * 100 + curr.first;
+            if (prevDdMmYy > currDdMmYy) ddmmyyInversions++;
+        }
+        
+        // Choose format with fewer chronological inversions
+        return mmddyyInversions < ddmmyyInversions ? 'MM/DD/YY' : 'DD/MM/YY';
+    }
+    
+    // Fallback (extremely rare - single date or empty file)
+    return 'DD/MM/YY';
+};
 
 /**
  * Extract timestamp from a log line - supports multiple formats
@@ -75,129 +154,6 @@ export const extractTimestamp = (line) => {
         if (match) return match[1];
     }
     return '';
-};
-
-/**
- * Extract time portion from timestamp - for display purposes
- * @param {string} timestamp - The timestamp to parse
- * @returns {string|null} - Formatted time string (HH:mm:ss.SSS) or null
- */
-export const extractTimeFromTimestamp = (timestamp) => {
-    if (!timestamp) return null;
-
-    // Try to match time with milliseconds first
-    const timeWithMsMatch = timestamp.match(TIME_PATTERNS.WITH_MS);
-    if (timeWithMsMatch) {
-        const time = timeWithMsMatch[1];
-        const ms = timeWithMsMatch[2].substring(0, 3); // Take only first 3 digits for milliseconds
-        return `${time}.${ms}`;
-    }
-
-    // Fallback to time without milliseconds
-    const timeMatch = timestamp.match(TIME_PATTERNS.WITHOUT_MS);
-    return timeMatch ? timeMatch[1] : null;
-};
-
-/**
- * Parse timestamp into milliseconds for time gap calculations
- * @param {string} timestamp - The timestamp to parse
- * @returns {number|null} - Milliseconds since epoch or null
- */
-export const parseTimestampToMs = (timestamp) => {
-    if (!timestamp) return null;
-
-    // Try to extract full timestamp: 2025-08-26 11:05:21:299 or 2025-08-26 11:05:21.299
-    const fullMatch = timestamp.match(TIMESTAMP_PATTERNS.FULL_TIMESTAMP);
-    if (fullMatch) {
-        const [, year, month, day, hours, minutes, seconds, ms] = fullMatch;
-        return new Date(year, month - 1, day, hours, minutes, seconds, parseInt(ms)).getTime();
-    }
-
-    // Try DD/MM/YY format: 19/08/25 08:38:58.203
-    const ddmmyyMatch = timestamp.match(TIMESTAMP_PATTERNS.DD_MM_YY);
-    if (ddmmyyMatch) {
-        const [, day, month, year, hours, minutes, seconds, ms] = ddmmyyMatch;
-        // Assume 20XX for years 00-29, 19XX for years 30-99
-        const fullYear = parseInt(year) <= 29 ? 2000 + parseInt(year) : 1900 + parseInt(year);
-        return new Date(fullYear, month - 1, day, hours, minutes, seconds, parseInt(ms)).getTime();
-    }
-
-    // Try DD/MM/YYYY format: 19/08/2025 08:38:58.203
-    const ddmmyyyyMatch = timestamp.match(TIMESTAMP_PATTERNS.DD_MM_YYYY);
-    if (ddmmyyyyMatch) {
-        const [, day, month, year, hours, minutes, seconds, ms] = ddmmyyyyMatch;
-        return new Date(year, month - 1, day, hours, minutes, seconds, parseInt(ms)).getTime();
-    }
-
-    // Fallback: Extract date and time separately and combine
-    const dateTimeMatch = timestamp.match(TIMESTAMP_PATTERNS.DATE_TIME);
-    if (dateTimeMatch) {
-        const [, datePart, timePart] = dateTimeMatch;
-        const [year, month, day] = datePart.split('-');
-        const [hours, minutes, seconds] = timePart.split(':');
-        return new Date(year, month - 1, day, hours, minutes, seconds).getTime();
-    }
-
-    return null;
-};
-
-/**
- * Extract date from timestamp for grouping purposes
- * @param {string} timestamp - The timestamp to parse
- * @returns {string|null} - Date string or null
- */
-export const extractDateFromTimestamp = (timestamp) => {
-    if (!timestamp) return null;
-
-    // Android format with month name: 2025-Jul-28
-    const androidMatch = timestamp.match(/(\d{4})-([A-Za-z]{3})-(\d{2})/);
-    if (androidMatch) {
-        const [, year, monthName, day] = androidMatch;
-        const months = {
-            'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
-            'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
-            'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
-        };
-        const month = months[monthName] || monthName;
-        return `${year}-${month}-${day}`;
-    }
-
-    // Try to extract date part from various timestamp formats:
-    // 1. Standard ISO format: 2025-08-02
-    const isoMatch = timestamp.match(DATE_PATTERNS.ISO_DATE);
-    if (isoMatch) return isoMatch[1];
-
-    // 2. DD/MM/YY format: 19/08/25
-    const ddmmyyMatch = timestamp.match(/(\d{2})\/(\d{2})\/(\d{2})/);
-    if (ddmmyyMatch) {
-        const [, day, month, year] = ddmmyyMatch;
-        const fullYear = parseInt(year) <= 29 ? 2000 + parseInt(year) : 1900 + parseInt(year);
-        return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-    }
-
-    // 3. DD/MM/YYYY format: 19/08/2025
-    const ddmmyyyyMatch = timestamp.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-    if (ddmmyyyyMatch) {
-        const [, day, month, year] = ddmmyyyyMatch;
-        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-    }
-
-    // 4. Bracketed format: [02/08/25
-    const bracketMatch = timestamp.match(DATE_PATTERNS.BRACKET_DATE);
-    if (bracketMatch) {
-        const [, day, month, year] = bracketMatch;
-        const fullYear = parseInt(year) <= 29 ? 2000 + parseInt(year) : 1900 + parseInt(year);
-        return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-    }
-
-    // 5. Alternative format: 02/08/2025
-    const altMatch = timestamp.match(DATE_PATTERNS.ALT_DATE);
-    if (altMatch) {
-        const [, day, month, year] = altMatch[1].split('/');
-        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-    }
-
-    return null;
 };
 
 /**

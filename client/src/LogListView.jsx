@@ -2,15 +2,34 @@ import React, { memo, useMemo, useState, useRef, useCallback, useEffect } from '
 import { Virtuoso } from 'react-virtuoso';
 import { LOG_LEVEL_MATRIX, CATO_COLORS } from './constants';
 import {
-  extractTimeFromTimestamp,
-  parseTimestampToMs,
   extractTimeGapFromSearch,
-  extractDateFromTimestamp,
   formatTimeGap,
   CLEAN_PATTERNS,
   GAP_PATTERN
 } from './dateTimeUtils';
 import { cleanMessage } from './utils/logLevelColors';
+
+// Custom hook to track dark mode with better performance
+const useDarkMode = () => {
+  const [isDarkMode, setIsDarkMode] = useState(() => 
+    document.documentElement.classList.contains('dark')
+  );
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDarkMode(document.documentElement.classList.contains('dark'));
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class']
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
+  return isDarkMode;
+};
 
 // Color palette for thread/process IDs (avoiding red, blue, green which have semantic meaning)
 const PROCESS_THREAD_COLORS = [
@@ -260,36 +279,21 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
 const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, index, onFiltersChange, previousLog, contextMenu, setContextMenu, onHover, pivotLog, stickyLogs, visibleColumns = {}, isExpanded, onToggleExpanded }) => {
   // Ref to measure content height
   const contentRef = useRef(null);
-  const [needsExpand, setNeedsExpand] = useState(false);
+
+  // Track dark mode efficiently
+  const isDarkMode = useDarkMode();
   
   // Process the log message and extract file info - memoized by log.id to prevent recalculation
   const cleanedMessage = useMemo(() => cleanMessage(log.message), [log.message]);
   const fileInfo = useMemo(() => extractFileInfo(log, previousLog), [log.message, log.timestamp, log.thread, log.process, previousLog?.thread, previousLog?.process]);
-  const timeInfo = useMemo(() => extractTimeFromTimestamp(log.timestamp || log.message) || '--:--:--.---', [log.timestamp, log.message]);
+  const timeInfo = useMemo(() => log.displayTime || '--:--:--.---', [log.displayTime]);
 
-  // Check if content exceeds 3 lines after render
-  useEffect(() => {
-    if (contentRef.current) {
-      const element = contentRef.current;
-      // Temporarily remove line-clamp to check natural height
-      const hadClamp = element.classList.contains('line-clamp-3');
-      if (hadClamp) {
-        element.classList.remove('line-clamp-3');
-      }
-      
-      // Check if scrollHeight (full content height) is greater than what 3 lines would be
-      // Line height is approximately 1.5em = 18px for text-xs, so 3 lines ≈ 54px
-      const threeLineHeight = 54;
-      const isOverflowing = element.scrollHeight > threeLineHeight;
-      
-      // Restore line-clamp if needed
-      if (hadClamp && !isExpanded) {
-        element.classList.add('line-clamp-3');
-      }
-      
-      setNeedsExpand(isOverflowing);
-    }
-  }, [cleanedMessage, isExpanded]);
+  // Check if content needs expand button - simple heuristic based on message length and newlines
+  const needsExpand = useMemo(() => {
+    const messageLines = cleanedMessage.split('\n').length;
+    const estimatedLines = Math.ceil(cleanedMessage.length / 100); // Rough estimate: 100 chars per line
+    return messageLines > 3 || estimatedLines > 3;
+  }, [cleanedMessage]);
 
   // Check if this log has a sticky label
   const hasSticky = useMemo(() => {
@@ -310,9 +314,9 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
       return { hasGap: false, gapSeconds: 0 };
     }
 
-    // Parse timestamps once - cache for performance
-    const currentTime = parseTimestampToMs(log.timestamp || log.message);
-    const previousTime = parseTimestampToMs(previousLog.timestamp || previousLog.message);
+    // Use pre-parsed timestamps for performance
+    const currentTime = log.timestampMs;
+    const previousTime = previousLog.timestampMs;
 
     if (!currentTime || !previousTime) {
       return { hasGap: false, gapSeconds: 0 };
@@ -322,7 +326,7 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
     const hasGap = gapSeconds >= timeGapThreshold;
 
     return { hasGap, gapSeconds };
-  }, [log.timestamp, log.message, previousLog?.timestamp, previousLog?.message, timeGapThreshold]);
+  }, [log.timestampMs, previousLog?.timestampMs, timeGapThreshold]);
 
   // Apply search highlighting if there's a search term - optimized to avoid repeated regex compilation
   const highlightedMessage = useMemo(() => {
@@ -503,19 +507,17 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
           } ${pivotLog && pivotLog.id === log.id ? 'ring-2 ring-orange-400 dark:ring-orange-500' : ''} ${hasSticky ? 'ring-2 ring-blue-400 dark:ring-blue-500' : ''}`}
         style={{
           backgroundColor: hasSticky
-            ? (document.documentElement.classList.contains('dark') ? '#854D0E' : '#FEF9C3')
+            ? (isDarkMode ? '#854D0E' : '#FEF9C3')
             : pivotLog && pivotLog.id === log.id
-            ? (document.documentElement.classList.contains('dark') ? '#EA580C' : '#FED7AA')
+            ? (isDarkMode ? '#EA580C' : '#FED7AA')
             : isHighlighted
-              ? (document.documentElement.classList.contains('dark') ? CATO_COLORS.DARK_HIGHLIGHT_BG : CATO_COLORS.LIGHT_HIGHLIGHT_BG)
+              ? (isDarkMode ? CATO_COLORS.DARK_HIGHLIGHT_BG : CATO_COLORS.LIGHT_HIGHLIGHT_BG)
               : isSelected
-                ? (document.documentElement.classList.contains('dark') ? CATO_COLORS.DARK_BG : CATO_COLORS.LIGHT_BG)
+                ? (isDarkMode ? CATO_COLORS.DARK_BG : CATO_COLORS.LIGHT_BG)
                 : undefined,
         }}
         onMouseEnter={(e) => {
           if (!isHighlighted && !isSelected && !(pivotLog && pivotLog.id === log.id) && !hasSticky) {
-            // Check if dark mode is active
-            const isDarkMode = document.documentElement.classList.contains('dark');
             e.currentTarget.style.backgroundColor = isDarkMode ? CATO_COLORS.PRIMARY_DARK : CATO_COLORS.LIGHT_BG;
           }
           onHover(log);
@@ -647,7 +649,7 @@ const LogItem = memo(LogItemComponent);
 
 LogItem.displayName = 'LogItem';
 
-const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filters, onFiltersChange, onSearchMatchUpdate, onHover, pivotLog, onSetPivot, onClearPivot, stickyLogs, onAddStickyLog, highlightLog, visibleColumns = {} }) => {
+const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogId, filters, onFiltersChange, onSearchMatchUpdate, onHover, pivotLog, onSetPivot, onClearPivot, stickyLogs, onAddStickyLog, highlightLog, visibleColumns = {} }) => {
   const virtuosoRef = useRef(null);
   // Refs for each item element to allow focus
   const itemRefs = useRef({});
@@ -722,7 +724,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
     let currentGroup = [];
 
     filteredLogs.forEach((log, index) => {
-      const logDate = extractDateFromTimestamp(log.timestamp);
+      const logDate = log.displayDate;
 
       // If this log has a date
       if (logDate && logDate !== currentDate) {
@@ -1256,16 +1258,38 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
     }
   }, [handleGoToLine]);
 
-  // Get all unique dates in chronological order
-  const allDates = useMemo(() => {
-    const uniqueDates = new Set();
-    groupedLogs.forEach(group => {
-      if (group.date) {
-        uniqueDates.add(group.date);
+  // Get all unique dates from allLogs (sorted) and create a mapping to display dates
+  const { allDates, dateToDisplay } = useMemo(() => {
+    if (!allLogs || allLogs.length === 0) return { allDates: [], dateToDisplay: {} };
+    
+    // Group logs by displayDate and track first timestamp of each date
+    const dateMap = new Map();
+    allLogs.forEach(log => {
+      const displayDate = log.displayDate;
+      const timestampMs = log.timestampMs;
+      if (displayDate && timestampMs) {
+        if (!dateMap.has(displayDate)) {
+          dateMap.set(displayDate, timestampMs);
+        }
       }
     });
-    return Array.from(uniqueDates).sort();
-  }, [groupedLogs]);
+    
+    // Sort dates by their first timestamp
+    const sortedDates = Array.from(dateMap.entries())
+      .sort((a, b) => a[1] - b[1]) // Sort by timestampMs
+      .map(([date]) => date); // Extract just the date strings
+    
+    // Create mapping (identity mapping since we're using displayDate directly)
+    const mapping = {};
+    sortedDates.forEach(date => {
+      mapping[date] = date;
+    });
+    
+    return {
+      allDates: sortedDates,
+      dateToDisplay: mapping
+    };
+  }, [allLogs]);
 
   // Find current date index for navigation
   const currentDateIndex = useMemo(() => {
@@ -1345,7 +1369,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
                   ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
                   : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200'
                   }`}
-                title={currentDateIndex > 0 ? `Go to ${allDates[currentDateIndex - 1]}` : 'No previous date'}
+                title={currentDateIndex > 0 ? `Go to ${dateToDisplay[allDates[currentDateIndex - 1]] || allDates[currentDateIndex - 1]}` : 'No previous date'}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -1354,7 +1378,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
 
               {/* Current Date - Show targetNavigationDate if navigating, otherwise currentStickyDate */}
               <span className="text-xs text-gray-700 dark:text-gray-300">
-                {targetNavigationDate || currentStickyDate}
+                {dateToDisplay[targetNavigationDate || currentStickyDate] || targetNavigationDate || currentStickyDate}
               </span>
 
               {/* Next Date Button */}
@@ -1365,7 +1389,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
                   ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
                   : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200'
                   }`}
-                title={currentDateIndex < allDates.length - 1 ? `Go to ${allDates[currentDateIndex + 1]}` : 'No next date'}
+                title={currentDateIndex < allDates.length - 1 ? `Go to ${dateToDisplay[allDates[currentDateIndex + 1]] || allDates[currentDateIndex + 1]}` : 'No next date'}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -1458,7 +1482,7 @@ const LogListView = ({ logs, onLogClick, highlightedLogId, selectedLogId, filter
                     </div>
                     <div className="relative flex justify-center text-xs">
                       <span className="bg-white dark:bg-gray-900 px-3 py-1 text-gray-500 dark:text-gray-400 font-medium rounded-full border border-gray-300 dark:border-gray-600">
-                        {log.date}
+                        {log.displayDate || log.date}
                       </span>
                     </div>
                   </div>

@@ -1,8 +1,7 @@
 import { 
   extractTimestamp, 
-  parseTimestampToMs, 
   extractTimeGapFromSearch, 
-  extractDateFromTimestamp,
+  formatDateWithMonthName,
   GAP_PATTERN 
 } from './dateTimeUtils.js';
 import { LOG_LEVEL_MATRIX } from './constants.js';
@@ -381,20 +380,65 @@ export const normalizeTimestamp = (timestamp) => {
  * @param {string} line - The log line to parse
  * @param {number} lineNumber - The line number in the file
  * @param {number} logId - The unique ID for this log entry
+ * @param {string} dateFormat - The date format detected from file (MM/DD/YY or DD/MM/YY)
  * @returns {Object} - Parsed log object with all extracted information
  */
-export const parseLogLine = (line, lineNumber, logId) => {
+export const parseLogLine = (line, lineNumber, logId, dateFormat = 'DD/MM/YY') => {
   const timestamp = extractTimestamp(line);
   
   // Use parseLogFormat to get properly extracted message and other fields
   const parsedFormat = parseLogFormat(line);
   const cleanMessage = parsedFormat?.message || line; // Fallback to full line if parsing fails
   
+  // Create display-ready timestamp, date and time at parse time
+  // Also create numeric timestamp for sorting/comparisons
+  let displayDate = null;
+  let displayTime = null;
+  let timestampMs = null;
+  
+  if (timestamp) {
+    // Handle slash format like "01/06/25 07:48:11.989"
+    const slashMatch = timestamp.match(/(\d{2})\/(\d{2})\/(\d{2})\s+(\d{2}):(\d{2}):(\d{2})[:.](\d{3})/);
+    if (slashMatch) {
+      const [, first, second, year, hours, minutes, seconds, ms] = slashMatch;
+      const fullYear = parseInt(year) > 50 ? `19${year}` : `20${year}`;
+      const day = dateFormat === 'MM/DD/YY' ? second : first;
+      const month = dateFormat === 'MM/DD/YY' ? first : second;
+      const isoDate = `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      
+      // Create Date object and extract timestamp
+      const dateObj = new Date(`${isoDate}T${hours}:${minutes}:${seconds}.${ms}`);
+      timestampMs = dateObj.getTime();
+      
+      // Create display strings
+      displayDate = formatDateWithMonthName(isoDate);
+      displayTime = `${hours}:${minutes}:${seconds}.${ms}`;
+    } else {
+      // Handle ISO format like "2025-05-23 12:34:56:789"
+      const isoMatch = timestamp.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})[:.](\d{3})/);
+      if (isoMatch) {
+        const [, year, month, day, hours, minutes, seconds, ms] = isoMatch;
+        const isoDate = `${year}-${month}-${day}`;
+        
+        // Create Date object and extract timestamp
+        const dateObj = new Date(`${isoDate}T${hours}:${minutes}:${seconds}.${ms}`);
+        timestampMs = dateObj.getTime();
+        
+        // Create display strings
+        displayDate = formatDateWithMonthName(isoDate);
+        displayTime = `${hours}:${minutes}:${seconds}.${ms}`;
+      }
+    }
+  }
+  
   return {
     id: logId,
     raw: line,
     message: cleanMessage,
-    timestamp: timestamp,
+    timestamp: timestamp, // Keep original string for compatibility
+    timestampMs: timestampMs, // Numeric timestamp for sorting/comparisons
+    displayDate: displayDate, // Formatted date with month name (e.g., "23-May-2025")
+    displayTime: displayTime, // Formatted time (e.g., "14:23:45.123")
     level: extractLogLevel(line),
     module: extractModule(line),
     thread: extractThread(line),
@@ -408,9 +452,10 @@ export const parseLogLine = (line, lineNumber, logId) => {
  * Parse log file content and group lines by timestamp
  * @param {string} content - The raw log file content
  * @param {Array} headerLines - Array of line numbers that are headers (to skip)
+ * @param {string} dateFormat - The date format detected from file (MM/DD/YY or DD/MM/YY)
  * @returns {Array} - Array of parsed log objects
  */
-export const parseLogContent = (content, headerLines = []) => {
+export const parseLogContent = (content, headerLines = [], dateFormat = 'DD/MM/YY') => {
   const allLines = content.split('\n'); // Keep all lines including empty ones
   const logs = [];
   let currentLog = null;
@@ -423,7 +468,7 @@ export const parseLogContent = (content, headerLines = []) => {
     if (hasTimestamp) {
       // Start a new log entry
       if (currentLog) logs.push(currentLog);
-      currentLog = parseLogLine(line, idx + 1, logs.length);
+      currentLog = parseLogLine(line, idx + 1, logs.length, dateFormat);
     } else if (currentLog) {
       // Append to previous log's message, but increment line number
       currentLog.message += '\n' + line;
@@ -431,7 +476,7 @@ export const parseLogContent = (content, headerLines = []) => {
       currentLog.originalLineNumbers.push(idx + 1);
     } else {
       // If the first line(s) have no timestamp, treat as a log
-      currentLog = parseLogLine(line, idx + 1, logs.length);
+      currentLog = parseLogLine(line, idx + 1, logs.length, dateFormat);
     }
   });
   

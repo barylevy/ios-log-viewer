@@ -1,22 +1,12 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { LOG_LEVEL_MATRIX } from './constants';
 import {
-  extractTimestamp,
-  parseTimestampToMs,
-  extractTimeGapFromSearch,
-  extractDateFromTimestamp,
+  detectDateFormat,
   GAP_PATTERN
 } from './dateTimeUtils';
 import {
-  extractLogLevel,
-  extractModule,
-  extractThread,
-  extractProcess,
   normalizeTimestamp,
-  parseLogLine,
-  parseLogContent,
-  parseLogFormat,
-  parseWindowsLogFormat
+  parseLogContent
 } from './LogParser';
 const DATE_RANGE_REGEX = /(^|\s)::\s*#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)/; // :: #date
 const DATE_START_REGEX = /#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)\s*::/; // #date ::
@@ -50,7 +40,7 @@ const getFileIdentifier = (file) => {
   return file.name;
 };
 
-// Returns a shortened display name (max 30 chars from the end, showing suffix)
+// Returns a shortened display name (max 50 chars from the end, showing suffix)
 const getFileDisplayName = (fileId) => {
   if (!fileId) return '';
 
@@ -64,32 +54,23 @@ const getFileDisplayName = (fileId) => {
     name = fileId.split('/').pop();
   }
 
-  // Shorten to max 30 chars from the end (show suffix)
-  if (name.length > 30) {
-    return '...' + name.slice(-30);
+  // Shorten to max 50 chars from the end (show suffix)
+  if (name.length > 50) {
+    return '...' + name.slice(-50);
   }
   return name;
 };
 
-// Returns the full file path/name for tooltip/hover, including folder if present
+// Returns the full file path/name for tooltip/hover
 const getFileFullName = (fileId) => {
   if (!fileId) return '';
-  // If it contains the size and timestamp pattern, extract just the filename with path
+  // If it contains the size and timestamp pattern, extract just the filename
   const sizeTimestampPattern = /^(.+)_\d+_\d+$/;
   const match = fileId.match(sizeTimestampPattern);
-  let fullPath = fileId;
   if (match) {
-    fullPath = match[1];
+    return match[1];
   }
-  // If it's a path, show the last two segments (folder + file)
-  if (fullPath.includes('/')) {
-    const parts = fullPath.split('/');
-    if (parts.length >= 2) {
-      return parts.slice(-2).join('/');
-    }
-    return fullPath;
-  }
-  return fullPath;
+  return fileId;
 };
 
 const useLogsModel = () => {
@@ -277,6 +258,21 @@ const useLogsModel = () => {
     return { headerData, headerLines };
   };
 
+  // Sort logs by timestamp using pre-parsed timestampMs
+  const sortLogsByTimestamp = (logs) => {
+    return logs.sort((a, b) => {
+      if (a.timestampMs && b.timestampMs) {
+        return a.timestampMs - b.timestampMs;
+      }
+      
+      // Fallback to string comparison if timestampMs is missing
+      if (a.timestamp && b.timestamp) {
+        return a.timestamp.localeCompare(b.timestamp);
+      }
+      return 0;
+    });
+  };
+
   // Internal: load logs for a file object or array of files (async)
   const loadLogs = useCallback((fileOrFiles) => {
     const isFileArray = Array.isArray(fileOrFiles);
@@ -294,8 +290,9 @@ const useLogsModel = () => {
           reader.onload = (e) => {
             const content = e.target.result;
             const { headerData, headerLines } = parseHeaderInfo(content);
-            const logs = parseLogContent(content, headerLines);
-            resolve({ logs, headerData, fileName: file.name });
+            const dateFormat = detectDateFormat(content);
+            const logs = parseLogContent(content, headerLines, dateFormat);
+            resolve({ logs, headerData, fileName: file.name, dateFormat });
           };
           reader.readAsText(file);
         });
@@ -311,21 +308,8 @@ const useLogsModel = () => {
           }))
         );
         
-        // Sort by timestamp using existing parseTimestampToMs function
-        allLogs.sort((a, b) => {
-          if (a.timestamp && b.timestamp) {
-            const msA = parseTimestampToMs(a.timestamp);
-            const msB = parseTimestampToMs(b.timestamp);
-            
-            if (msA !== null && msB !== null) {
-              return msA - msB;
-            }
-            
-            // Fallback to string comparison if parsing fails
-            return a.timestamp.localeCompare(b.timestamp);
-          }
-          return 0;
-        });
+        // Sort by timestamp
+        sortLogsByTimestamp(allLogs);
         
         // Merge headers from all files (prefer non-empty values)
         const mergedHeaders = results.reduce((acc, result) => {
@@ -355,6 +339,10 @@ const useLogsModel = () => {
       const reader = new FileReader();
       reader.onload = (e) => {
         const content = e.target.result;
+        
+        // Detect date format from file content (used for parsing)
+        const dateFormat = detectDateFormat(content);
+        
         // Parse header information from start of file
         const { headerData, headerLines } = parseHeaderInfo(content);
         setLogFileHeaders(prev => {
@@ -369,8 +357,11 @@ const useLogsModel = () => {
           return prev;
         });
         
-        // Parse the log content using the dedicated parser
-        const logs = parseLogContent(content, headerLines);
+        // Parse the log content using the dedicated parser with date format
+        const logs = parseLogContent(content, headerLines, dateFormat);
+        
+        // Sort logs by timestamp (important for merged log files)
+        sortLogsByTimestamp(logs);
         
         setAllFileLogs(prev => ({ ...prev, [fileId]: logs }));
         setLogs(logs);
@@ -552,9 +543,10 @@ const useLogsModel = () => {
         }
 
         // Gap filter: check if this log has the required time gap from previous log
+        // Use pre-parsed timestampMs for performance
         if (gapThreshold > 0 && index > 0) {
-          const currentTime = parseTimestampToMs(log.timestamp || log.message);
-          const previousTime = parseTimestampToMs(logs[index - 1].timestamp || logs[index - 1].message);
+          const currentTime = log.timestampMs;
+          const previousTime = logs[index - 1].timestampMs;
 
           if (currentTime && previousTime) {
             const gapSeconds = Math.abs(currentTime - previousTime) / 1000;
@@ -812,41 +804,6 @@ const useLogsModel = () => {
     }
   }, []);
 
-  // Get display name from file identifier
-
-  // Returns a shortened display name (max 50 chars from the end, showing suffix)
-  const getFileDisplayName = useCallback((fileId) => {
-    if (!fileId) return '';
-
-    // If it contains the size and timestamp pattern, extract just the filename
-    const sizeTimestampPattern = /^(.+)_\d+_\d+$/;
-    const match = fileId.match(sizeTimestampPattern);
-    let name = fileId;
-    if (match) {
-      name = match[1];
-    } else if (fileId.includes('/')) {
-      name = fileId.split('/').pop();
-    }
-
-    // Shorten to max 50 chars from the end (show suffix)
-    if (name.length > 50) {
-      return '...' + name.slice(-50);
-    }
-    return name;
-  }, []);
-
-  // Returns the full file path/name for tooltip/hover
-  const getFileFullName = useCallback((fileId) => {
-    if (!fileId) return '';
-    // If it contains the size and timestamp pattern, extract just the filename
-    const sizeTimestampPattern = /^(.+)_\d+_\d+$/;
-    const match = fileId.match(sizeTimestampPattern);
-    if (match) {
-      return match[1];
-    }
-    return fileId;
-  }, []);
-
   return {
     logs,
     filteredLogs,
@@ -871,7 +828,6 @@ const useLogsModel = () => {
     switchToFile,
     removeLogsForFile,
     clearSavedFilters,
-    getFileDisplayName,
     addStickyLog,
     removeStickyLog,
     clearAllStickyLogs,

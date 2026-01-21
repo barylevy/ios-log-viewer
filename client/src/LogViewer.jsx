@@ -72,41 +72,10 @@ const LogViewer = () => {
     }
   }, [hoveredLog]);
 
-  // Utility function to parse timestamp to milliseconds
-  const parseTimestampToMs = useCallback((timestamp) => {
-    if (!timestamp) return null;
-
-    try {
-      // Handle different timestamp formats
-      if (timestamp.includes('T')) {
-        // ISO format: 2025-08-02T23:54:57
-        return new Date(timestamp).getTime();
-      } else if (timestamp.includes('-') && timestamp.includes(' ')) {
-        // Format: 2025-08-02 23:54:57:514
-        // Parse with milliseconds support
-        const match = timestamp.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})(?::(\d{3}))?/);
-        if (match) {
-          const [, date, time, ms] = match;
-          const isoString = `${date}T${time}`;
-          const baseMs = new Date(isoString).getTime();
-          const milliseconds = ms ? parseInt(ms, 10) : 0;
-          return baseMs + milliseconds;
-        }
-      } else if (timestamp.match(/^\d{2}:\d{2}:\d{2}/)) {
-        // Time only: 23:54:57 - use today's date
-        const today = new Date().toISOString().split('T')[0];
-        return new Date(`${today}T${timestamp}`).getTime();
-      }
-    } catch (e) {
-      console.warn('Failed to parse timestamp:', timestamp, e);
-    }
-    return null;
-  }, []);
-
   // Calculate pivot time gap in DD Days, HH:MM:SS format (or just HH:MM:SS if no days)
-  const calculatePivotGap = useCallback((pivotTimestamp, currentTimestamp) => {
-    const pivotMs = parseTimestampToMs(pivotTimestamp);
-    const currentMs = parseTimestampToMs(currentTimestamp);
+  const calculatePivotGap = useCallback((pivotLog, currentLog) => {
+    const pivotMs = pivotLog?.timestampMs;
+    const currentMs = currentLog?.timestampMs;
 
     if (!pivotMs || !currentMs) return null;
 
@@ -125,7 +94,7 @@ const LogViewer = () => {
     } else {
       return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`;
     }
-  }, [parseTimestampToMs]);
+  }, []);
 
   // Calculate current pivot gap for display
   const currentPivotGap = useMemo(() => {
@@ -135,8 +104,8 @@ const LogViewer = () => {
     const logToCompare = hoveredLog || lastHoveredLog;
     
     if (logToCompare) {
-      // Show gap to hovered or last hovered log
-      return calculatePivotGap(pivotLog.timestamp, logToCompare.timestamp);
+      // Show gap to hovered or last hovered log (pass entire log objects)
+      return calculatePivotGap(pivotLog, logToCompare);
     } else {
       // Show that pivot is set (no specific gap)
       return "Set";
@@ -461,15 +430,12 @@ const LogViewer = () => {
       const firstLog = logs[0];
       const lastLog = logs[logs.length - 1];
       
-      if (firstLog.timestamp && lastLog.timestamp) {
-        // Remove milliseconds from timestamps (everything after the last colon if it's 3 digits)
-        const formatTimestamp = (ts) => {
-          // Match pattern like "2025-08-04 07:10:36:859" and remove the ":859" part
-          return ts.replace(/:\d{3}$/, '');
-        };
-        
-        const startTime = formatTimestamp(firstLog.timestamp);
-        const endTime = formatTimestamp(lastLog.timestamp);
+      if (firstLog.displayDate && firstLog.displayTime && lastLog.displayDate && lastLog.displayTime) {
+        setLogDuration(`${firstLog.displayDate} ${firstLog.displayTime} → ${lastLog.displayDate} ${lastLog.displayTime}`);
+      } else if (firstLog.timestamp && lastLog.timestamp) {
+        // Fallback if display fields are not available
+        const startTime = firstLog.timestamp.replace(/[:.](\d{3})$/, '.$1');
+        const endTime = lastLog.timestamp.replace(/[:.](\d{3})$/, '.$1');
         setLogDuration(`${startTime} → ${endTime}`);
       } else {
         setLogDuration(null);
@@ -758,6 +724,7 @@ const LogViewer = () => {
     return (
       <LogListView
         logs={filteredLogs}
+        allLogs={logs}
         onLogClick={handleLogClick}
         highlightedLogId={highlightedLogId}
         selectedLogId={selectedLog?.id || null}
