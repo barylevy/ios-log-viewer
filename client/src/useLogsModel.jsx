@@ -174,8 +174,6 @@ const useLogsModel = () => {
   const stickyLogs = useMemo(() => {
     if (!currentFileName) return [];
     
-    const currentFileStickyLogs = allFileStickyLogs[currentFileName] || [];
-    
     // Check if current file is a merged view by looking at the logs
     const currentLogs = allFileLogs[currentFileName] || [];
     const sourceFiles = new Set(currentLogs.map(log => log.sourceFile).filter(Boolean));
@@ -206,7 +204,23 @@ const useLogsModel = () => {
       return aggregatedSticky;
     }
     
-    // Single file view - return only that file's sticky logs
+    // Single file view - need to match by sourceFile, not by exact currentFileName
+    // Because currentFileName might be a full path, but sticky logs are stored under simple filename key
+    const currentSourceFile = sourceFiles.values().next().value;
+    
+    // Try exact match first
+    let currentFileStickyLogs = allFileStickyLogs[currentFileName] || [];
+    
+    // If no exact match and we have a sourceFile, search for matching key
+    if (currentFileStickyLogs.length === 0 && currentSourceFile) {
+      const matchingKey = Object.keys(allFileStickyLogs).find(key => 
+        key.includes(currentSourceFile) || currentSourceFile === key
+      );
+      if (matchingKey) {
+        currentFileStickyLogs = allFileStickyLogs[matchingKey] || [];
+      }
+    }
+    
     return currentFileStickyLogs;
   }, [allFileStickyLogs, currentFileName, allFileLogs]);
 
