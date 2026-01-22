@@ -276,7 +276,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
 };
 
 // Component definition
-const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, index, onFiltersChange, previousLog, contextMenu, setContextMenu, onHover, pivotLog, stickyLogs, visibleColumns = {}, isExpanded, onToggleExpanded }) => {
+const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, index, onFiltersChange, previousLog, contextMenu, setContextMenu, onHover, pivotLog, stickyLogsSet, visibleColumns = {}, isExpanded, onToggleExpanded, hasMergedSources = false }) => {
   // Ref to measure content height
   const contentRef = useRef(null);
 
@@ -295,10 +295,19 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
     return messageLines > 3 || estimatedLines > 3;
   }, [cleanedMessage]);
 
-  // Check if this log has a sticky label
+  // Check if this log has a sticky label (O(1) Set lookup)
+  // Handle both direct ID match and baseId + sourceFile match for merged logs
   const hasSticky = useMemo(() => {
-    return stickyLogs && stickyLogs.some(sticky => sticky.id === log.id);
-  }, [stickyLogs, log.id]);
+    if (stickyLogsSet.has(log.id)) return true;
+    
+    // For merged logs, also check baseId + sourceFile combination
+    if (log.baseId && log.sourceFile) {
+      const compositeKey = `${log.baseId}_${log.sourceFile}`;
+      return stickyLogsSet.has(compositeKey);
+    }
+    
+    return false;
+  }, [stickyLogsSet, log.id, log.baseId, log.sourceFile]);
 
   // Calculate time gap threshold once and cache it
   const timeGapThreshold = useMemo(() => {
@@ -505,6 +514,7 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
             ? 'bg-gray-50 dark:bg-gray-800'
             : 'bg-white dark:bg-gray-900'
           } ${pivotLog && pivotLog.id === log.id ? 'ring-2 ring-orange-400 dark:ring-orange-500' : ''} ${hasSticky ? 'ring-2 ring-blue-400 dark:ring-blue-500' : ''}`}
+        title={hasMergedSources && log.sourceFile ? `Source: ${log.sourceFile}` : undefined}
         style={{
           backgroundColor: hasSticky
             ? (isDarkMode ? '#854D0E' : '#FEF9C3')
@@ -653,6 +663,27 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
   const virtuosoRef = useRef(null);
   // Refs for each item element to allow focus
   const itemRefs = useRef({});
+  
+  // Check if we have multiple source files (merged view)
+  const hasMergedSources = useMemo(() => {
+    const sourceFiles = new Set(logs.map(log => log.sourceFile).filter(Boolean));
+    return sourceFiles.size > 1;
+  }, [logs]);
+  
+  // Convert stickyLogs to Set for O(1) lookup instead of O(n) array.some()
+  // Include both direct IDs and composite keys (baseId + sourceFile) for cross-tab matching
+  const stickyLogsSet = useMemo(() => {
+    if (!stickyLogs || stickyLogs.length === 0) return new Set();
+    const ids = new Set();
+    stickyLogs.forEach(log => {
+      ids.add(log.id);
+      // Also add composite key for baseId + sourceFile matching
+      if (log.baseId && log.sourceFile) {
+        ids.add(`${log.baseId}_${log.sourceFile}`);
+      }
+    });
+    return ids;
+  }, [stickyLogs]);
   const [currentStickyDate, setCurrentStickyDate] = useState(null);
   const [targetNavigationDate, setTargetNavigationDate] = useState(null);
   // Search navigation state
@@ -1500,10 +1531,11 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
                   setContextMenu={setContextMenu}
                   onHover={handleHover}
                   pivotLog={pivotLog}
-                  stickyLogs={stickyLogs}
+                  stickyLogsSet={stickyLogsSet}
                   visibleColumns={visibleColumns}
                   isExpanded={expandedLogs[log.id] || false}
                   onToggleExpanded={toggleLogExpanded}
+                  hasMergedSources={hasMergedSources}
                 />
               </div>
             );

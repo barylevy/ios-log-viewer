@@ -606,9 +606,9 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
                 >
                   {/* Scroll to log button */}
                   <button
-                    onClick={() => onScrollToLog(sticky.lineNumber)}
+                    onClick={() => onScrollToLog(sticky.lineNumber, sticky.sourceFile)}
                     className="hover:opacity-75"
-                    title={`Line ${sticky.lineNumber}: ${sticky.cleanedMessage || sticky.message || 'No message available'}`}
+                    title={sticky.sourceFile ? `[${sticky.sourceFile}] Line ${sticky.lineNumber}` : `Line ${sticky.lineNumber}`}
                   >
                     #{sticky.lineNumber}
                   </button>
@@ -619,7 +619,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
                       onRemoveStickyLog(sticky.id);
                     }}
                     className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-                    title="Remove sticky log"
+                    title={`Remove sticky log${sticky.sourceFile ? ` from ${sticky.sourceFile}` : ''}`}
                   >
                     <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
