@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import AIConfigSettings from './Settings';
+import { AI_CONTEXT_MESSAGE } from './resources/aiContext';
 
 // Simple encryption/decryption for API key storage
 const encryptKey = (key) => {
@@ -67,6 +68,7 @@ const AIChat = ({ logs, fileName, isOpen, onClose, isFullWidth, onToggleFullWidt
     const [error, setError] = useState('');
     const [apiKey, setApiKey] = useState('');
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [contextSent, setContextSent] = useState(false);
     const messagesEndRef = useRef(null);
 
     // Check for API key on component mount and when panel opens
@@ -76,6 +78,24 @@ const AIChat = ({ logs, fileName, isOpen, onClose, isFullWidth, onToggleFullWidt
             setApiKey(currentKey);
         }
     }, [isOpen, settingsOpen]);
+
+    // Show context message in chat when it opens
+    useEffect(() => {
+        if (isOpen && messages.length === 0 && apiKey) {
+            // Get custom context message from localStorage or use default
+            const savedContext = localStorage.getItem('ai_context_message');
+            const contextContent = savedContext || AI_CONTEXT_MESSAGE;
+            
+            // Add context message to chat UI
+            const contextMessage = {
+                id: Date.now(),
+                type: 'system',
+                content: contextContent,
+                timestamp: new Date().toISOString()
+            };
+            setMessages([contextMessage]);
+        }
+    }, [isOpen, messages.length, apiKey]);
 
     // Scroll to the latest message when messages change
     useEffect(() => {
@@ -108,7 +128,16 @@ const AIChat = ({ logs, fileName, isOpen, onClose, isFullWidth, onToggleFullWidt
                 throw new Error('Please configure your OpenAI API key first.');
             }
 
-            const logContext = logs.slice(0, 50).map((log, index) => {
+            // Add context message before first question
+            let systemMessage = '';
+            if (!contextSent) {
+                const savedContext = localStorage.getItem('ai_context_message');
+                const contextContent = savedContext || AI_CONTEXT_MESSAGE;
+                systemMessage = contextContent + '\n\n';
+                setContextSent(true);
+            }
+
+            const logContext = logs.map((log, index) => {
                 // More robust text extraction
                 let text = '';
                 if (typeof log === 'string') {
@@ -122,7 +151,7 @@ const AIChat = ({ logs, fileName, isOpen, onClose, isFullWidth, onToggleFullWidt
                 return `[${index + 1}] ${text}`;
             }).join('\n');
 
-            const systemMessage = logContext.length > 0
+            systemMessage += logContext.length > 0
                 ? `You are a log analysis assistant. Here are the logs from file "${fileName}":\n\n${logContext}\n\nAnalyze these logs and answer questions about them.`
                 : `You are a log analysis assistant. The user is asking about logs from file "${fileName}", but no log content was provided. Please ask them to load some logs first.`;
 
@@ -271,14 +300,25 @@ const AIChat = ({ logs, fileName, isOpen, onClose, isFullWidth, onToggleFullWidt
                         className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                         <div
-                            className={`w-full p-3 rounded-lg ${message.type === 'user'
-                                ? 'bg-blue-500 text-white'
-                                : message.type === 'error'
-                                    ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
-                                    : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
-                                }`}
+                            className={`w-full p-3 rounded-lg ${
+                                message.type === 'user'
+                                    ? 'bg-blue-500 text-white'
+                                    : message.type === 'error'
+                                        ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
+                                        : message.type === 'system'
+                                            ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-900 dark:text-blue-200 border border-blue-200 dark:border-blue-800'
+                                            : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
+                            }`}
                         >
-                            <p className="whitespace-pre-wrap">{message.content}</p>
+                            {message.type === 'system' && (
+                                <div className="flex items-center gap-2 mb-2 text-sm font-semibold">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span>Context and Background Information</span>
+                                </div>
+                            )}
+                            <p className="whitespace-pre-wrap text-sm">{message.content}</p>
                             <div className="text-xs opacity-70 mt-2">
                                 {new Date(message.timestamp).toLocaleTimeString()}
                             </div>

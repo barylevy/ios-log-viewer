@@ -643,17 +643,19 @@ const LogViewer = () => {
     if (showingCombinedView) {
       return {
         logs: allFileLogs['Combined Files'] || [],
+        filteredLogs: allFileLogs['Combined Files'] || [], // Same for combined view
         fileName: `Combined Files (${files.map(f => f.name).join(', ')})`
       };
     } else if (files[activeFileIndex]) {
       // Use the current logs from useLogsModel, which should be the active file's logs
       return {
         logs: logs || [],
+        filteredLogs: filteredLogs || [], // Pass filtered logs for AI
         fileName: files[activeFileIndex].name
       };
     }
-    return { logs: [], fileName: 'No File' };
-  }, [files, activeFileIndex, showingCombinedView, allFileLogs, logs]);
+    return { logs: [], filteredLogs: [], fileName: 'No File' };
+  }, [files, activeFileIndex, showingCombinedView, allFileLogs, logs, filteredLogs]);
 
   // Toggle log selection - if same log is clicked, close it; if different log, open it
   const handleLogClick = useCallback((log) => {
@@ -852,7 +854,7 @@ const LogViewer = () => {
               }}
             >
               <AIChat
-                logs={currentDisplayContext.logs}
+                logs={currentDisplayContext.filteredLogs}
                 fileName={currentDisplayContext.fileName}
                 isOpen={showAIChat}
                 onClose={() => {

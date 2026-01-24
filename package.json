@@ -1,0 +1,9 @@
+{
+  "name": "ios-log-viewer",
+  "version": "1.0.0",
+  "description": "iOS Log Viewer with AI Chat",
+  "scripts": {
+    "dev": "cd client && npm run dev",
+    "build": "cd client && npm run build"
+  }
+}

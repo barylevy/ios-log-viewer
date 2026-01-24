@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { AI_CONTEXT_MESSAGE } from './resources/aiContext';
 
 // Simple encryption/decryption for API key storage
 const encryptKey = (key) => {
@@ -44,21 +45,42 @@ const AIConfigSettings = ({ isOpen, onClose }) => {
     const [tempKey, setTempKey] = useState('');
     const [showKey, setShowKey] = useState(false);
     const [saveMessage, setSaveMessage] = useState('');
+    const [contextMessage, setContextMessage] = useState('');
+    const [tempContextMessage, setTempContextMessage] = useState('');
 
     useEffect(() => {
         if (isOpen) {
             const currentKey = retrieveApiKey();
             setApiKey(currentKey);
             setTempKey(currentKey);
+            
+            // Load custom context message or use default
+            const savedContext = localStorage.getItem('ai_context_message');
+            const currentContext = savedContext || AI_CONTEXT_MESSAGE;
+            setContextMessage(currentContext);
+            setTempContextMessage(currentContext);
+            
             setSaveMessage('');
         }
     }, [isOpen]);
 
     const handleSave = () => {
+        let saved = false;
+        
         if (tempKey.trim()) {
             storeApiKey(tempKey.trim());
             setApiKey(tempKey.trim());
-            setSaveMessage('API key saved successfully!');
+            saved = true;
+        }
+        
+        if (tempContextMessage.trim()) {
+            localStorage.setItem('ai_context_message', tempContextMessage.trim());
+            setContextMessage(tempContextMessage.trim());
+            saved = true;
+        }
+        
+        if (saved) {
+            setSaveMessage('Settings saved successfully!');
             setTimeout(() => setSaveMessage(''), 3000);
         }
     };
@@ -74,7 +96,12 @@ const AIConfigSettings = ({ isOpen, onClose }) => {
 
     const handleReset = () => {
         setTempKey(apiKey);
+        setTempContextMessage(contextMessage);
         setSaveMessage('');
+    };
+
+    const handleResetToDefault = () => {
+        setTempContextMessage(AI_CONTEXT_MESSAGE);
     };
 
     if (!isOpen) return null;
@@ -138,6 +165,31 @@ const AIConfigSettings = ({ isOpen, onClose }) => {
                         </div>
                     </div>
 
+                    {/* Context Message Configuration */}
+                    <div>
+                        <div className="flex items-center justify-between mb-2">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                AI Context Message
+                            </label>
+                            <button
+                                onClick={handleResetToDefault}
+                                className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                            >
+                                Reset to Default
+                            </button>
+                        </div>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+                            This message is sent to the AI at the beginning of each conversation to provide context.
+                        </p>
+                        <textarea
+                            value={tempContextMessage}
+                            onChange={(e) => setTempContextMessage(e.target.value)}
+                            rows={8}
+                            placeholder="Enter your context message..."
+                            className="w-full p-2 border rounded text-sm bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+                        />
+                    </div>
+
                     {/* Help Text */}
                     <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded text-sm">
                         <h4 className="font-medium text-blue-800 dark:text-blue-200 mb-1">
@@ -170,7 +222,7 @@ const AIConfigSettings = ({ isOpen, onClose }) => {
                         </button>
                         <button
                             onClick={handleSave}
-                            disabled={!tempKey.trim()}
+                            disabled={!tempKey.trim() && !tempContextMessage.trim()}
                             className="px-4 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             Save
