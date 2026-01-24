@@ -562,6 +562,7 @@ const LogViewer = () => {
         const fileLogs = allFileLogs[file.id] || [];
         return fileLogs.map((log, index) => ({
           ...log,
+          baseId: log.baseId || log.id, // Preserve baseId for sticky log matching
           id: `${file.id}-${log.id}`, // Ensure unique IDs
           sourceFile: file.name
         }));
