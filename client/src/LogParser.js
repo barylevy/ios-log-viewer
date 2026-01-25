@@ -17,10 +17,16 @@ import { LOG_LEVEL_MATRIX } from './constants.js';
  * @returns {string|null} - The original log level format or null if not found
  */
 export const extractLogLevel = (line) => {
-  // Windows format: [Date] [Level] [Module] [ProcessId] [ThreadId] [File:Line]
+  // Windows format with brackets: [Date] [Level] [Module] [ProcessId] [ThreadId] [File:Line]
   const windowsMatch = line.match(/^\[[\d\/]+\s[\d:.]+\]\s+\[([^\]]+)\]/);
   if (windowsMatch) {
     return windowsMatch[1]; // Return original format like "I", "W", "ERROR"
+  }
+
+  // Windows format without brackets: Date [Level] [Module] [ProcessId:ThreadId] [File:Line]
+  const windowsNoBracketsMatch = line.match(/^\d{2}\/\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3}\s+\[([^\]]+)\]/);
+  if (windowsNoBracketsMatch) {
+    return windowsNoBracketsMatch[1]; // Return original format like "W", "I", "E"
   }
 
   // Mac/iOS format: timestamp [module:line] [Level] [t:thread] [p:process]
@@ -439,7 +445,7 @@ export const parseLogLine = (line, lineNumber, logId, dateFormat = 'DD/MM/YY') =
     timestampMs: timestampMs, // Numeric timestamp for sorting/comparisons
     displayDate: displayDate, // Formatted date with month name (e.g., "23-May-2025")
     displayTime: displayTime, // Formatted time (e.g., "14:23:45.123")
-    level: extractLogLevel(line),
+    level: parsedFormat?.logLevel || extractLogLevel(line), // Prefer parsed format, fallback to extract
     module: extractModule(line),
     thread: extractThread(line),
     process: extractProcess(line),
