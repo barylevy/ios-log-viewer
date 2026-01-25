@@ -559,7 +559,21 @@ const LogViewer = () => {
 
       // Combine all files - get logs from allFileLogs
       const combinedLogs = files.flatMap(file => {
-        const fileLogs = allFileLogs[file.id] || [];
+        let fileLogs = [];
+        
+        // Check if this is a grouped file (array of files)
+        if (file.isGroup && Array.isArray(file.fileObj)) {
+          // For grouped files, collect logs from all individual files
+          file.fileObj.forEach(individualFile => {
+            const fileKey = getFileIdentifier(individualFile);
+            const logs = allFileLogs[fileKey] || [];
+            fileLogs.push(...logs);
+          });
+        } else {
+          // For regular files, get logs directly
+          fileLogs = allFileLogs[file.id] || [];
+        }
+        
         return fileLogs.map((log, index) => ({
           ...log,
           baseId: log.baseId || log.id, // Preserve baseId for sticky log matching
