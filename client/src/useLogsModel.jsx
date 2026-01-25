@@ -1,77 +1,34 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { LOG_LEVEL_MATRIX } from './constants';
 import {
-  detectDateFormat,
-  GAP_PATTERN
-} from './dateTimeUtils';
+  getFileIdentifier,
+  getFileDisplayName,
+  getFileFullName,
+  loadLogFile,
+  parseHeaderInfo
+} from './utils/fileLoader';
 import {
+  DATE_RANGE_REGEX,
+  DATE_START_REGEX,
+  DATE_BOTH_REGEX,
+  ROW_RANGE_REGEX,
+  ROW_START_REGEX,
+  ROW_BOTH_REGEX,
+  ROW_TO_DATE_REGEX,
+  DATE_TO_ROW_REGEX,
+  extractTimestamp,
+  extractTimeGapFromSearch,
+  GAP_PATTERN,
+  extractLogLevel,
+  extractModule,
+  extractThread,
+  extractProcess,
   normalizeTimestamp,
-  parseLogContent
-} from './LogParser';
-const DATE_RANGE_REGEX = /(^|\s)::\s*#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)/; // :: #date
-const DATE_START_REGEX = /#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)\s*::/; // #date ::
-const DATE_BOTH_REGEX = /#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)\s*::\s*#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)/; // #date :: #date
-
-const ROW_RANGE_REGEX = /(^|\s)::\s*#(\d+)(?!\d{4})/; // :: #600 (but not :: #2025...)
-const ROW_START_REGEX = /#(\d+)(?!\d{4})\s*::/; // #415 :: (but not #2025...)
-const ROW_BOTH_REGEX = /#(\d+)(?!\d{4})\s*::\s*#(\d+)(?!\d{4})/; // #415 :: #600
-
-// Mixed range patterns: row to date or date to row
-const ROW_TO_DATE_REGEX = /#(\d+)(?!\d{4})\s*::\s*#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)/; // #9 :: #2025-07-04 13:29:11:645
-const DATE_TO_ROW_REGEX = /#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:[:.]\d{3})?)?)\s*::\s*#(\d+)(?!\d{4})/; // #2025-07-04 13:29:11:645 :: #500
-
-// Generate unique file identifier
-const getFileIdentifier = (file) => {
-  // Priority order for file identification:
-  // 1. Full path if available (webkitRelativePath or path property)
-  // 2. File name with last modified time for uniqueness
-  // 3. File name only as fallback
-
-  if (file.webkitRelativePath && file.webkitRelativePath !== '') {
-    return file.webkitRelativePath;
-  }
-
-  // For drag-and-drop files, try to use the file name with size and modified date for uniqueness
-  if (file.lastModified && file.size) {
-    return `${file.name}_${file.size}_${file.lastModified}`;
-  }
-
-  // Fallback to just the file name
-  return file.name;
-};
-
-// Returns a shortened display name (max 50 chars from the end, showing suffix)
-const getFileDisplayName = (fileId) => {
-  if (!fileId) return '';
-
-  // If it contains the size and timestamp pattern, extract just the filename
-  const sizeTimestampPattern = /^(.+)_\d+_\d+$/;
-  const match = fileId.match(sizeTimestampPattern);
-  let name = fileId;
-  if (match) {
-    name = match[1];
-  } else if (fileId.includes('/')) {
-    name = fileId.split('/').pop();
-  }
-
-  // Shorten to max 50 chars from the end (show suffix)
-  if (name.length > 50) {
-    return '...' + name.slice(-50);
-  }
-  return name;
-};
-
-// Returns the full file path/name for tooltip/hover
-const getFileFullName = (fileId) => {
-  if (!fileId) return '';
-  // If it contains the size and timestamp pattern, extract just the filename
-  const sizeTimestampPattern = /^(.+)_\d+_\d+$/;
-  const match = fileId.match(sizeTimestampPattern);
-  if (match) {
-    return match[1];
-  }
-  return fileId;
-};
+  parseLogLine,
+  parseLogContent,
+  parseLogFormat,
+  parseWindowsLogFormat
+} from './utils/logParsingUtils';
 
 const useLogsModel = () => {
   const [fileLoadingState, setFileLoadingState] = useState({}); // { [fileId]: true/false }
@@ -170,106 +127,24 @@ const useLogsModel = () => {
   }, [allFileStickyLogs]);
 
   // Get sticky logs for current file
-  // For merged files (All logs tab), aggregate sticky logs from all source files
   const stickyLogs = useMemo(() => {
-    if (!currentFileName) return [];
-    
-    // Check if current file is a merged view by looking at the logs
-    const currentLogs = allFileLogs[currentFileName] || [];
-    const sourceFiles = new Set(currentLogs.map(log => log.sourceFile).filter(Boolean));
-    
-    // If we have multiple source files, it's a merged view - aggregate all sticky logs
-    if (sourceFiles.size > 1) {
-      const aggregatedSticky = [];
-      
-      // Collect sticky logs from all files that match any of the source files
-      Object.entries(allFileStickyLogs).forEach(([fileKey, stickyLogsArray]) => {
-        // Check if this file's sticky logs should be included
-        // Match by checking if the fileKey contains any of the sourceFile names
-        sourceFiles.forEach(sourceFile => {
-          if (fileKey.includes(sourceFile) || sourceFile === fileKey) {
-            // Add these sticky logs, avoiding duplicates
-            stickyLogsArray.forEach(sticky => {
-              const exists = aggregatedSticky.find(s => 
-                s.baseId === sticky.baseId && s.sourceFile === sticky.sourceFile
-              );
-              if (!exists) {
-                aggregatedSticky.push(sticky);
-              }
-            });
-          }
-        });
-      });
-      
-      return aggregatedSticky;
-    }
-    
-    // Single file view - need to match by sourceFile, not by exact currentFileName
-    // Because currentFileName might be a full path, but sticky logs are stored under simple filename key
-    const currentSourceFile = sourceFiles.values().next().value;
-    
-    // Try exact match first
-    let currentFileStickyLogs = allFileStickyLogs[currentFileName] || [];
-    
-    // If no exact match and we have a sourceFile, search for matching key
-    if (currentFileStickyLogs.length === 0 && currentSourceFile) {
-      const matchingKey = Object.keys(allFileStickyLogs).find(key => 
-        key.includes(currentSourceFile) || currentSourceFile === key
-      );
-      if (matchingKey) {
-        currentFileStickyLogs = allFileStickyLogs[matchingKey] || [];
-      }
-    }
-    
-    return currentFileStickyLogs;
-  }, [allFileStickyLogs, currentFileName, allFileLogs]);
+    return currentFileName ? (allFileStickyLogs[currentFileName] || []) : [];
+  }, [allFileStickyLogs, currentFileName]);
 
   const addStickyLog = useCallback((log) => {
     if (!currentFileName) return;
 
     try {
       setAllFileStickyLogs(prev => {
-        // Determine which file to add the sticky log to
-        // If the log has a sourceFile, we need to find the matching file key
-        let targetFileKey = currentFileName;
-        
-        if (log.sourceFile) {
-          // Search for a file key that matches the sourceFile
-          // This handles cases where the file key might include path or timestamp
-          const matchingKey = Object.keys(prev).find(key => 
-            key === log.sourceFile || key.includes(log.sourceFile)
-          );
-          
-          // If we found a matching key, use it; otherwise try to use sourceFile directly
-          if (matchingKey) {
-            targetFileKey = matchingKey;
-          } else {
-            // For merged views, use the sourceFile as the key
-            targetFileKey = log.sourceFile;
-          }
-        }
-        
-        const currentFileStickyLogs = prev[targetFileKey] || [];
+        const currentFileStickyLogs = prev[currentFileName] || [];
 
-        // Extract the base ID (remove file prefix if present)
-        const baseId = typeof log.id === 'string' && log.id.includes('_') 
-          ? log.id.split('_')[1] 
-          : log.id;
-
-        // Avoid duplicates - check by baseId and sourceFile
-        if (currentFileStickyLogs.find(sticky => {
-          const stickyBaseId = typeof sticky.id === 'string' && sticky.id.includes('_')
-            ? sticky.id.split('_')[1]
-            : sticky.id;
-          return stickyBaseId === baseId && sticky.sourceFile === log.sourceFile;
-        })) {
+        // Avoid duplicates
+        if (currentFileStickyLogs.find(sticky => sticky.id === log.id)) {
           return prev;
         }
 
         const newStickyLog = {
           id: log.id,
-          baseId: baseId, // Store base ID for matching
-          sourceFile: log.sourceFile, // Store source file for matching
           lineNumber: log.lineNumber,
           timestamp: log.timestamp,
           level: log.level,
@@ -279,7 +154,7 @@ const useLogsModel = () => {
 
         return {
           ...prev,
-          [targetFileKey]: [...currentFileStickyLogs, newStickyLog]
+          [currentFileName]: [...currentFileStickyLogs, newStickyLog]
         };
       });
     } catch (error) {
@@ -291,52 +166,12 @@ const useLogsModel = () => {
     if (!currentFileName) return;
 
     setAllFileStickyLogs(prev => {
-      // First try to find the sticky log in current file
-      let targetFileKey = currentFileName;
-      let stickyToRemove = (prev[currentFileName] || []).find(sticky => sticky.id === logId);
-      
-      // If not found in current file, search across all files (for merged view)
-      if (!stickyToRemove) {
-        for (const [fileKey, stickyArray] of Object.entries(prev)) {
-          const found = stickyArray.find(sticky => sticky.id === logId);
-          if (found) {
-            targetFileKey = fileKey;
-            stickyToRemove = found;
-            break;
-          }
-        }
-      }
-      
-      // If still not found, try matching by baseId and sourceFile
-      if (!stickyToRemove) {
-        const baseId = typeof logId === 'string' && logId.includes('_') 
-          ? logId.split('_')[1] 
-          : logId;
-          
-        for (const [fileKey, stickyArray] of Object.entries(prev)) {
-          const found = stickyArray.find(sticky => {
-            const stickyBaseId = typeof sticky.id === 'string' && sticky.id.includes('_')
-              ? sticky.id.split('_')[1]
-              : sticky.id;
-            return stickyBaseId === baseId;
-          });
-          if (found) {
-            targetFileKey = fileKey;
-            stickyToRemove = found;
-            break;
-          }
-        }
-      }
-      
-      // Remove the sticky log from the target file
-      const currentFileStickyLogs = prev[targetFileKey] || [];
-      const updatedFileStickyLogs = currentFileStickyLogs.filter(sticky => 
-        sticky.id !== (stickyToRemove?.id || logId)
-      );
+      const currentFileStickyLogs = prev[currentFileName] || [];
+      const updatedFileStickyLogs = currentFileStickyLogs.filter(sticky => sticky.id !== logId);
 
       return {
         ...prev,
-        [targetFileKey]: updatedFileStickyLogs
+        [currentFileName]: updatedFileStickyLogs
       };
     });
   }, [currentFileName]);
@@ -352,122 +187,14 @@ const useLogsModel = () => {
     });
   }, [currentFileName]);
 
-  // Parse header information from log content
-  const parseHeaderInfo = (content) => {
-    const lines = content.split('\n');
-    const headerData = {};
-    const headerLines = [];
-
-    // Check first 10 lines for headers
-    for (let i = 0; i < Math.min(10, lines.length); i++) {
-      const line = lines[i].trim();
-
-      if (line.startsWith('User:')) {
-        headerData.user = line.substring(5).trim();
-        headerLines.push(i);
-      } else if (line.startsWith('Account:')) {
-        headerData.account = line.substring(8).trim();
-        headerLines.push(i);
-      } else if (line.startsWith('Client version:')) {
-        headerData.clientVersion = line.substring(15).trim();
-        headerLines.push(i);
-      } else if (line.startsWith('OS version:')) {
-        headerData.osVersion = line.substring(11).trim();
-        headerLines.push(i);
-      }
-    }
-
-    return { headerData, headerLines };
-  };
-
-  // Sort logs by timestamp using pre-parsed timestampMs
-  const sortLogsByTimestamp = (logs) => {
-    return logs.sort((a, b) => {
-      if (a.timestampMs && b.timestampMs) {
-        return a.timestampMs - b.timestampMs;
-      }
-      
-      // Fallback to string comparison if timestampMs is missing
-      if (a.timestamp && b.timestamp) {
-        return a.timestamp.localeCompare(b.timestamp);
-      }
-      return 0;
-    });
-  };
-
-  // Internal: load logs for a file object or array of files (async)
-  const loadLogs = useCallback((fileOrFiles) => {
-    const isFileArray = Array.isArray(fileOrFiles);
-    const firstFile = isFileArray ? fileOrFiles[0] : fileOrFiles;
-    const fileId = getFileIdentifier(firstFile);
-    
+  // Internal: load logs for a file object (async)
+  const loadLogs = useCallback((file) => {
+    const fileId = getFileIdentifier(file);
     // Mark loading as started
     setFileLoadingState(prev => ({ ...prev, [fileId]: true }));
     
-    if (isFileArray) {
-      // Load multiple files and merge them
-      const fileReadPromises = fileOrFiles.map(file => {
-        return new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            const content = e.target.result;
-            const { headerData, headerLines } = parseHeaderInfo(content);
-            const dateFormat = detectDateFormat(content);
-            const logs = parseLogContent(content, headerLines, dateFormat);
-            resolve({ logs, headerData, fileName: file.name, dateFormat });
-          };
-          reader.readAsText(file);
-        });
-      });
-      
-      Promise.all(fileReadPromises).then(results => {
-        // Merge all logs from all files
-        const allLogs = results.flatMap((result, index) => 
-          result.logs.map(log => ({
-            ...log,
-            baseId: log.id, // Store original ID for matching
-            id: `${index}_${log.id}`, // Ensure unique IDs across files
-            sourceFile: result.fileName // Track which file each log came from
-          }))
-        );
-        
-        // Sort by timestamp
-        sortLogsByTimestamp(allLogs);
-        
-        // Merge headers from all files (prefer non-empty values)
-        const mergedHeaders = results.reduce((acc, result) => {
-          if (result.headerData) {
-            Object.entries(result.headerData).forEach(([key, value]) => {
-              if (value && !acc[key]) {
-                acc[key] = value;
-              }
-            });
-          }
-          return acc;
-        }, {});
-        
-        if (Object.keys(mergedHeaders).length > 0) {
-          setLogFileHeaders(prev => ({ ...prev, [fileId]: mergedHeaders }));
-        }
-        
-        setAllFileLogs(prev => ({ ...prev, [fileId]: allLogs }));
-        setLogs(allLogs);
-        setSelectedLog(null);
-        setHighlightedLogId(null);
-        setCurrentFileName(fileId);
-        setFileLoadingState(prev => ({ ...prev, [fileId]: false }));
-      });
-    } else {
-      // Single file - original logic
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const content = e.target.result;
-        
-        // Detect date format from file content (used for parsing)
-        const dateFormat = detectDateFormat(content);
-        
-        // Parse header information from start of file
-        const { headerData, headerLines } = parseHeaderInfo(content);
+    loadLogFile(file, parseLogContent)
+      .then(({ fileId, logs, headerData }) => {
         setLogFileHeaders(prev => {
           const existingHeaders = prev[fileId] || {};
           const hasNewHeaders = headerData && Object.keys(headerData).length > 0;
@@ -480,27 +207,17 @@ const useLogsModel = () => {
           return prev;
         });
         
-        // Parse the log content using the dedicated parser with date format
-        const logs = parseLogContent(content, headerLines, dateFormat);
-        
-        // Add sourceFile to all logs for consistency with merged view
-        const logsWithSource = logs.map(log => ({
-          ...log,
-          sourceFile: fileOrFiles.name // Add source file name
-        }));
-        
-        // Sort logs by timestamp (important for merged log files)
-        sortLogsByTimestamp(logsWithSource);
-        
-        setAllFileLogs(prev => ({ ...prev, [fileId]: logsWithSource }));
-        setLogs(logsWithSource);
+        setAllFileLogs(prev => ({ ...prev, [fileId]: logs }));
+        setLogs(logs);
         setSelectedLog(null);
         setHighlightedLogId(null);
         setCurrentFileName(fileId);
         setFileLoadingState(prev => ({ ...prev, [fileId]: false }));
-      };
-      reader.readAsText(fileOrFiles);
-    }
+      })
+      .catch(error => {
+        console.error('Error loading file:', error);
+        setFileLoadingState(prev => ({ ...prev, [fileId]: false }));
+      });
   }, []);
 
   // Request file load if not loaded yet
@@ -675,10 +392,9 @@ const useLogsModel = () => {
         }
 
         // Gap filter: check if this log has the required time gap from previous log
-        // Use pre-parsed timestampMs for performance
         if (gapThreshold > 0 && index > 0) {
-          const currentTime = log.timestampMs;
-          const previousTime = logs[index - 1].timestampMs;
+          const currentTime = parseTimestampToMs(log.timestamp || log.message);
+          const previousTime = parseTimestampToMs(logs[index - 1].timestamp || logs[index - 1].message);
 
           if (currentTime && previousTime) {
             const gapSeconds = Math.abs(currentTime - previousTime) / 1000;
@@ -758,17 +474,10 @@ const useLogsModel = () => {
     }));
   }, [logs, filters, searchData, normalizeTimestamp]);
 
-  const scrollToLog = useCallback((lineNumber, sourceFile = null) => {
+  const scrollToLog = useCallback((lineNumber) => {
     try {
-      // Find the log with the given line number (and sourceFile if provided) in filtered logs
-      const targetLogIndex = filteredLogs.findIndex(log => {
-        const lineMatch = log.lineNumber === lineNumber;
-        // If sourceFile is provided, also match by sourceFile
-        if (sourceFile) {
-          return lineMatch && log.sourceFile === sourceFile;
-        }
-        return lineMatch;
-      });
+      // Find the log with the given line number in filtered logs (what's actually displayed)
+      const targetLogIndex = filteredLogs.findIndex(log => log.lineNumber === lineNumber);
 
       if (targetLogIndex !== -1) {
         // Log is visible - scroll to it
@@ -782,13 +491,7 @@ const useLogsModel = () => {
         }, 100);
       } else {
         // Log is not visible due to filtering - find it in all logs first
-        const targetLogInAll = logs.find(log => {
-          const lineMatch = log.lineNumber === lineNumber;
-          if (sourceFile) {
-            return lineMatch && log.sourceFile === sourceFile;
-          }
-          return lineMatch;
-        });
+        const targetLogInAll = logs.find(log => log.lineNumber === lineNumber);
 
         if (targetLogInAll) {
           // Find the closest visible log in filtered logs
@@ -973,6 +676,8 @@ const useLogsModel = () => {
     switchToFile,
     removeLogsForFile,
     clearSavedFilters,
+    getFileDisplayName: (fileId) => getFileDisplayName(fileId), // Use imported function
+    getFileFullName: (fileId) => getFileFullName(fileId), // Use imported function
     addStickyLog,
     removeStickyLog,
     clearAllStickyLogs,

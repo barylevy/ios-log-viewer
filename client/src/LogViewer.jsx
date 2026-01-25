@@ -5,7 +5,8 @@ import LogViewerHeader from './LogViewerHeader';
 import LogViewerFilters from './LogViewerFilters';
 import LogTabs from './LogTabs';
 import AIChat from './AIChat';
-import useLogsModel, { getFileIdentifier } from './useLogsModel';
+import useLogsModel from './useLogsModel';
+import { getFileIdentifier } from './utils/fileLoader';
 import { saveSession, loadSession, clearSession } from './utils/sessionStorage';
 import { AVAILABLE_COLUMNS } from './ColumnSettings';
 
