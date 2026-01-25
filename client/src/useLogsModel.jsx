@@ -188,42 +188,148 @@ const useLogsModel = () => {
   }, [currentFileName]);
 
   // Internal: load logs for a file object (async)
-  const loadLogs = useCallback((file) => {
-    const fileId = getFileIdentifier(file);
-    // Mark loading as started
-    setFileLoadingState(prev => ({ ...prev, [fileId]: true }));
+  const loadLogs = useCallback((fileOrFiles, groupId = null) => {
+    // Handle both single file and array of files (for grouped files)
+    const isFileArray = Array.isArray(fileOrFiles);
     
-    loadLogFile(file, parseLogContent)
-      .then(({ fileId, logs, headerData }) => {
-        setLogFileHeaders(prev => {
-          const existingHeaders = prev[fileId] || {};
-          const hasNewHeaders = headerData && Object.keys(headerData).length > 0;
-          const hasExistingHeaders = Object.keys(existingHeaders).length > 0;
-          if (hasExistingHeaders && !hasNewHeaders) return prev;
-          if (hasNewHeaders) {
-            return { ...prev, [fileId]: headerData };
+    if (isFileArray) {
+      // Load multiple files and combine their logs into ONE model
+      const filePromises = fileOrFiles.map(file => loadLogFile(file, parseLogContent));
+      
+      Promise.all(filePromises)
+        .then(results => {
+          // Combine ALL logs from all files into one array
+          let combinedLogs = [];
+          let combinedHeaders = {};
+          
+          results.forEach(({ fileId, logs, headerData }) => {
+            // Add logs to combined array
+            combinedLogs = combinedLogs.concat(logs);
+            
+            // Merge headers (first file's headers take precedence)
+            if (Object.keys(combinedHeaders).length === 0 && headerData) {
+              combinedHeaders = headerData;
+            }
+          });
+          
+          // Sort combined logs by timestamp
+          combinedLogs.sort((a, b) => {
+            if (a.timestamp && b.timestamp) {
+              return a.timestamp.localeCompare(b.timestamp);
+            }
+            if (a.lineNumber && b.lineNumber) {
+              return a.lineNumber - b.lineNumber;
+            }
+            return 0;
+          });
+          
+          // Store the combined logs under the GROUP ID (not individual files)
+          const storeId = groupId || results[0]?.fileId;
+          setAllFileLogs(prev => ({ ...prev, [storeId]: combinedLogs }));
+          
+          if (Object.keys(combinedHeaders).length > 0) {
+            setLogFileHeaders(prev => ({ ...prev, [storeId]: combinedHeaders }));
           }
-          if (!hasExistingHeaders && !hasNewHeaders) return prev;
-          return prev;
+          
+          // Set as current logs
+          setLogs(combinedLogs);
+          setSelectedLog(null);
+          setHighlightedLogId(null);
+          setCurrentFileName(storeId);
+          
+          // Clear loading state
+          setFileLoadingState(prev => {
+            const newState = { ...prev };
+            if (groupId) {
+              newState[groupId] = false;
+            }
+            fileOrFiles.forEach(file => {
+              newState[getFileIdentifier(file)] = false;
+            });
+            return newState;
+          });
+        })
+        .catch(error => {
+          console.error('Error loading files:', error);
+          setFileLoadingState(prev => {
+            const newState = { ...prev };
+            if (groupId) {
+              newState[groupId] = false;
+            }
+            fileOrFiles.forEach(file => {
+              newState[getFileIdentifier(file)] = false;
+            });
+            return newState;
+          });
         });
-        
-        setAllFileLogs(prev => ({ ...prev, [fileId]: logs }));
-        setLogs(logs);
-        setSelectedLog(null);
-        setHighlightedLogId(null);
-        setCurrentFileName(fileId);
-        setFileLoadingState(prev => ({ ...prev, [fileId]: false }));
-      })
-      .catch(error => {
-        console.error('Error loading file:', error);
-        setFileLoadingState(prev => ({ ...prev, [fileId]: false }));
-      });
+    } else {
+      // Single file - existing logic
+      const file = fileOrFiles;
+      const fileId = getFileIdentifier(file);
+      // Mark loading as started
+      setFileLoadingState(prev => ({ ...prev, [fileId]: true }));
+      
+      loadLogFile(file, parseLogContent)
+        .then(({ fileId, logs, headerData }) => {
+          setLogFileHeaders(prev => {
+            const existingHeaders = prev[fileId] || {};
+            const hasNewHeaders = headerData && Object.keys(headerData).length > 0;
+            const hasExistingHeaders = Object.keys(existingHeaders).length > 0;
+            if (hasExistingHeaders && !hasNewHeaders) return prev;
+            if (hasNewHeaders) {
+              return { ...prev, [fileId]: headerData };
+            }
+            if (!hasExistingHeaders && !hasNewHeaders) return prev;
+            return prev;
+          });
+          
+          setAllFileLogs(prev => ({ ...prev, [fileId]: logs }));
+          setLogs(logs);
+          setSelectedLog(null);
+          setHighlightedLogId(null);
+          setCurrentFileName(fileId);
+          setFileLoadingState(prev => ({ ...prev, [fileId]: false }));
+        })
+        .catch(error => {
+          console.error('Error loading file:', error);
+          setFileLoadingState(prev => ({ ...prev, [fileId]: false }));
+        });
+    }
   }, []);
 
   // Request file load if not loaded yet
   const requestFileLoad = useCallback((fileId, fileObj) => {
-    if (!allFileLogs[fileId] && !fileLoadingState[fileId]) {
-      loadLogs(fileObj);
+    const isFileArray = Array.isArray(fileObj);
+    
+    if (isFileArray) {
+      // For grouped files, check if any of the individual files are already loaded
+      const allFilesLoaded = fileObj.every(file => {
+        const individualFileId = getFileIdentifier(file);
+        return allFileLogs[individualFileId];
+      });
+      
+      const anyFileLoading = fileObj.some(file => {
+        const individualFileId = getFileIdentifier(file);
+        return fileLoadingState[individualFileId];
+      });
+      
+      if (!allFilesLoaded && !anyFileLoading) {
+        // Mark the group as loading
+        setFileLoadingState(prev => {
+          const newState = { ...prev, [fileId]: true };
+          fileObj.forEach(file => {
+            newState[getFileIdentifier(file)] = true;
+          });
+          return newState;
+        });
+        // Pass the group ID to loadLogs so it can clear the loading state
+        loadLogs(fileObj, fileId);
+      }
+    } else {
+      // Single file
+      if (!allFileLogs[fileId] && !fileLoadingState[fileId]) {
+        loadLogs(fileObj);
+      }
     }
   }, [allFileLogs, fileLoadingState, loadLogs]);
 

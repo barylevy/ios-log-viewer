@@ -8,6 +8,7 @@ import AIChat from './AIChat';
 import useLogsModel from './useLogsModel';
 import { getFileIdentifier } from './utils/fileLoader';
 import { saveSession, loadSession, clearSession } from './utils/sessionStorage';
+import { groupFilesByPrefix } from './utils/fileGrouping';
 import { AVAILABLE_COLUMNS } from './ColumnSettings';
 
 const LogViewer = () => {
@@ -350,7 +351,7 @@ const LogViewer = () => {
       // Request load with proper file(s)
       requestFileLoad(fileId, fileOrFiles);
 
-      // Switch to the new file to show its logs
+      // Switch to the new file to show its logs (works for both single and grouped)
       setTimeout(() => {
         switchToFile(fileId);
       }, 0);
@@ -450,12 +451,13 @@ const LogViewer = () => {
     setActiveFileIndex(index);
     setShowingCombinedView(false);
 
-    // Lazy load: If logs for this file are not loaded, load them now
+    // Lazy load: If logs for this file/group are not loaded, load them now
     const file = files[index];
     if (file) {
       if (!allFileLogs[file.id] && file.fileObj) {
         requestFileLoad(file.id, file.fileObj);
       }
+      // Switch to file works for both single files and groups (logs already combined)
       switchToFile(file.id);
     }
   }, [files, allFileLogs, requestFileLoad, switchToFile]);
@@ -558,23 +560,9 @@ const LogViewer = () => {
     // Lazy load combined view only if not already loaded
     if (!combinedViewLoaded && files.length > 0) {
 
-      // Combine all files - get logs from allFileLogs
+      // Combine all existing models from all tabs (no re-parsing!)
       const combinedLogs = files.flatMap(file => {
-        let fileLogs = [];
-        
-        // Check if this is a grouped file (array of files)
-        if (file.isGroup && Array.isArray(file.fileObj)) {
-          // For grouped files, collect logs from all individual files
-          file.fileObj.forEach(individualFile => {
-            const fileKey = getFileIdentifier(individualFile);
-            const logs = allFileLogs[fileKey] || [];
-            fileLogs.push(...logs);
-          });
-        } else {
-          // For regular files, get logs directly
-          fileLogs = allFileLogs[file.id] || [];
-        }
-        
+        const fileLogs = allFileLogs[file.id] || [];
         return fileLogs.map((log, index) => ({
           ...log,
           baseId: log.baseId || log.id, // Preserve baseId for sticky log matching
@@ -583,7 +571,7 @@ const LogViewer = () => {
         }));
       });
 
-      // Sort by timestamp if available
+      // Sort by timestamp
       combinedLogs.sort((a, b) => {
         if (a.timestamp && b.timestamp) {
           return a.timestamp.localeCompare(b.timestamp);
@@ -618,10 +606,22 @@ const LogViewer = () => {
       file.name.toLowerCase().endsWith('.txt') || file.name.toLowerCase().endsWith('.log')
     );
 
-    // Sort files by name before loading
+    // Sort files by name before grouping
     const sortedTextFiles = textFiles.sort((a, b) => a.name.localeCompare(b.name));
 
-    sortedTextFiles.forEach(file => handleFileLoad(file));
+    // Group files by prefix
+    const groupedFiles = groupFilesByPrefix(sortedTextFiles);
+    
+    // Load each group (or individual file)
+    groupedFiles.forEach((filesInGroup, prefix) => {
+      if (filesInGroup.length > 1) {
+        // Multiple files with same prefix - load as a group
+        handleFileLoad(filesInGroup, false, prefix);
+      } else {
+        // Single file - load normally
+        handleFileLoad(filesInGroup[0]);
+      }
+    });
   }, [handleFileLoad]);
 
   // Chat panel resizing
