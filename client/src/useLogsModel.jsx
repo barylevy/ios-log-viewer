@@ -128,7 +128,41 @@ const useLogsModel = () => {
 
   // Get sticky logs for current file
   const stickyLogs = useMemo(() => {
-    return currentFileName ? (allFileStickyLogs[currentFileName] || []) : [];
+    if (!currentFileName) return [];
+    
+    // For "Combined Files" (All Tabs), collect sticky logs from ALL files
+    if (currentFileName === 'Combined Files') {
+      const allSticky = [];
+      
+      // Iterate through all files and collect their sticky logs
+      Object.entries(allFileStickyLogs).forEach(([fileName, stickyLogsArray]) => {
+        if (fileName !== 'Combined Files' && stickyLogsArray && stickyLogsArray.length > 0) {
+          // Add source file info to each sticky log
+          stickyLogsArray.forEach(stickyLog => {
+            allSticky.push({
+              ...stickyLog,
+              sourceFile: fileName // Add source file so we know which tab it came from
+            });
+          });
+        }
+      });
+      
+      // Sort by timestamp or line number
+      allSticky.sort((a, b) => {
+        if (a.timestamp && b.timestamp) {
+          return a.timestamp.localeCompare(b.timestamp);
+        }
+        if (a.lineNumber && b.lineNumber) {
+          return a.lineNumber - b.lineNumber;
+        }
+        return 0;
+      });
+      
+      return allSticky;
+    }
+    
+    // For regular files/groups, return only their sticky logs
+    return allFileStickyLogs[currentFileName] || [];
   }, [allFileStickyLogs, currentFileName]);
 
   const addStickyLog = useCallback((log) => {
