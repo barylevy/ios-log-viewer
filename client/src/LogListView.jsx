@@ -1477,6 +1477,11 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
             </div>
             <div className="flex items-center gap-3">
               {visibleColumns.module !== false && (
+                <div className="text-xs font-semibold text-gray-700 dark:text-gray-300" title="Module or component name">
+                  Module
+                </div>
+              )}
+              {visibleColumns.module !== false && (
                 <div className="text-xs font-semibold text-gray-700 dark:text-gray-300" title="Source file and line number">
                   Source File
                 </div>

@@ -146,6 +146,42 @@ function transformToExpectedFormat(result) {
       transformed.Line = null;
       break;
       
+    case 'windows-extended':
+      // Windows extended format with account, user, project, userId
+      transformed.logLevel = result.logLevel;
+      transformed.Module = result.moduleName;
+      transformed.ProcessId = result.processId;
+      transformed.ThreadID = result.threadId;
+      if (result.sourceName && result.sourceLine) {
+        transformed.FileName = result.sourceName;
+        transformed.Line = result.sourceLine;
+      }
+      break;
+      
+    case 'windows-simple':
+      // Windows simple format (CatoClient trace): MM/DD/YY HH:MM:SS.SSS [ ] [          ] [PID:TID] message
+      transformed.logLevel = result.logLevel || null;
+      transformed.Module = result.moduleName || null;
+      transformed.ProcessId = result.processId;
+      transformed.ThreadID = result.threadId;
+      break;
+      
+    case 'chrome-windows':
+      // Chrome/Windows format: [PID:TID:MMDD/HHMMSS.SSS:LEVEL:file.cc(line)] message
+      transformed.logLevel = result.logLevel;
+      transformed.Module = null;
+      transformed.ProcessId = result.processId;
+      transformed.ThreadID = result.threadId;
+      if (result.fileName) {
+        // Extract filename and line from "file.cc(line)" format
+        const fileMatch = result.fileName.match(/^([^(]+)\((\d+)\)$/);
+        if (fileMatch) {
+          transformed.FileName = fileMatch[1];
+          transformed.Line = fileMatch[2];
+        }
+      }
+      break;
+      
     case 'windows-hex':
       // Windows hex format: [date] [level] [module] [hexProcessId:hexThreadId] [function] [unknown] [unknown] message
       transformed.logLevel = result.logLevel;

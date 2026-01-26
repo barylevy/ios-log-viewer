@@ -106,3 +106,18 @@
 
 [24/08/25 08:15:22.103] [I] [testmod   ] [2048:4096] [TestFile.cpp:100] Another log line with embedded date 2024-01-15 12:00:00 in message
 {"Date": "24/08/25", "Time": "08:15:22.103", "ProcessId": "2048", "ThreadID": "4096", "logLevel": "I", "FileName": "TestFile.cpp", "Line": "100", "Module": "testmod"}
+
+# Windows extended format with account, user, project, and userId metadata
+20/01/26 16:34:54.657 [I] [Configurat] [1474:147C] [getAccountManagerForWinUser        :   58] [2217:prelogin] [p:auscatod1a] [U:857242227937794636] No Data to load, empty Account Manager for user SID: S-1-5-21-1273520343-1386297449-721686768-178406
+{"Date": "20/01/26", "Time": "16:34:54.657", "ProcessId": "1474", "ThreadID": "147C", "logLevel": "I", "FileName": "getAccountManagerForWinUser", "Line": "58", "Module": "Configurat"}
+# Windows simple format (CatoClient trace) with empty level and module fields
+12/10/25 09:56:37.154 [ ] [          ] [28084:001] AccountManager() created
+{"Date": "12/10/25", "Time": "09:56:37.154", "ProcessId": "28084", "ThreadID": "001", "logLevel": null, "Module": null}
+
+# Chrome/Windows browser format with error level
+[8452:11720:0122/124643.646:ERROR:google_update_settings.cc(265)] Failed opening key Software\Chromium to set usagestats; result: 5
+{"Date": "01/22", "Time": "12:46:43.646", "ProcessId": "8452", "ThreadID": "11720", "logLevel": "ERROR", "FileName": "google_update_settings.cc", "Line": "265", "Module": null}
+
+# Chrome/Windows browser format with warning level
+[8452:2308:0122/124643.701:WARNING:account_consistency_mode_manager.cc(72)] Desktop Identity Consistency cannot be enabled as no OAuth client ID and client secret have been configured.
+{"Date": "01/22", "Time": "12:46:43.701", "ProcessId": "8452", "ThreadID": "2308", "logLevel": "WARNING", "FileName": "account_consistency_mode_manager.cc", "Line": "72", "Module": null}

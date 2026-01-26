@@ -87,6 +87,20 @@ export const extractLogLevel = (line) => {
  * @returns {string} - The module name or empty string
  */
 export const extractModule = (line) => {
+  // Windows simple format (CatoClient trace): MM/DD/YY HH:MM:SS.SSS [ ] [          ] [PID:TID] message
+  // This format has empty level and module fields - no module to extract
+  const windowsSimpleMatch = line.match(/^\d{2}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3}\s+\[\s*\]\s+\[\s*\]\s+\[[0-9A-Fa-f]+:[0-9A-Fa-f]+\]/);
+  if (windowsSimpleMatch) {
+    return ''; // No module in this format
+  }
+
+  // Windows format: date time [level] [module] [process:thread] ...
+  // Extract module from the second bracket (after level)
+  const windowsMatch = line.match(/^\d{2}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3}\s+\[[^\]]+\]\s+\[([^\]]+)\]\s+\[[0-9A-Fa-f]+:[0-9A-Fa-f]+\]\s+\[/);
+  if (windowsMatch) {
+    return windowsMatch[1].trim();
+  }
+
   // Chrome/Windows format: [processId:threadId:MMDD/HHMMSS.SSS:LEVEL:file.cc(line)]
   const chromeMatch = line.match(/^\[\d+:\d+:\d{4}\/\d{6}\.\d{3}:[A-Z]+:([^\]]+)\]/);
   if (chromeMatch) {
@@ -111,9 +125,9 @@ export const extractModule = (line) => {
   }
 
   // Windows format variation 2: [date] [level] [module] [processId] [threadId] [file:line]
-  const windowsMatch = line.match(/^\[[\d/]+\s[\d:.]+\]\s+\[[^\]]+\]\s+\[([^\]]+)\]\s+\[\d+\]\s+\[\d+\]\s+\[[^\]]+\]/);
-  if (windowsMatch) {
-    const module = windowsMatch[1];
+  const windowsBracketedMatch = line.match(/^\[[\d/]+\s[\d:.]+\]\s+\[[^\]]+\]\s+\[([^\]]+)\]\s+\[\d+\]\s+\[\d+\]\s+\[[^\]]+\]/);
+  if (windowsBracketedMatch) {
+    const module = windowsBracketedMatch[1];
     return module.trim();
   }
 
@@ -445,7 +459,7 @@ export const parseLogLine = (line, lineNumber, logId, dateFormat = 'DD/MM/YY') =
     timestampMs: timestampMs, // Numeric timestamp for sorting/comparisons
     displayDate: displayDate, // Formatted date with month name (e.g., "23-May-2025")
     displayTime: displayTime, // Formatted time (e.g., "14:23:45.123")
-    level: parsedFormat?.logLevel || extractLogLevel(line), // Prefer parsed format, fallback to extract
+    level: parsedFormat?.logLevel || extractLogLevel(line),
     module: extractModule(line),
     thread: extractThread(line),
     process: extractProcess(line),
@@ -547,7 +561,48 @@ export const parseLogFormat = (line) => {
     };
   }
 
+  // Windows format with extended metadata: date time [level] [module] [process:thread] [function : line] [account:user] [p:project] [U:userId] message
+  // Example: 20/01/26 16:30:14.825 [D] [Configurat] [1474:33FC] [getLastActiveSessionCredentials    : 2695] [2217:prelogin] [p:auscatod1a] [U:857242227937794636] message
+  const windowsExtendedMatch = line.match(/^(\d{2}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([0-9A-Fa-f]+):([0-9A-Fa-f]+)\]\s+\[([^\]]+?)\s*:\s*(\d+)\]\s+\[([^\]]+)\]\s+\[p:([^\]]+)\]\s+\[U:([^\]]+)\]\s+(.*)$/);
+  if (windowsExtendedMatch) {
+    const [account, user] = windowsExtendedMatch[8].split(':');
+    return {
+      format: 'windows-extended',
+      dateTime: windowsExtendedMatch[1],
+      logLevel: windowsExtendedMatch[2],
+      moduleName: windowsExtendedMatch[3].trim(),
+      processId: windowsExtendedMatch[4],
+      threadId: windowsExtendedMatch[5],
+      sourceName: windowsExtendedMatch[6].trim(),
+      sourceLine: windowsExtendedMatch[7],
+      account: account || '',
+      user: user || windowsExtendedMatch[8],
+      project: windowsExtendedMatch[9],
+      userId: windowsExtendedMatch[10],
+      message: windowsExtendedMatch[11]
+    };
+  }
+
+  // Windows minimal/tunnel format: date time [level] [module] [process:thread] [function : line] [:] [:] [ :] message
+  // Example: 09/01/26 18:05:38.395 [E] [Configurat] [20AC:2490] [logError : 407] [:] [:] [ :] openImp: ...
+  // IMPORTANT: Must come before windowsMatch1 which has a more generic pattern
+  const windowsMinimalMatch = line.match(/^(\d{2}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([0-9A-Fa-f]+):([0-9A-Fa-f]+)\]\s+\[([^\]]+?)\s*:\s*(\d+)\]\s+\[:\]\s+\[:\]\s+\[\s*:\]\s+(.*)$/);
+  if (windowsMinimalMatch) {
+    return {
+      format: 'windows-minimal',
+      dateTime: windowsMinimalMatch[1],
+      logLevel: windowsMinimalMatch[2],
+      moduleName: windowsMinimalMatch[3].trim(),
+      processId: windowsMinimalMatch[4],
+      threadId: windowsMinimalMatch[5],
+      sourceName: windowsMinimalMatch[6].trim(),
+      sourceLine: windowsMinimalMatch[7],
+      message: windowsMinimalMatch[8]
+    };
+  }
+
   // Windows format variation 1: date time [level] [module] [process:thread] [function:line] [unknown] [unknown] [message]
+  // More generic pattern - should come AFTER windowsMinimalMatch
   const windowsMatch1 = line.match(/^(\d{2}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([0-9A-Fa-f]+:[0-9A-Fa-f]+)\]\s+\[([^\]]+)\]\s+\[([^\]]*)\]\s+\[([^\]]*)\]\s+\[(.*)$/);
   if (windowsMatch1) {
     return {
@@ -560,6 +615,21 @@ export const parseLogFormat = (line) => {
       unknown1: windowsMatch1[6],
       unknown2: windowsMatch1[7],
       message: windowsMatch1[8]
+    };
+  }
+
+  // Windows simple format (CatoClient trace): MM/DD/YY HH:MM:SS.SSS [ ] [          ] [PID:TID] message
+  // This format has empty/spaces in level and module fields
+  const windowsSimpleMatch = line.match(/^(\d{2}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})\s+\[\s*\]\s+\[\s*\]\s+\[([0-9A-Fa-f]+):([0-9A-Fa-f]+)\]\s+(.*)$/);
+  if (windowsSimpleMatch) {
+    return {
+      format: 'windows-simple',
+      dateTime: windowsSimpleMatch[1],
+      logLevel: '',
+      moduleName: '',
+      processId: windowsSimpleMatch[2],
+      threadId: windowsSimpleMatch[3],
+      message: windowsSimpleMatch[4]
     };
   }
 
