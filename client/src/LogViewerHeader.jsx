@@ -63,13 +63,23 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
   const handleFilesSelected = (event) => {
     const files = Array.from(event.target.files);
 
-    // Sort files by name before loading
+    // Sort files by name before grouping
     const sortedFiles = files.sort((a, b) => a.name.localeCompare(b.name));
 
-    // Load all files
-    sortedFiles.forEach(file => {
-      onFileLoad(file);
+    // Group files by prefix (same as directory loading)
+    const fileGroups = groupFilesByPrefix(sortedFiles);
+
+    // Load files - grouped or individual
+    fileGroups.forEach((groupFiles, prefix) => {
+      if (groupFiles.length === 1) {
+        // Single file in group - load normally
+        onFileLoad(groupFiles[0]);
+      } else {
+        // Multiple files in group - load as merged group
+        onFileLoad(groupFiles, false, prefix);
+      }
     });
+    
     event.target.value = '';
   };
 
