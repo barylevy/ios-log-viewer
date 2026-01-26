@@ -7,7 +7,7 @@ const AVAILABLE_COLUMNS = [
   { id: 'message', label: 'Message', defaultVisible: true, disabled: true }, // Message is always visible
   { id: 'module', label: 'Module', defaultVisible: true },
   { id: 'sourceFile', label: 'Source File', defaultVisible: true },
-  { id: 'processThread', label: 'Process/Thread', defaultVisible: true },
+  { id: 'processThread', label: 'P:T', defaultVisible: true },
   { id: 'timeGap', label: 'Time Gap', defaultVisible: true },
 ];
 

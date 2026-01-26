@@ -585,6 +585,44 @@ export const parseLogFormat = (line) => {
     };
   }
 
+  // Windows partial format: date time [level] [module] [process:thread] [function : line] [:] [p:project] [ :] message
+  // Example: 09/01/26 18:16:49.013 [D] [Routing] [1474:2788] [getRoutingTable:82] [:] [p:chicatod12a] [ :] getRoutingTable
+  // Has project but missing account and userId fields
+  const windowsPartialMatch = line.match(/^(\d{2}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([0-9A-Fa-f]+):([0-9A-Fa-f]+)\]\s+\[([^\]]+?)\s*:\s*(\d+)\]\s+\[:\]\s+\[p:([^\]]+)\]\s+\[\s*:\]\s+(.*)$/);
+  if (windowsPartialMatch) {
+    return {
+      format: 'windows-partial',
+      dateTime: windowsPartialMatch[1],
+      logLevel: windowsPartialMatch[2],
+      moduleName: windowsPartialMatch[3].trim(),
+      processId: windowsPartialMatch[4],
+      threadId: windowsPartialMatch[5],
+      sourceName: windowsPartialMatch[6].trim(),
+      sourceLine: windowsPartialMatch[7],
+      project: windowsPartialMatch[8],
+      message: windowsPartialMatch[9]
+    };
+  }
+
+  // Windows second-field format: date time [level] [module] [process:thread] [function : line] [:] [:value] message
+  // Example: 21/01/26 21:30:19.765 [I] [VPNProc] [1634:2BE4] [getAdditionalProducts : 3264] [:] [:TnlsOfficeMode] [getAdditionalProducts started
+  // First field empty [:], second field has value [:something]
+  const windowsSecondFieldMatch = line.match(/^(\d{2}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([0-9A-Fa-f]+):([0-9A-Fa-f]+)\]\s+\[([^\]]+?)\s*:\s*(\d+)\]\s+\[:\]\s+\[([^\]]+)\]\s+(.*)$/);
+  if (windowsSecondFieldMatch) {
+    return {
+      format: 'windows-second-field',
+      dateTime: windowsSecondFieldMatch[1],
+      logLevel: windowsSecondFieldMatch[2],
+      moduleName: windowsSecondFieldMatch[3].trim(),
+      processId: windowsSecondFieldMatch[4],
+      threadId: windowsSecondFieldMatch[5],
+      sourceName: windowsSecondFieldMatch[6].trim(),
+      sourceLine: windowsSecondFieldMatch[7],
+      secondField: windowsSecondFieldMatch[8],
+      message: windowsSecondFieldMatch[9]
+    };
+  }
+
   // Windows minimal/tunnel format: date time [level] [module] [process:thread] [function : line] [:] [:] [ :] message
   // Example: 09/01/26 18:05:38.395 [E] [Configurat] [20AC:2490] [logError : 407] [:] [:] [ :] openImp: ...
   // IMPORTANT: Must come before windowsMatch1 which has a more generic pattern
@@ -600,6 +638,24 @@ export const parseLogFormat = (line) => {
       sourceName: windowsMinimalMatch[6].trim(),
       sourceLine: windowsMinimalMatch[7],
       message: windowsMinimalMatch[8]
+    };
+  }
+
+  // Windows minimal-alt format: date time [level] [module] [process:thread] [function : line] [:] [:] [message]
+  // Example: 09/01/26 18:17:24.436 [E] [Configurat] [1474:22D4] [getLastActiveSessionAccountManager : 2672] [:] [:] [message in brackets]
+  // Similar to minimal but message is in brackets instead of [ :] message
+  const windowsMinimalAltMatch = line.match(/^(\d{2}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([0-9A-Fa-f]+):([0-9A-Fa-f]+)\]\s+\[([^\]]+?)\s*:\s*(\d+)\]\s+\[:\]\s+\[:\]\s+\[(.*)$/);
+  if (windowsMinimalAltMatch) {
+    return {
+      format: 'windows-minimal-alt',
+      dateTime: windowsMinimalAltMatch[1],
+      logLevel: windowsMinimalAltMatch[2],
+      moduleName: windowsMinimalAltMatch[3].trim(),
+      processId: windowsMinimalAltMatch[4],
+      threadId: windowsMinimalAltMatch[5],
+      sourceName: windowsMinimalAltMatch[6].trim(),
+      sourceLine: windowsMinimalAltMatch[7],
+      message: windowsMinimalAltMatch[8]
     };
   }
 

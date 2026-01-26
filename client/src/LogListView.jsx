@@ -840,25 +840,27 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
   }, [filters.searchQuery]); // Only reset when search query changes
 
   // Auto-scroll to selected log when it changes (for modal navigation)
-  useEffect(() => {
-    if (selectedLogId && virtuosoRef.current && flatLogs.length > 0) {
-      const selectedIndex = flatLogs.findIndex(log => log.id === selectedLogId);
-      if (selectedIndex >= 0) {
-        // Only scroll if the item is not currently visible
-        const isVisible = visibleRange &&
-          selectedIndex >= visibleRange.startIndex &&
-          selectedIndex <= visibleRange.endIndex;
+  // Disabled: This was causing unwanted scrolling when clicking on visible records
+  // The modal navigation (prev/next) doesn't need this since users can already see the highlighted record
+  // useEffect(() => {
+  //   if (selectedLogId && virtuosoRef.current && flatLogs.length > 0) {
+  //     const selectedIndex = flatLogs.findIndex(log => log.id === selectedLogId);
+  //     if (selectedIndex >= 0) {
+  //       // Only scroll if the item is not currently visible
+  //       const isVisible = visibleRange &&
+  //         selectedIndex >= visibleRange.startIndex &&
+  //         selectedIndex <= visibleRange.endIndex;
 
-        if (!isVisible) {
-          virtuosoRef.current.scrollToIndex({
-            index: selectedIndex,
-            align: 'center',
-            behavior: 'smooth'
-          });
-        }
-      }
-    }
-  }, [selectedLogId, flatLogs, visibleRange]);
+  //       if (!isVisible) {
+  //         virtuosoRef.current.scrollToIndex({
+  //           index: selectedIndex,
+  //           align: 'center',
+  //           behavior: 'smooth'
+  //         });
+  //       }
+  //     }
+  //   }
+  // }, [selectedLogId, flatLogs, visibleRange]);
 
   // Next/Prev navigation
   const goToNextMatch = useCallback(() => {
@@ -1488,7 +1490,7 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
               )}
               {visibleColumns.processThread !== false && (
                 <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 pr-2" title="Process ID and Thread ID">
-                  Process:Thread
+                  P:T
                 </div>
               )}
             </div>
