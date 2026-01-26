@@ -871,7 +871,7 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
     virtuosoRef.current.scrollToIndex({
       index: target,
       align: 'center',
-      behavior: 'smooth'
+      behavior: 'auto'
     });
     setCurrentMatchIndex(next);
     // Focus the target item after scrolling
@@ -890,7 +890,7 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
     virtuosoRef.current.scrollToIndex({
       index: target,
       align: 'center',
-      behavior: 'smooth'
+      behavior: 'auto'
     });
     setCurrentMatchIndex(prev);
     // Focus the target item after scrolling
