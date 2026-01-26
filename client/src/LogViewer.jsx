@@ -567,7 +567,7 @@ const LogViewer = () => {
           ...log,
           baseId: log.baseId || log.id, // Preserve baseId for sticky log matching
           id: `${file.id}-${log.id}`, // Ensure unique IDs
-          sourceFile: file.name
+          sourceFile: log.sourceFile || file.id // Use existing sourceFile (from grouped files) or file.id (for single files)
         }));
       });
 

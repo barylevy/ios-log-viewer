@@ -675,11 +675,14 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
   const stickyLogsSet = useMemo(() => {
     if (!stickyLogs || stickyLogs.length === 0) return new Set();
     const ids = new Set();
-    stickyLogs.forEach(log => {
-      ids.add(log.id);
-      // Also add composite key for baseId + sourceFile matching
-      if (log.baseId && log.sourceFile) {
-        ids.add(`${log.baseId}_${log.sourceFile}`);
+    stickyLogs.forEach(stickyLog => {
+      ids.add(stickyLog.id);
+      
+      // For All Tabs view: create composite key from sticky log's original data
+      // This matches against the log's baseId (which is its original id before combining)
+      if (stickyLog.sourceFile) {
+        // Sticky log from specific tab - match by its id + sourceFile
+        ids.add(`${stickyLog.id}_${stickyLog.sourceFile}`);
       }
     });
     return ids;

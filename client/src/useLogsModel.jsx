@@ -237,8 +237,12 @@ const useLogsModel = () => {
           let combinedHeaders = {};
           
           results.forEach(({ fileId, logs, headerData }) => {
-            // Add logs to combined array
-            combinedLogs = combinedLogs.concat(logs);
+            // Add logs to combined array, tagging each with its source file ID
+            const logsWithSource = logs.map(log => ({
+              ...log,
+              sourceFile: fileId // Tag with original file ID for sticky log matching
+            }));
+            combinedLogs = combinedLogs.concat(logsWithSource);
             
             // Merge headers (first file's headers take precedence)
             if (Object.keys(combinedHeaders).length === 0 && headerData) {
