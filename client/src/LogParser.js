@@ -461,8 +461,10 @@ export const parseLogLine = (line, lineNumber, logId, dateFormat = 'DD/MM/YY') =
     displayTime: displayTime, // Formatted time (e.g., "14:23:45.123")
     level: parsedFormat?.logLevel || extractLogLevel(line),
     module: extractModule(line),
-    thread: extractThread(line),
-    process: extractProcess(line),
+    sourceName: parsedFormat?.sourceName || '',
+    sourceLine: parsedFormat?.sourceLine || '',
+    thread: parsedFormat?.threadId || extractThread(line),
+    process: parsedFormat?.processId || extractProcess(line),
     lineNumber: lineNumber,
     originalLineNumbers: [lineNumber]
   };
