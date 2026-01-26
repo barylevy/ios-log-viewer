@@ -610,17 +610,17 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
             </div>
 
             <div className="flex-shrink-0 flex items-center gap-3">
-              {/* Module/File Name - trailing after message */}
+              {/* Module Name */}
               {visibleColumns.module !== false && log.module && (
                 <div className="text-xs text-blue-600 dark:text-blue-400 font-mono bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 whitespace-nowrap" title={`Module: ${log.module}`}>
                   {log.module}
                 </div>
               )}
               
-              {/* DEBUG: Show when module column should appear but doesn't */}
-              {visibleColumns.module !== false && !log.module && (
-                <div className="text-xs text-red-500 font-mono px-2 py-0.5" title="Module data missing">
-                  [no module]
+              {/* Source File:Line */}
+              {visibleColumns.sourceFile !== false && log.sourceName && (
+                <div className="text-xs text-purple-600 dark:text-purple-400 font-mono bg-purple-50 dark:bg-purple-900/20 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-800 whitespace-nowrap" title={`Source: ${log.sourceName}${log.sourceLine ? ':' + log.sourceLine : ''}`}>
+                  {log.sourceName}{log.sourceLine ? ':' + log.sourceLine : ''}
                 </div>
               )}
 
@@ -1481,7 +1481,7 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
                   Module
                 </div>
               )}
-              {visibleColumns.module !== false && (
+              {visibleColumns.sourceFile !== false && (
                 <div className="text-xs font-semibold text-gray-700 dark:text-gray-300" title="Source file and line number">
                   Source File
                 </div>
