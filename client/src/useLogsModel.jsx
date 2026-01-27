@@ -537,8 +537,8 @@ const useLogsModel = () => {
 
         // Gap filter: check if this log has the required time gap from previous log
         if (gapThreshold > 0 && index > 0) {
-          const currentTime = parseTimestampToMs(log.timestamp || log.message);
-          const previousTime = parseTimestampToMs(logs[index - 1].timestamp || logs[index - 1].message);
+          const currentTime = log.timestampMs;
+          const previousTime = logs[index - 1].timestampMs;
 
           if (currentTime && previousTime) {
             const gapSeconds = Math.abs(currentTime - previousTime) / 1000;
