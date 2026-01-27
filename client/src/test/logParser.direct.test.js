@@ -198,6 +198,18 @@ function transformToExpectedFormat(result) {
       }
       break;
       
+    case 'windows-unified':
+      // Windows unified format (consolidation of all Windows formats)
+      transformed.logLevel = result.logLevel;
+      transformed.Module = result.moduleName;
+      transformed.ProcessId = result.processId;
+      transformed.ThreadID = result.threadId;
+      if (result.sourceName && result.sourceLine) {
+        transformed.FileName = result.sourceName;
+        transformed.Line = result.sourceLine;
+      }
+      break;
+      
     case 'linux':
       // Linux format
       transformed.logLevel = result.logLevel;

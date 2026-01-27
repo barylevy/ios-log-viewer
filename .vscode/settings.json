@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^pkill -9 node$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

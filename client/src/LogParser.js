@@ -182,6 +182,13 @@ export const extractThread = (line) => {
     return thread === '_:' ? '_' : thread;
   }
 
+  // Windows format with combined hex IDs (date NOT in brackets): date [level] [module] [processId:threadId] [function]
+  const windowsHexNoBracketsMatch = line.match(/^\d{2}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3}\s+\[[^\]]+\]\s+\[[^\]]+\]\s+\[([0-9A-Fa-f]+):([0-9A-Fa-f]+)\]/);
+  if (windowsHexNoBracketsMatch) {
+    const threadId = windowsHexNoBracketsMatch[2]; // Second part after colon is thread ID
+    return threadId;
+  }
+
   // Windows format with combined hex IDs: [date] [level] [module] [processId:threadId] [function]
   const windowsHexMatch = line.match(/^\[[\d\/]+\s[\d:.]+\]\s+\[[^\]]+\]\s+\[[^\]]+\]\s+\[([0-9A-Fa-f]+):([0-9A-Fa-f]+)\]/);
   if (windowsHexMatch) {
@@ -270,6 +277,13 @@ export const extractProcess = (line) => {
   if (chromeMatch) {
     const processId = chromeMatch[1]; // First number is process ID
     return processId;
+  }
+
+  // Windows format variation 1 (date NOT in brackets): date [level] [module] [processId:threadId] [function]
+  const windowsMatch1NoBrackets = line.match(/^\d{2}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3}\s+\[[^\]]+\]\s+\[[^\]]+\]\s+\[([0-9A-Fa-f]+):([0-9A-Fa-f]+)\]/);
+  if (windowsMatch1NoBrackets) {
+    const processId = windowsMatch1NoBrackets[1]; // Just the process part
+    return processId; // Return only process ID, not combined
   }
 
   // Windows format variation 1: [date] [level] [module] [processId:threadId] [function] [unknown] [unknown] [message]
@@ -563,116 +577,148 @@ export const parseLogFormat = (line) => {
     };
   }
 
-  // Windows format with extended metadata: date time [level] [module] [process:thread] [function : line] [account:user] [p:project] [U:userId] message
-  // Example: 20/01/26 16:30:14.825 [D] [Configurat] [1474:33FC] [getLastActiveSessionCredentials    : 2695] [2217:prelogin] [p:auscatod1a] [U:857242227937794636] message
-  const windowsExtendedMatch = line.match(/^(\d{2}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([0-9A-Fa-f]+):([0-9A-Fa-f]+)\]\s+\[([^\]]+?)\s*:\s*(\d+)\]\s+\[([^\]]+)\]\s+\[p:([^\]]+)\]\s+\[U:([^\]]+)\]\s+(.*)$/);
-  if (windowsExtendedMatch) {
-    const [account, user] = windowsExtendedMatch[8].split(':');
-    return {
-      format: 'windows-extended',
-      dateTime: windowsExtendedMatch[1],
-      logLevel: windowsExtendedMatch[2],
-      moduleName: windowsExtendedMatch[3].trim(),
-      processId: windowsExtendedMatch[4],
-      threadId: windowsExtendedMatch[5],
-      sourceName: windowsExtendedMatch[6].trim(),
-      sourceLine: windowsExtendedMatch[7],
-      account: account || '',
-      user: user || windowsExtendedMatch[8],
-      project: windowsExtendedMatch[9],
-      userId: windowsExtendedMatch[10],
-      message: windowsExtendedMatch[11]
-    };
+  // Windows unified format: date time [level] [module] [process:thread] [function:line] [...metadata fields...] message
+  // Handles all variations with 2-4 metadata fields that can be:
+  // - [:] or [ :] - empty
+  // - [p:project] - project name
+  // - [account:user] - account and user
+  // - [U:userId] - user ID
+  // - [:value] - any value with colon prefix
+  // - [message] - message in brackets (when last field contains non-colon text)
+  // Examples with 3 fields:
+  // 09/01/26 18:16:49.013 [D] [Routing] [1474:2788] [getRoutingTable:82] [:] [p:chicatod12a] [ :] getRoutingTable
+  // 21/01/26 21:30:19.765 [I] [VPNProc] [1634:2BE4] [getAdditionalProducts : 3264] [:] [:TnlsOfficeMode] [getAdditionalProducts started
+  // 09/01/26 18:05:38.395 [E] [Configurat] [20AC:2490] [logError : 407] [:] [:] [ :] openImp
+  // 09/01/26 18:17:24.436 [E] [Configurat] [1474:22D4] [getLastActiveSessionAccountManager : 2672] [:] [:] [message in brackets]
+  // Example with 4 fields:
+  // 20/01/26 16:30:14.825 [D] [Configurat] [1474:33FC] [getLastActiveSessionCredentials : 2695] [2217:prelogin] [p:auscatod1a] [U:857242227937794636] message
+  
+  // Determine how many fields by counting brackets after [processId:threadId] [function:line]
+  // Look for the pattern and count what comes after
+  const processThreadPattern = /\[([0-9A-Fa-f]+):([0-9A-Fa-f]+)\]\s+\[([^\]]+?)\s*:\s*(\d+)\]/;
+  const processThreadMatch = line.match(processThreadPattern);
+  let has4Fields = false;
+  
+  if (processThreadMatch) {
+    const afterFunctionLine = line.substring(line.indexOf(processThreadMatch[0]) + processThreadMatch[0].length);
+    // Count opening brackets
+    const bracketCount = (afterFunctionLine.match(/\[/g) || []).length;
+    has4Fields = bracketCount >= 4;
   }
-
-  // Windows partial format: date time [level] [module] [process:thread] [function : line] [:] [p:project] [ :] message
-  // Example: 09/01/26 18:16:49.013 [D] [Routing] [1474:2788] [getRoutingTable:82] [:] [p:chicatod12a] [ :] getRoutingTable
-  // Has project but missing account and userId fields
-  const windowsPartialMatch = line.match(/^(\d{2}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([0-9A-Fa-f]+):([0-9A-Fa-f]+)\]\s+\[([^\]]+?)\s*:\s*(\d+)\]\s+\[:\]\s+\[p:([^\]]+)\]\s+\[\s*:\]\s+(.*)$/);
-  if (windowsPartialMatch) {
-    return {
-      format: 'windows-partial',
-      dateTime: windowsPartialMatch[1],
-      logLevel: windowsPartialMatch[2],
-      moduleName: windowsPartialMatch[3].trim(),
-      processId: windowsPartialMatch[4],
-      threadId: windowsPartialMatch[5],
-      sourceName: windowsPartialMatch[6].trim(),
-      sourceLine: windowsPartialMatch[7],
-      project: windowsPartialMatch[8],
-      message: windowsPartialMatch[9]
-    };
+  
+  if (has4Fields) {
+    // Try 4 fields
+    const windowsUnified4Match = line.match(/^(\d{2}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([0-9A-Fa-f]+):([0-9A-Fa-f]+)\]\s+\[([^\]]+?)\s*:\s*(\d+)\]\s+\[([^\]]*)\]\s+\[([^\]]*)\]\s+\[([^\]]*)\]\s+\[([^\]]*)\]\s*(.*)$/);
+    if (windowsUnified4Match) {
+      const field1 = windowsUnified4Match[8].trim();
+      const field2 = windowsUnified4Match[9].trim();
+      const field3 = windowsUnified4Match[10].trim();
+      const field4 = windowsUnified4Match[11].trim();
+      const remainingText = windowsUnified4Match[12].trim();
+      
+      // Parse metadata fields
+      let account = '', user = '', project = '', userId = '', secondField = '';
+      let message = remainingText;
+      
+      // Parse field1: can be [account:user] or [:] or empty
+      if (field1 && field1 !== ':') {
+        const accountMatch = field1.match(/^([^:]+):(.+)$/);
+        if (accountMatch) {
+          account = accountMatch[1];
+          user = accountMatch[2];
+        }
+      }
+      
+      // Parse field2: can be [p:project] or [:value] or [:] or empty
+      if (field2) {
+        if (field2.startsWith('p:')) {
+          project = field2.substring(2);
+        } else if (field2.startsWith(':') && field2.length > 1) {
+          secondField = field2.substring(1);
+        }
+      }
+      
+      // Parse field3: can be [U:userId] or [ :] or [:] or empty
+      if (field3) {
+        if (field3.startsWith('U:')) {
+          userId = field3.substring(2);
+        }
+      }
+      
+      // Parse field4: can be [U:userId] or [message] or empty
+      // Check if it's userId first, then check if it's a message
+      if (field4) {
+        if (field4.startsWith('U:')) {
+          userId = field4.substring(2);
+        } else if (field4 !== ':' && field4 !== ' :' && field4.trim() !== '') {
+          // It's a message in brackets (no colon prefix or just empty colon)
+          message = field4;
+        }
+      }
+      
+      return {
+        format: 'windows-unified',
+        dateTime: windowsUnified4Match[1],
+        logLevel: windowsUnified4Match[2],
+        moduleName: windowsUnified4Match[3].trim(),
+        processId: windowsUnified4Match[4],
+        threadId: windowsUnified4Match[5],
+        sourceName: windowsUnified4Match[6].trim(),
+        sourceLine: windowsUnified4Match[7],
+        account: account,
+        user: user,
+        project: project,
+        userId: userId,
+        secondField: secondField,
+        message: message
+      };
+    }
   }
-
-  // Windows second-field format: date time [level] [module] [process:thread] [function : line] [:] [:value] message
-  // Example: 21/01/26 21:30:19.765 [I] [VPNProc] [1634:2BE4] [getAdditionalProducts : 3264] [:] [:TnlsOfficeMode] [getAdditionalProducts started
-  // First field empty [:], second field has value [:something]
-  const windowsSecondFieldMatch = line.match(/^(\d{2}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([0-9A-Fa-f]+):([0-9A-Fa-f]+)\]\s+\[([^\]]+?)\s*:\s*(\d+)\]\s+\[:\]\s+\[([^\]]+)\]\s+(.*)$/);
-  if (windowsSecondFieldMatch) {
+  
+  // Try 3 fields
+  const windowsUnified3Match = line.match(/^(\d{2}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([0-9A-Fa-f]+):([0-9A-Fa-f]+)\]\s+\[([^\]]+?)\s*:\s*(\d+)\]\s+\[([^\]]*)\]\s+\[([^\]]*)\]\s+(.*)$/);
+  if (windowsUnified3Match) {
+    const field1 = windowsUnified3Match[8].trim();
+    const field2 = windowsUnified3Match[9].trim();
+    const remainingText = windowsUnified3Match[10].trim();
+    
+    // Parse metadata fields
+    let account = '', user = '', project = '', userId = '', secondField = '';
+    let message = remainingText;
+    
+    // Parse field1: can be [account:user] or [:] or empty
+    if (field1 && field1 !== ':') {
+      const accountMatch = field1.match(/^([^:]+):(.+)$/);
+      if (accountMatch) {
+        account = accountMatch[1];
+        user = accountMatch[2];
+      }
+    }
+    
+    // Parse field2: can be [p:project] or [:value] or [:] or empty
+    if (field2) {
+      if (field2.startsWith('p:')) {
+        project = field2.substring(2);
+      } else if (field2.startsWith(':') && field2.length > 1) {
+        secondField = field2.substring(1);
+      }
+    }
+    
     return {
-      format: 'windows-second-field',
-      dateTime: windowsSecondFieldMatch[1],
-      logLevel: windowsSecondFieldMatch[2],
-      moduleName: windowsSecondFieldMatch[3].trim(),
-      processId: windowsSecondFieldMatch[4],
-      threadId: windowsSecondFieldMatch[5],
-      sourceName: windowsSecondFieldMatch[6].trim(),
-      sourceLine: windowsSecondFieldMatch[7],
-      secondField: windowsSecondFieldMatch[8],
-      message: windowsSecondFieldMatch[9]
-    };
-  }
-
-  // Windows minimal/tunnel format: date time [level] [module] [process:thread] [function : line] [:] [:] [ :] message
-  // Example: 09/01/26 18:05:38.395 [E] [Configurat] [20AC:2490] [logError : 407] [:] [:] [ :] openImp: ...
-  // IMPORTANT: Must come before windowsMatch1 which has a more generic pattern
-  const windowsMinimalMatch = line.match(/^(\d{2}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([0-9A-Fa-f]+):([0-9A-Fa-f]+)\]\s+\[([^\]]+?)\s*:\s*(\d+)\]\s+\[:\]\s+\[:\]\s+\[\s*:\]\s+(.*)$/);
-  if (windowsMinimalMatch) {
-    return {
-      format: 'windows-minimal',
-      dateTime: windowsMinimalMatch[1],
-      logLevel: windowsMinimalMatch[2],
-      moduleName: windowsMinimalMatch[3].trim(),
-      processId: windowsMinimalMatch[4],
-      threadId: windowsMinimalMatch[5],
-      sourceName: windowsMinimalMatch[6].trim(),
-      sourceLine: windowsMinimalMatch[7],
-      message: windowsMinimalMatch[8]
-    };
-  }
-
-  // Windows minimal-alt format: date time [level] [module] [process:thread] [function : line] [:] [:] [message]
-  // Example: 09/01/26 18:17:24.436 [E] [Configurat] [1474:22D4] [getLastActiveSessionAccountManager : 2672] [:] [:] [message in brackets]
-  // Similar to minimal but message is in brackets instead of [ :] message
-  const windowsMinimalAltMatch = line.match(/^(\d{2}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([0-9A-Fa-f]+):([0-9A-Fa-f]+)\]\s+\[([^\]]+?)\s*:\s*(\d+)\]\s+\[:\]\s+\[:\]\s+\[(.*)$/);
-  if (windowsMinimalAltMatch) {
-    return {
-      format: 'windows-minimal-alt',
-      dateTime: windowsMinimalAltMatch[1],
-      logLevel: windowsMinimalAltMatch[2],
-      moduleName: windowsMinimalAltMatch[3].trim(),
-      processId: windowsMinimalAltMatch[4],
-      threadId: windowsMinimalAltMatch[5],
-      sourceName: windowsMinimalAltMatch[6].trim(),
-      sourceLine: windowsMinimalAltMatch[7],
-      message: windowsMinimalAltMatch[8]
-    };
-  }
-
-  // Windows format variation 1: date time [level] [module] [process:thread] [function:line] [unknown] [unknown] [message]
-  // More generic pattern - should come AFTER windowsMinimalMatch
-  const windowsMatch1 = line.match(/^(\d{2}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([0-9A-Fa-f]+:[0-9A-Fa-f]+)\]\s+\[([^\]]+)\]\s+\[([^\]]*)\]\s+\[([^\]]*)\]\s+\[(.*)$/);
-  if (windowsMatch1) {
-    return {
-      format: 'windows-combined',
-      dateTime: windowsMatch1[1],
-      logLevel: windowsMatch1[2],
-      moduleName: windowsMatch1[3].trim(),
-      processThreadIds: windowsMatch1[4],
-      fileNameLine: windowsMatch1[5].trim(),
-      unknown1: windowsMatch1[6],
-      unknown2: windowsMatch1[7],
-      message: windowsMatch1[8]
+      format: 'windows-unified',
+      dateTime: windowsUnified3Match[1],
+      logLevel: windowsUnified3Match[2],
+      moduleName: windowsUnified3Match[3].trim(),
+      processId: windowsUnified3Match[4],
+      threadId: windowsUnified3Match[5],
+      sourceName: windowsUnified3Match[6].trim(),
+      sourceLine: windowsUnified3Match[7],
+      account: account,
+      user: user,
+      project: project,
+      userId: userId,
+      secondField: secondField,
+      message: message
     };
   }
 
