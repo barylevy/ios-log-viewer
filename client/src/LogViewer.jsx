@@ -36,6 +36,7 @@ const LogViewer = () => {
     addStickyLog,
     removeStickyLog,
     clearAllStickyLogs,
+    updateStickyLogTitle,
     scrollToLog
   } = useLogsModel();
 
@@ -835,6 +836,7 @@ const LogViewer = () => {
                   stickyLogs={stickyLogs}
                   onRemoveStickyLog={removeStickyLog}
                   onClearAllStickyLogs={clearAllStickyLogs}
+                  onUpdateStickyLogTitle={updateStickyLogTitle}
                   onScrollToLog={scrollToLog}
                 />
                 <div className="flex-1 overflow-hidden">

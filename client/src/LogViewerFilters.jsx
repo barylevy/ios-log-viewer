@@ -31,10 +31,13 @@ const FILTER_TOOLTIP = `Advanced Filtering Guide:
 
 • Works with log level and context line filters`;
 
-const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCount, searchMatchCount, searchMatchPos, pivotGap, pivotLineNumber, stickyLogs, onRemoveStickyLog, onClearAllStickyLogs, onScrollToLog }) => {
+const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCount, searchMatchCount, searchMatchPos, pivotGap, pivotLineNumber, stickyLogs, onRemoveStickyLog, onClearAllStickyLogs, onScrollToLog, onUpdateStickyLogTitle }) => {
   const [isLevelDropdownOpen, setIsLevelDropdownOpen] = useState(false);
   const [isFilterHistoryOpen, setIsFilterHistoryOpen] = useState(false);
   const [isSearchHistoryOpen, setIsSearchHistoryOpen] = useState(false);
+  const [editingStickyId, setEditingStickyId] = useState(null);
+  const [editingTitle, setEditingTitle] = useState('');
+  const editInputRef = useRef(null);
   const [filterHistory, setFilterHistory] = useState(() => {
     // Load filter history from localStorage
     const saved = localStorage.getItem('logViewer_filterHistory');
@@ -242,6 +245,44 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
+
+  // Focus edit input when editing starts
+  useEffect(() => {
+    if (editingStickyId !== null && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [editingStickyId]);
+
+  // Handle double-click to start editing sticky title
+  const handleStickyDoubleClick = (sticky) => {
+    setEditingStickyId(sticky.id);
+    setEditingTitle(sticky.title || `#${sticky.lineNumber}`);
+  };
+
+  // Save edited title
+  const handleSaveStickyTitle = () => {
+    if (editingStickyId !== null && onUpdateStickyLogTitle) {
+      onUpdateStickyLogTitle(editingStickyId, editingTitle.trim() || `#${editingStickyId}`);
+    }
+    setEditingStickyId(null);
+    setEditingTitle('');
+  };
+
+  // Cancel editing
+  const handleCancelStickyEdit = () => {
+    setEditingStickyId(null);
+    setEditingTitle('');
+  };
+
+  // Handle key down in edit input
+  const handleStickyEditKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleSaveStickyTitle();
+    } else if (e.key === 'Escape') {
+      handleCancelStickyEdit();
+    }
+  };
 
   const handleLogLevelToggle = (level) => {
     const currentLevels = filters.logLevel;
@@ -604,14 +645,28 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
                   key={sticky.id}
                   className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded border transition-colors ${getLevelBackgroundColor(sticky.level)}`}
                 >
-                  {/* Scroll to log button */}
-                  <button
-                    onClick={() => onScrollToLog(sticky.lineNumber, sticky.sourceFile)}
-                    className="hover:opacity-75"
-                    title={sticky.sourceFile ? `[${sticky.sourceFile}] Line ${sticky.lineNumber}` : `Line ${sticky.lineNumber}`}
-                  >
-                    #{sticky.lineNumber}
-                  </button>
+                  {/* Scroll to log button - editable on double-click */}
+                  {editingStickyId === sticky.id ? (
+                    <input
+                      ref={editInputRef}
+                      type="text"
+                      value={editingTitle}
+                      onChange={(e) => setEditingTitle(e.target.value)}
+                      onBlur={handleSaveStickyTitle}
+                      onKeyDown={handleStickyEditKeyDown}
+                      className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-1 py-0 text-xs w-24"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <button
+                      onClick={() => onScrollToLog(sticky.lineNumber, sticky.sourceFile)}
+                      onDoubleClick={() => handleStickyDoubleClick(sticky)}
+                      className="hover:opacity-75"
+                      title={sticky.sourceFile ? `[${sticky.sourceFile}] Line ${sticky.lineNumber}${sticky.title ? ` - ${sticky.title}` : ''}\nDouble-click to edit title` : `Line ${sticky.lineNumber}${sticky.title ? ` - ${sticky.title}` : ''}\nDouble-click to edit title`}
+                    >
+                      {sticky.title || `#${sticky.lineNumber}`}
+                    </button>
+                  )}
                   {/* Remove sticky log button */}
                   <button
                     onClick={(e) => {

@@ -221,6 +221,22 @@ const useLogsModel = () => {
     });
   }, [currentFileName]);
 
+  const updateStickyLogTitle = useCallback((logId, newTitle) => {
+    if (!currentFileName) return;
+
+    setAllFileStickyLogs(prev => {
+      const currentFileStickyLogs = prev[currentFileName] || [];
+      const updatedFileStickyLogs = currentFileStickyLogs.map(sticky => 
+        sticky.id === logId ? { ...sticky, title: newTitle } : sticky
+      );
+
+      return {
+        ...prev,
+        [currentFileName]: updatedFileStickyLogs
+      };
+    });
+  }, [currentFileName]);
+
   // Internal: load logs for a file object (async)
   const loadLogs = useCallback((fileOrFiles, groupId = null) => {
     // Handle both single file and array of files (for grouped files)
@@ -825,6 +841,7 @@ const useLogsModel = () => {
     addStickyLog,
     removeStickyLog,
     clearAllStickyLogs,
+    updateStickyLogTitle,
     scrollToLog
   };
 };
