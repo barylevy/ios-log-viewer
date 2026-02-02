@@ -48,17 +48,33 @@ const useLogsModel = () => {
     }
   }); // Store filters per file
   const [currentFileName, setCurrentFileName] = useState(null); // Track current file
-  const [filters, setFilters] = useState({
-    searchText: '',
-    searchQuery: '',
-    logLevel: ['all'], // Array to support multiple levels
-    contextLines: 0
+  const [filters, setFilters] = useState(() => {
+    // Initialize with localStorage values for modes
+    const filterMode = localStorage.getItem('logViewer_filterMode') || 'text';
+    const searchMode = localStorage.getItem('logViewer_searchMode') || 'text';
+    
+    return {
+      searchText: '',
+      searchQuery: '',
+      logLevel: ['all'], // Array to support multiple levels
+      contextLines: 0,
+      filterMode, // 'text' or 'regex'
+      searchMode  // 'text' or 'regex'
+    };
   });
 
   // Load filters when current file changes
   useEffect(() => {
     if (currentFileName && allFileFilters[currentFileName]) {
-      setFilters({ ...allFileFilters[currentFileName] });
+      // Merge with current modes from localStorage to ensure they're always present
+      const filterMode = localStorage.getItem('logViewer_filterMode') || 'text';
+      const searchMode = localStorage.getItem('logViewer_searchMode') || 'text';
+      
+      setFilters({
+        ...allFileFilters[currentFileName],
+        filterMode,
+        searchMode
+      });
     }
   }, [currentFileName, allFileFilters]);
 
@@ -485,17 +501,34 @@ const useLogsModel = () => {
     const excludeTerms = terms.filter(term => term.startsWith('!')).map(term => term.slice(1));
 
     // Build regexes for each term (case-insensitive, supports spaces)
+    // If filterMode is 'regex', treat terms as regex patterns; otherwise escape special chars
     const includeRegexes = includeTerms.map(term => {
       try {
-        return new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-      } catch {
+        if (filters.filterMode === 'regex') {
+          // Use term as regex pattern directly
+          console.log('Filter Mode: REGEX - Using term as pattern:', term);
+          return new RegExp(term, 'i');
+        } else {
+          // Escape special regex characters for text search
+          console.log('Filter Mode: TEXT - Escaping term:', term);
+          return new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+        }
+      } catch (e) {
+        console.error('Invalid regex pattern:', term, e);
         return null;
       }
     });
     const excludeRegexes = excludeTerms.map(term => {
       try {
-        return new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-      } catch {
+        if (filters.filterMode === 'regex') {
+          // Use term as regex pattern directly
+          return new RegExp(term, 'i');
+        } else {
+          // Escape special regex characters for text search
+          return new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+        }
+      } catch (e) {
+        console.error('Invalid regex pattern:', term, e);
         return null;
       }
     });
@@ -511,20 +544,35 @@ const useLogsModel = () => {
       dateEnd,
       gapThreshold
     };
-  }, [filters.searchText]);
+  }, [filters.searchText, filters.filterMode]);
 
   const filteredLogs = useMemo(() => {
     if (!logs.length) return [];
 
     const matchingLogIndices = [];
 
-    // Pre-lowercase all messages once for performance
-    const lowerMessages = logs.map(log => log.message.toLowerCase());
+    // Helper function to get all searchable text from a log entry
+    const getSearchableText = (log) => {
+      const parts = [
+        log.message || '',
+        log.timestamp || '',
+        log.level || '',
+        log.module || '',
+        log.thread || '',
+        log.process || '',
+        log.lineNumber?.toString() || ''
+      ];
+      return parts.join(' ');
+    };
+
+    // Pre-lowercase all searchable text once for performance (for text mode)
+    const lowerTexts = logs.map(log => getSearchableText(log).toLowerCase());
 
     logs.forEach((log, index) => {
       if (searchData) {
         const { includeTerms, excludeTerms, includeRegexes, excludeRegexes, rowStart, rowEnd, dateStart, dateEnd, gapThreshold } = searchData;
-        const message = lowerMessages[index];
+        const searchableText = getSearchableText(log);
+        const lowerText = lowerTexts[index];
 
         // Range filtering: handle date, row, and mixed ranges
         // Row start filter: check if log line number is >= rowStart
@@ -567,8 +615,12 @@ const useLogsModel = () => {
         // Exclude logic: if any exclude term matches, skip this log
         const isExcluded = excludeTerms.some((term, i) => {
           const regex = excludeRegexes[i];
-          if (regex) return regex.test(message);
-          return message.includes(term.toLowerCase());
+          if (regex) {
+            // In regex mode, test against full searchable text
+            return regex.test(searchableText);
+          }
+          // In text mode, use lowercase comparison
+          return lowerText.includes(term.toLowerCase());
         });
         if (isExcluded) return;
 
@@ -576,8 +628,12 @@ const useLogsModel = () => {
         if (includeTerms.length > 0) {
           const matchesAnyInclude = includeTerms.some((term, i) => {
             const regex = includeRegexes[i];
-            if (regex) return regex.test(message);
-            return message.includes(term.toLowerCase());
+            if (regex) {
+              // In regex mode, test against full searchable text
+              return regex.test(searchableText);
+            }
+            // In text mode, use lowercase comparison
+            return lowerText.includes(term.toLowerCase());
           });
           if (!matchesAnyInclude) return;
         }

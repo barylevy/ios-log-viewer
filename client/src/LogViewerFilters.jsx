@@ -8,6 +8,7 @@ const FILTER_TOOLTIP = `Advanced Filtering Guide:
 • Multiple terms: Use '||' (OR logic): error || warning
 • Exclude terms: Use '!' prefix: !heartbeat
 • Exact phrases: Use quotes: "connection lost"
+• Regex mode: Switch dropdown to 'Regex' for pattern matching: \\berror\\b || warn.*
 
 • Filter by row numbers:
   #415 :: — from row 415 onwards
@@ -48,6 +49,16 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
     const saved = localStorage.getItem('logViewer_searchHistory');
     return saved ? JSON.parse(saved) : [];
   });
+  const [filterMode, setFilterMode] = useState(() => {
+    // Load filter mode from localStorage
+    const saved = localStorage.getItem('logViewer_filterMode');
+    return saved || 'text';
+  });
+  const [searchMode, setSearchMode] = useState(() => {
+    // Load search mode from localStorage
+    const saved = localStorage.getItem('logViewer_searchMode');
+    return saved || 'text';
+  });
 
   const dropdownRef = useRef(null);
   const portalRef = useRef(null);
@@ -62,6 +73,18 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
   const [filterDropdownPos, setFilterDropdownPos] = useState({ top: 0, left: 0 });
   const [searchDropdownPos, setSearchDropdownPos] = useState({ top: 0, left: 0 });
+
+  // Save filter mode to localStorage and propagate to parent
+  useEffect(() => {
+    localStorage.setItem('logViewer_filterMode', filterMode);
+    onFiltersChange({ filterMode });
+  }, [filterMode]);
+
+  // Save search mode to localStorage and propagate to parent
+  useEffect(() => {
+    localStorage.setItem('logViewer_searchMode', searchMode);
+    onFiltersChange({ searchMode });
+  }, [searchMode]);
 
   const handleFilterChange = (key, value) => {
     onFiltersChange({ [key]: value });
@@ -333,6 +356,17 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
     <div className="flex-1 min-w-64 flex items-center">
       <label className="text-xs font-medium text-gray-700 dark:text-gray-300 mr-2">Search:</label>
       <div className="relative w-full flex border border-gray-300 dark:border-gray-600 rounded-md focus-within:ring-2 focus-within:ring-green-500 focus-within:border-green-500 bg-white dark:bg-gray-700">
+        {/* Search Mode Dropdown */}
+        <select
+          value={searchMode}
+          onChange={(e) => setSearchMode(e.target.value)}
+          className="h-6 px-1 border-none bg-transparent text-gray-700 dark:text-gray-300 text-xs focus:outline-none cursor-pointer"
+          title="Switch between text and regex search"
+        >
+          <option value="text">Text</option>
+          <option value="regex">Regex</option>
+        </select>
+        <div className="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
         <input
           ref={searchInputRef}
           type="text"
@@ -341,7 +375,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
           onChange={(e) => handleFilterChange('searchQuery', e.target.value)}
           onBlur={handleSearchBlur}
           onKeyDown={handleSearchKeyDown}
-          className="w-full h-6 px-2 pr-28 border-none rounded-l-md focus:outline-none bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
+          className="w-full h-6 px-2 pr-28 border-none focus:outline-none bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
           title="Search in logs. Add #gap=5 to show visual separators between records with 5+ second gaps. Combine with search terms: 'error #gap=3' shows errors with gap indicators."
         />
         {filters.searchQuery && (
@@ -438,6 +472,17 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
         <div className="flex items-center w-full">
           <label className="text-xs font-medium text-gray-700 dark:text-gray-300 mr-2">Filter:</label>
           <div className="relative w-full flex border border-gray-300 dark:border-gray-600 rounded-md focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 bg-white dark:bg-gray-700">
+            {/* Filter Mode Dropdown */}
+            <select
+              value={filterMode}
+              onChange={(e) => setFilterMode(e.target.value)}
+              className="h-6 px-1 border-none bg-transparent text-gray-700 dark:text-gray-300 text-xs focus:outline-none cursor-pointer"
+              title="Switch between text and regex search"
+            >
+              <option value="text">Text</option>
+              <option value="regex">Regex</option>
+            </select>
+            <div className="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
             <input
               ref={filterInputRef}
               type="text"
@@ -446,7 +491,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
               onChange={(e) => handleFilterChange('searchText', e.target.value)}
               onBlur={handleFilterBlur}
               onKeyDown={handleFilterKeyDown}
-              className="w-full h-6 px-2 pr-28 border-none rounded-l-md focus:outline-none bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
+              className="w-full h-6 px-2 pr-28 border-none focus:outline-none bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
               title={FILTER_TOOLTIP}
             />
             {filters.searchText && (

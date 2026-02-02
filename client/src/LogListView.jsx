@@ -342,7 +342,7 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
     let messageHtml = cleanedMessage;
 
     // Helper function to process highlight terms
-    const processHighlights = (searchText, markClass) => {
+    const processHighlights = (searchText, markClass, isRegex) => {
       if (!searchText) return;
 
       const terms = searchText
@@ -351,20 +351,32 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
         .filter(term => term.length > 0 && !GAP_PATTERN.test(term)); // Exclude #gap=X patterns
 
       terms.forEach(term => {
-        const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(`(${escaped})`, 'gi');
-        messageHtml = messageHtml.replace(regex, `<mark class="${markClass}">$1</mark>`);
+        try {
+          let regex;
+          if (isRegex) {
+            // Use term as regex pattern directly
+            regex = new RegExp(`(${term})`, 'gi');
+          } else {
+            // Escape special characters for text search
+            const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            regex = new RegExp(`(${escaped})`, 'gi');
+          }
+          messageHtml = messageHtml.replace(regex, `<mark class="${markClass}">$1</mark>`);
+        } catch (e) {
+          // If regex is invalid, skip highlighting for this term
+          console.warn('Invalid regex pattern:', term, e);
+        }
       });
     };
 
     // Highlight filter terms (blue)
-    processHighlights(filters.searchText, 'bg-blue-200 dark:bg-blue-500');
+    processHighlights(filters.searchText, 'bg-blue-200 dark:bg-blue-500', filters.filterMode === 'regex');
 
     // Highlight search query terms (green)
-    processHighlights(filters.searchQuery, 'bg-green-200 dark:bg-green-600 font-bold');
+    processHighlights(filters.searchQuery, 'bg-green-200 dark:bg-green-600 font-bold', filters.searchMode === 'regex');
 
     return messageHtml;
-  }, [cleanedMessage, filters.searchQuery, filters.searchText]);
+  }, [cleanedMessage, filters.searchQuery, filters.searchText, filters.filterMode, filters.searchMode]);
 
   // Determine log level for styling - use the parsed level field, with fallback to pattern matching
   const logLevel = useMemo(() => {
@@ -816,24 +828,54 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
 
     const terms = filters.searchQuery
       .split('||')
-      .map(t => t.trim().toLowerCase())
+      .map(t => t.trim())
       .filter(Boolean);
 
     if (!terms.length) return [];
 
+    // Helper function to get all searchable text from a log entry
+    const getSearchableText = (log) => {
+      const parts = [
+        cleanMessage(log.message || ''),
+        log.timestamp || '',
+        log.level || '',
+        log.module || '',
+        log.thread || '',
+        log.process || '',
+        log.lineNumber?.toString() || ''
+      ];
+      return parts.join(' ');
+    };
+
     const indices = [];
     for (let idx = 0; idx < flatLogs.length; idx++) {
       const log = flatLogs[idx];
-      const msg = cleanMessage(log.message || '').toLowerCase();
+      const searchableText = getSearchableText(log);
 
-      // Use some() with early return for better performance
-      if (terms.some(term => msg.includes(term))) {
+      // Check if any term matches
+      const matches = terms.some(term => {
+        try {
+          if (filters.searchMode === 'regex') {
+            // Use term as regex pattern
+            const regex = new RegExp(term, 'i');
+            return regex.test(searchableText);
+          } else {
+            // Simple text search (case-insensitive)
+            return searchableText.toLowerCase().includes(term.toLowerCase());
+          }
+        } catch (e) {
+          // If regex is invalid, fall back to text search
+          return searchableText.toLowerCase().includes(term.toLowerCase());
+        }
+      });
+
+      if (matches) {
         indices.push(idx);
       }
     }
 
     return indices;
-  }, [filters.searchQuery, flatLogs]);
+  }, [filters.searchQuery, filters.searchMode, flatLogs]);
   // Reset on search query change (not on every matchIndices recalculation)
   useEffect(() => {
     setCurrentMatchIndex(matchIndices.length ? 0 : -1);
