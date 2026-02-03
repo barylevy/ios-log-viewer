@@ -8,6 +8,7 @@ import {
   GAP_PATTERN
 } from './dateTimeUtils';
 import { cleanMessage } from './utils/logLevelColors';
+import { replaceProcessIdWithType } from './utils/processTypeMapper';
 
 // Custom hook to track dark mode with better performance
 const useDarkMode = () => {
@@ -77,20 +78,26 @@ const getColorForThread = (threadId) => {
 
 // Helper function to extract process and thread information for display
 const extractFileInfo = (log, previousLog) => {
-  // Check if thread ID or process ID changed from previous log
+  // Use the pre-computed processName from parsing
+  const processDisplay = log.processName || log.process;
+  
+  // Check if thread ID or process name changed from previous log
   const threadChanged = previousLog && log.thread && log.thread !== previousLog.thread;
-  const processChanged = previousLog && log.process && log.process !== previousLog.process;
+  const previousProcessDisplay = previousLog?.processName || previousLog?.process;
+  const processChanged = previousLog && processDisplay && processDisplay !== previousProcessDisplay;
   const hasChange = threadChanged || processChanged;
 
   // Get colors for process and thread separately
   const processColor = getColorForProcess(log.process);
   const threadColor = getColorForThread(log.thread);
 
-  // Display both process ID and thread ID if both are available
-  if (log.process && log.thread) {
-    const text = `[${log.process}:${log.thread}]`;
-    const tooltip = `Process ID: ${log.process} | Thread ID: ${log.thread}`;
-    const html = `[<span style="color: ${processColor}" title="${tooltip}">${log.process}</span>:<span style="color: ${threadColor}" title="${tooltip}">${log.thread}</span>]`;
+  // Display both process name and thread ID if both are available
+  if (processDisplay && log.thread) {
+    const text = `[${processDisplay}:${log.thread}]`;
+    const tooltip = log.processName && log.processName !== log.process
+      ? `Process Type: ${log.processName} (ID: ${log.process}) | Module: ${log.module} | Thread ID: ${log.thread}`
+      : `Process ID: ${log.process} | Thread ID: ${log.thread}`;
+    const html = `[<span style="color: ${processColor}" title="${tooltip}">${processDisplay}</span>:<span style="color: ${threadColor}" title="${tooltip}">${log.thread}</span>]`;
     return { 
       text,
       html,
@@ -109,10 +116,13 @@ const extractFileInfo = (log, previousLog) => {
     };
   }
 
-  // Fallback to just process if only process is available
-  if (log.process) {
-    const text = `[${log.process}]`;
-    const html = `<span style="color: ${processColor}" title="Process ID: ${log.process}">[${log.process}]</span>`;
+  // Fallback to just process name if only process is available
+  if (processDisplay) {
+    const text = `[${processDisplay}]`;
+    const tooltip = log.processName && log.processName !== log.process
+      ? `Process Type: ${log.processName} (ID: ${log.process}) | Module: ${log.module}`
+      : `Process ID: ${log.process}`;
+    const html = `<span style="color: ${processColor}" title="${tooltip}">[${processDisplay}]</span>`;
     return {
       text,
       html,
@@ -632,7 +642,7 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
               {/* Source File:Line */}
               {visibleColumns.sourceFile !== false && log.sourceName && (
                 <div className="text-xs text-purple-600 dark:text-purple-400 font-mono bg-purple-50 dark:bg-purple-900/20 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-800 whitespace-nowrap" title={`Source: ${log.sourceName}${log.sourceLine ? ':' + log.sourceLine : ''}`}>
-                  {log.sourceName}{log.sourceLine ? ':' + log.sourceLine : ''}
+                  {log.processName && log.processName !== log.process ? replaceProcessIdWithType(log.sourceName, log.module) : log.sourceName}{log.sourceLine ? ':' + log.sourceLine : ''}
                 </div>
               )}
 
@@ -842,6 +852,7 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
         log.module || '',
         log.thread || '',
         log.process || '',
+        log.processName || '',
         log.lineNumber?.toString() || ''
       ];
       return parts.join(' ');

@@ -5,6 +5,7 @@ import {
   GAP_PATTERN 
 } from './dateTimeUtils.js';
 import { LOG_LEVEL_MATRIX } from './constants.js';
+import { getProcessTypeFromModule } from './utils/processTypeMapper.js';
 
 /**
  * Log parsing utilities - handles parsing of different log formats including iOS and Windows
@@ -496,6 +497,7 @@ export const parseLogContent = (content, headerLines = [], dateFormat = 'DD/MM/Y
   const logs = [];
   let currentLog = null;
 
+  // First pass: parse all logs
   allLines.forEach((line, idx) => {
     if (!line.trim() || headerLines.includes(idx)) return;
     
@@ -517,6 +519,28 @@ export const parseLogContent = (content, headerLines = [], dateFormat = 'DD/MM/Y
   });
   
   if (currentLog) logs.push(currentLog);
+
+  // Second pass: build process ID to process type mapping
+  const processIdToTypeMap = new Map();
+  
+  logs.forEach(log => {
+    if (log.process && log.module) {
+      const processType = getProcessTypeFromModule(log.module);
+      if (processType && !processIdToTypeMap.has(log.process)) {
+        processIdToTypeMap.set(log.process, processType);
+      }
+    }
+  });
+
+  // Third pass: update all logs with processName
+  logs.forEach(log => {
+    if (log.process) {
+      log.processName = processIdToTypeMap.get(log.process) || log.process;
+    } else {
+      log.processName = '';
+    }
+  });
+
   return logs;
 };
 

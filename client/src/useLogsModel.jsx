@@ -560,6 +560,7 @@ const useLogsModel = () => {
         log.module || '',
         log.thread || '',
         log.process || '',
+        log.processName || '',
         log.lineNumber?.toString() || ''
       ];
       return parts.join(' ');

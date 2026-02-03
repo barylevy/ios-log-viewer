@@ -187,8 +187,15 @@ const LogModal = ({ log, onClose, onAddStickyLog, onNext, onPrev, hasNext, hasPr
               {/* First Row - Center: ProcessId (auto-sized) */}
               {log.process && (
                 <div className="whitespace-nowrap">
-                  <span className="font-medium text-gray-600 dark:text-gray-400">ProcessId:</span>
-                  <span className="ml-2 font-mono text-gray-900 dark:text-white">{log.process}</span>
+                  <span className="font-medium text-gray-600 dark:text-gray-400">
+                    {log.processName && log.processName !== log.process ? 'Process:' : 'ProcessId:'}
+                  </span>
+                  <span 
+                    className="ml-2 font-mono text-gray-900 dark:text-white" 
+                    title={log.processName && log.processName !== log.process ? `Type: ${log.processName} | ID: ${log.process} | Module: ${log.module}` : `Process ID: ${log.process}`}
+                  >
+                    {log.processName || log.process}
+                  </span>
                 </div>
               )}
 
