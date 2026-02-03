@@ -84,7 +84,21 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
   };
 
   const handleDirectorySelected = (event) => {
-    const files = Array.from(event.target.files);
+    const allFiles = Array.from(event.target.files);
+    
+    // Filter out files that should not be loaded
+    const EXCLUDED_FILES = [
+      'systemextensionsctl_list.txt',
+      'sudo_launchctl_list.txt',
+      'digResults.txt',
+      'networkServiceOrder.txt',
+      'scutilDNS.txt',
+      'scutilProxy.txt',
+      'ifconfig.txt',
+      'launchctl_list.txt'
+    ];
+    
+    const files = allFiles.filter(file => !EXCLUDED_FILES.includes(file.name));
 
     // Clear previous files when loading new directory
     if (onClearTabs) {
