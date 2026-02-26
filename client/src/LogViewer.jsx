@@ -562,22 +562,75 @@ const LogViewer = () => {
     if (!combinedViewLoaded && files.length > 0) {
 
       // Combine all existing models from all tabs (no re-parsing!)
-      const combinedLogs = files.flatMap(file => {
+      const allCombinedLogs = files.flatMap((file, fileIndex) => {
         const fileLogs = allFileLogs[file.id] || [];
-        return fileLogs.map((log, index) => ({
-          ...log,
-          baseId: log.baseId || log.id, // Preserve baseId for sticky log matching
-          id: `${file.id}-${log.id}`, // Ensure unique IDs
-          sourceFile: log.sourceFile || file.id // Use existing sourceFile (from grouped files) or file.id (for single files)
-        }));
+        return fileLogs.map((log, logIndex) => {
+          const newLog = {
+            ...log,
+            baseId: log.baseId || log.id, // Preserve baseId for sticky log matching
+            id: `${file.id}-${log.id}`, // Ensure unique IDs
+            sourceFile: log.sourceFile || file.id, // Use existing sourceFile (from grouped files) or file.id (for single files)
+            originalFileIndex: fileIndex, // Track which file this came from
+            originalLogIndex: logIndex, // Track position within original file
+            originalLogId: log.id // Save original log ID before we change it
+          };
+          
+          // Update parentLogId reference to use new combined ID format
+          if (log.isContinuation && log.parentLogId !== undefined) {
+            newLog.parentLogId = `${file.id}-${log.parentLogId}`;
+            newLog.originalParentLogId = log.parentLogId; // Keep original parent ID
+          }
+          
+          return newLog;
+        });
       });
 
-      // Sort by timestamp
-      combinedLogs.sort((a, b) => {
-        if (a.timestamp && b.timestamp) {
+      // Sort by timestamp, but keep continuation lines with their parent
+      // Strategy: separate normal logs from continuation logs, sort normal logs, then insert continuations
+      const normalLogs = [];
+      const continuationsByParent = new Map();
+      
+      allCombinedLogs.forEach(log => {
+        if (log.isContinuation && log.originalParentLogId !== undefined) {
+          // Create key from file index and original parent ID
+          const key = `${log.originalFileIndex}:${log.originalParentLogId}`;
+          if (!continuationsByParent.has(key)) {
+            continuationsByParent.set(key, []);
+          }
+          continuationsByParent.get(key).push(log);
+        } else {
+          normalLogs.push(log);
+        }
+      });
+      
+      // Sort only normal logs by timestamp, then by file/position for stability
+      normalLogs.sort((a, b) => {
+        // Primary sort: by timestamp
+        if (a.timestampMs && b.timestampMs && a.timestampMs !== b.timestampMs) {
+          return a.timestampMs - b.timestampMs;
+        }
+        if (a.timestamp && b.timestamp && a.timestamp !== b.timestamp) {
           return a.timestamp.localeCompare(b.timestamp);
         }
-        return 0;
+        // Secondary sort: by file order
+        if (a.originalFileIndex !== b.originalFileIndex) {
+          return a.originalFileIndex - b.originalFileIndex;
+        }
+        // Tertiary sort: by position within file
+        return a.originalLogIndex - b.originalLogIndex;
+      });
+      
+      // Rebuild: insert continuation logs right after their parent
+      const combinedLogs = [];
+      normalLogs.forEach(log => {
+        combinedLogs.push(log);
+        
+        // Insert continuation logs right after this parent
+        const key = `${log.originalFileIndex}:${log.originalLogId}`;
+        const continuations = continuationsByParent.get(key) || [];
+        continuations.forEach(contLog => {
+          combinedLogs.push(contLog);
+        });
       });
 
       setLogsForFile('Combined Files', combinedLogs);

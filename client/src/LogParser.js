@@ -496,6 +496,7 @@ export const parseLogContent = (content, headerLines = [], dateFormat = 'DD/MM/Y
   const allLines = content.split('\n'); // Keep all lines including empty ones
   const logs = [];
   let currentLog = null;
+  let lastLogWithTimestamp = null;
 
   // First pass: parse all logs
   allLines.forEach((line, idx) => {
@@ -507,13 +508,34 @@ export const parseLogContent = (content, headerLines = [], dateFormat = 'DD/MM/Y
       // Start a new log entry
       if (currentLog) logs.push(currentLog);
       currentLog = parseLogLine(line, idx + 1, logs.length, dateFormat);
-    } else if (currentLog) {
-      // Append to previous log's message, but increment line number
-      currentLog.message += '\n' + line;
-      currentLog.raw += '\n' + line;
-      currentLog.originalLineNumbers.push(idx + 1);
+      lastLogWithTimestamp = currentLog;
+    } else if (lastLogWithTimestamp) {
+      // Create a continuation log entry (displays as separate line but inherits parent's metadata)
+      if (currentLog) logs.push(currentLog);
+      
+      currentLog = {
+        id: logs.length,
+        raw: line,
+        message: line,
+        timestamp: lastLogWithTimestamp.timestamp,
+        timestampMs: lastLogWithTimestamp.timestampMs,
+        displayDate: lastLogWithTimestamp.displayDate,
+        displayTime: lastLogWithTimestamp.displayTime,
+        level: lastLogWithTimestamp.level,
+        module: lastLogWithTimestamp.module,
+        sourceName: lastLogWithTimestamp.sourceName,
+        sourceLine: lastLogWithTimestamp.sourceLine,
+        thread: lastLogWithTimestamp.thread,
+        process: lastLogWithTimestamp.process,
+        processName: lastLogWithTimestamp.processName,
+        lineNumber: idx + 1,
+        originalLineNumbers: [idx + 1],
+        isContinuation: true, // Mark as continuation line
+        parentLogId: lastLogWithTimestamp.id // Reference to parent log
+      };
     } else {
       // If the first line(s) have no timestamp, treat as a log
+      if (currentLog) logs.push(currentLog);
       currentLog = parseLogLine(line, idx + 1, logs.length, dateFormat);
     }
   });

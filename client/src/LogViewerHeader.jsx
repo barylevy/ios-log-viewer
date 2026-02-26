@@ -66,18 +66,13 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
     // Sort files by name before grouping
     const sortedFiles = files.sort((a, b) => a.name.localeCompare(b.name));
 
-    // Group files by prefix (same as directory loading)
+    // Group files by prefix
     const fileGroups = groupFilesByPrefix(sortedFiles);
 
-    // Load files - grouped or individual
+    // Load all files as groups (even single files)
     fileGroups.forEach((groupFiles, prefix) => {
-      if (groupFiles.length === 1) {
-        // Single file in group - load normally
-        onFileLoad(groupFiles[0]);
-      } else {
-        // Multiple files in group - load as merged group
-        onFileLoad(groupFiles, false, prefix);
-      }
+      // Load as merged group regardless of count
+      onFileLoad(groupFiles, false, prefix);
     });
     
     event.target.value = '';
@@ -105,30 +100,14 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
       onClearTabs();
     }
 
-    // Group files by prefix for Windows logs
+    // Group files by prefix
     const fileGroups = groupFilesByPrefix(files);
 
-    // If all files are in a single group (no grouping needed), load normally
-    if (fileGroups.size === 1 && fileGroups.values().next().value.length === files.length) {
-      // Sort files by name before loading
-      const sortedFiles = files.sort((a, b) => a.name.localeCompare(b.name));
-      
-      // Load all files
-      sortedFiles.forEach(file => {
-        onFileLoad(file);
-      });
-    } else {
-      // Multiple groups detected - load as grouped files
-      fileGroups.forEach((groupFiles, prefix) => {
-        if (groupFiles.length === 1) {
-          // Single file in group - load normally
-          onFileLoad(groupFiles[0]);
-        } else {
-          // Multiple files in group - load as merged group
-          onFileLoad(groupFiles, false, prefix);
-        }
-      });
-    }
+    // Load all groups (even single-file groups)
+    fileGroups.forEach((groupFiles, prefix) => {
+      // Load as merged group regardless of count
+      onFileLoad(groupFiles, false, prefix);
+    });
     
     event.target.value = '';
   };

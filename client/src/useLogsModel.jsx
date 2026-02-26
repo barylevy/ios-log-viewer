@@ -199,7 +199,8 @@ const useLogsModel = () => {
           timestamp: log.timestamp,
           level: log.level,
           message: log.message ? log.message.substring(0, 50) + (log.message.length > 50 ? '...' : '') : 'No message',
-          cleanedMessage: log.cleanedMessage || log.message || 'No message'
+          cleanedMessage: log.cleanedMessage || log.message || 'No message',
+          sourceFile: log.sourceFile // Save source file for multi-file navigation
         };
 
         return {
@@ -268,11 +269,14 @@ const useLogsModel = () => {
           let combinedLogs = [];
           let combinedHeaders = {};
           
-          results.forEach(({ fileId, logs, headerData }) => {
-            // Add logs to combined array, tagging each with its source file ID
-            const logsWithSource = logs.map(log => ({
+          results.forEach(({ fileId, logs, headerData }, fileIndex) => {
+            // Add logs to combined array, tagging each with its source file ID and original sequence
+            const logsWithSource = logs.map((log, logIndex) => ({
               ...log,
-              sourceFile: fileId // Tag with original file ID for sticky log matching
+              sourceFile: fileId, // Tag with original file ID for sticky log matching
+              originalFileIndex: fileIndex, // Track which file this came from
+              originalLogIndex: logIndex, // Track position within original file
+              originalId: log.id // Save original ID before we change it
             }));
             combinedLogs = combinedLogs.concat(logsWithSource);
             
@@ -282,15 +286,58 @@ const useLogsModel = () => {
             }
           });
           
-          // Sort combined logs by timestamp
-          combinedLogs.sort((a, b) => {
-            if (a.timestamp && b.timestamp) {
+          // Sort combined logs by timestamp, but keep continuation lines with their parent
+          // Strategy: separate normal logs from continuation logs, sort normal logs, then insert continuations
+          const normalLogs = [];
+          const continuationsByParent = new Map(); // Map of "fileIndex:originalId" to continuation logs
+          
+          combinedLogs.forEach(log => {
+            if (log.isContinuation && log.parentLogId !== undefined) {
+              // Create unique key using file index and parent's original ID
+              const key = `${log.originalFileIndex}:${log.parentLogId}`;
+              if (!continuationsByParent.has(key)) {
+                continuationsByParent.set(key, []);
+              }
+              continuationsByParent.get(key).push(log);
+            } else {
+              normalLogs.push(log);
+            }
+          });
+          
+          // Sort only normal logs by timestamp, then by file order, then by original position
+          normalLogs.sort((a, b) => {
+            // Primary sort: by timestamp
+            if (a.timestampMs && b.timestampMs && a.timestampMs !== b.timestampMs) {
+              return a.timestampMs - b.timestampMs;
+            }
+            if (a.timestamp && b.timestamp && a.timestamp !== b.timestamp) {
               return a.timestamp.localeCompare(b.timestamp);
             }
-            if (a.lineNumber && b.lineNumber) {
-              return a.lineNumber - b.lineNumber;
+            // Secondary sort: by file order
+            if (a.originalFileIndex !== b.originalFileIndex) {
+              return a.originalFileIndex - b.originalFileIndex;
             }
-            return 0;
+            // Tertiary sort: by position within file
+            return a.originalLogIndex - b.originalLogIndex;
+          });
+          
+          // Rebuild combined logs: insert continuation logs right after their parent
+          combinedLogs = [];
+          let newLogId = 0;
+          normalLogs.forEach(log => {
+            // Update log ID for the new sorted order
+            log.id = newLogId++;
+            combinedLogs.push(log);
+            
+            // Insert continuation logs right after this parent
+            // Use the original file index and original ID to find continuations
+            const key = `${log.originalFileIndex}:${log.originalId}`;
+            const continuations = continuationsByParent.get(key) || [];
+            continuations.forEach(contLog => {
+              contLog.id = newLogId++;
+              contLog.parentLogId = log.id; // Update parent reference to new ID
+              combinedLogs.push(contLog);
+            });
           });
           
           // Store the combined logs under the GROUP ID (not individual files)
@@ -691,10 +738,18 @@ const useLogsModel = () => {
     }));
   }, [logs, filters, searchData, normalizeTimestamp]);
 
-  const scrollToLog = useCallback((lineNumber) => {
+  const scrollToLog = useCallback((lineNumber, sourceFile = null) => {
     try {
-      // Find the log with the given line number in filtered logs (what's actually displayed)
-      const targetLogIndex = filteredLogs.findIndex(log => log.lineNumber === lineNumber);
+      // Find the log with the given line number (and optionally sourceFile) in filtered logs
+      const targetLogIndex = filteredLogs.findIndex(log => {
+        if (sourceFile) {
+          // When sourceFile is provided, match both lineNumber and sourceFile
+          return log.lineNumber === lineNumber && log.sourceFile === sourceFile;
+        } else {
+          // Without sourceFile, match only lineNumber (backward compatibility)
+          return log.lineNumber === lineNumber;
+        }
+      });
 
       if (targetLogIndex !== -1) {
         // Log is visible - scroll to it
@@ -706,9 +761,29 @@ const useLogsModel = () => {
           });
           window.dispatchEvent(scrollEvent);
         }, 100);
+      } else if (sourceFile) {
+        // If sourceFile was provided but not found, try without sourceFile as fallback
+        const fallbackIndex = filteredLogs.findIndex(log => log.lineNumber === lineNumber);
+        
+        if (fallbackIndex !== -1) {
+          const targetLog = filteredLogs[fallbackIndex];
+          
+          setTimeout(() => {
+            const scrollEvent = new CustomEvent('scrollToLogIndex', {
+              detail: { index: fallbackIndex, logId: targetLog.id, shouldHighlight: true }
+            });
+            window.dispatchEvent(scrollEvent);
+          }, 100);
+        }
       } else {
         // Log is not visible due to filtering - find it in all logs first
-        const targetLogInAll = logs.find(log => log.lineNumber === lineNumber);
+        const targetLogInAll = logs.find(log => {
+          if (sourceFile) {
+            return log.lineNumber === lineNumber && log.sourceFile === sourceFile;
+          } else {
+            return log.lineNumber === lineNumber;
+          }
+        });
 
         if (targetLogInAll) {
           // Find the closest visible log in filtered logs
@@ -716,9 +791,15 @@ const useLogsModel = () => {
           let minDistance = Infinity;
 
           filteredLogs.forEach((log, index) => {
+            // When sourceFile is specified, prefer logs from the same file
+            const sameFile = sourceFile ? (log.sourceFile === sourceFile) : true;
             const distance = Math.abs(log.lineNumber - lineNumber);
-            if (distance < minDistance) {
-              minDistance = distance;
+            
+            // Give priority to logs from the same file
+            const adjustedDistance = sameFile ? distance : distance + 10000;
+            
+            if (adjustedDistance < minDistance) {
+              minDistance = adjustedDistance;
               closestIndex = index;
             }
           });
@@ -735,7 +816,7 @@ const useLogsModel = () => {
               const notificationEvent = new CustomEvent('showLogNotVisible', {
                 detail: {
                   lineNumber: lineNumber,
-                  message: `Log line ${lineNumber} is not visible due to current filters. Scrolled to nearest visible log.`
+                  message: `Log line ${lineNumber}${sourceFile ? ` from ${sourceFile}` : ''} is not visible due to current filters. Scrolled to nearest visible log.`
                 }
               });
               window.dispatchEvent(notificationEvent);
@@ -743,7 +824,7 @@ const useLogsModel = () => {
           }
         } else {
           // Log doesn't exist
-          console.warn(`Log line ${lineNumber} not found`);
+          console.warn(`Log line ${lineNumber}${sourceFile ? ` from ${sourceFile}` : ''} not found`);
         }
       }
     } catch (error) {

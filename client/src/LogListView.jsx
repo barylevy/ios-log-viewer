@@ -535,7 +535,7 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
           : index % 2 === 1
             ? 'bg-gray-50 dark:bg-gray-800'
             : 'bg-white dark:bg-gray-900'
-          } ${pivotLog && pivotLog.id === log.id ? 'ring-2 ring-orange-400 dark:ring-orange-500' : ''} ${hasSticky ? 'ring-2 ring-blue-400 dark:ring-blue-500' : ''}`}
+          } ${pivotLog && pivotLog.id === log.id ? 'ring-2 ring-orange-400 dark:ring-orange-500' : ''} ${hasSticky ? 'ring-2 ring-blue-400 dark:ring-blue-500' : ''} ${log.isContinuation ? 'border-l-4 border-l-gray-300 dark:border-l-gray-600 pl-5' : ''}`}
         title={hasMergedSources && log.sourceFile ? `Source: ${log.sourceFile}` : undefined}
         style={{
           backgroundColor: hasSticky
@@ -579,13 +579,15 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
         >
           {/* Timestamp */}
           {visibleColumns.timestamp !== false && (
-          <div className={`text-xs font-mono text-center ${hasSticky ? 'underline decoration-solid decoration-1' : ''} ${timeInfo === '--:--:--.---'
+          <div className={`text-xs font-mono text-center ${hasSticky ? 'underline decoration-solid decoration-1' : ''} ${log.isContinuation
+            ? 'text-gray-400 dark:text-gray-500'
+            : timeInfo === '--:--:--.---'
             ? 'text-gray-300 dark:text-gray-600 opacity-50'
             : timeGapInfo.hasGap
               ? 'text-orange-600 dark:text-orange-400 font-semibold'
               : 'text-gray-500 dark:text-gray-400'
             }`}>
-            {timeInfo}
+            {log.isContinuation ? '↳' : timeInfo}
           </div>
           )}
 
@@ -598,8 +600,8 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
 
           {/* Log Level Indicator */}
           {visibleColumns.logLevel !== false && (
-          <div className={`text-xs font-semibold uppercase text-center ${logLevelColor}`}>
-            {logLevel.charAt(0).toUpperCase()}
+          <div className={`text-xs font-semibold uppercase text-center ${log.isContinuation ? 'text-gray-300 dark:text-gray-600' : logLevelColor}`}>
+            {log.isContinuation ? '⋮' : logLevel.charAt(0).toUpperCase()}
           </div>
           )}
 
@@ -610,11 +612,16 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
                 ref={contentRef}
                 className={`text-xs break-words ${log.isContextLine
                   ? 'text-gray-600 dark:text-gray-400'
+                  : log.isContinuation
+                  ? 'text-gray-700 dark:text-gray-300 pl-2'
                   : 'text-gray-800 dark:text-gray-200'
                   } ${!isExpanded ? 'line-clamp-3' : ''}`}
               >
                 {log.isContextLine && (
                   <span className="text-gray-400 dark:text-gray-500 font-mono mr-1">~</span>
+                )}
+                {log.isContinuation && (
+                  <span className="text-gray-400 dark:text-gray-500 font-mono mr-1">⤷</span>
                 )}
                 <span dangerouslySetInnerHTML={{ __html: highlightedMessage }} />
               </div>
@@ -632,6 +639,13 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
             </div>
 
             <div className="flex-shrink-0 flex items-center gap-3">
+              {/* Original File Name (when grouped) */}
+              {hasMergedSources && log.sourceFile && (
+                <div className="text-xs text-teal-600 dark:text-teal-400 font-mono bg-teal-50 dark:bg-teal-900/20 px-2 py-0.5 rounded border border-teal-200 dark:border-teal-800 whitespace-nowrap" title={`Original File: ${log.sourceFile}`}>
+                  📄 {log.sourceFile.length > 25 ? '...' + log.sourceFile.slice(-25) : log.sourceFile}
+                </div>
+              )}
+              
               {/* Module Name */}
               {visibleColumns.module !== false && log.module && (
                 <div className="text-xs text-blue-600 dark:text-blue-400 font-mono bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 whitespace-nowrap" title={`Module: ${log.module}`}>
