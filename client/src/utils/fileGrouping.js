@@ -4,6 +4,27 @@
  */
 
 /**
+ * Check if a file has a valid log extension
+ * @param {File} file - The file object
+ * @returns {boolean} True if file has .txt, .log, or .ips extension
+ */
+export function hasValidLogExtension(file) {
+  const name = file.name.toLowerCase();
+  return name.endsWith('.txt') || name.endsWith('.log') || name.endsWith('.ips');
+}
+
+/**
+ * Natural sort comparison for filenames with numbers
+ * Correctly sorts files like: cato_dem.1.log, cato_dem.2.log, ... cato_dem.10.log
+ * @param {string} a - First filename
+ * @param {string} b - Second filename
+ * @returns {number} Comparison result
+ */
+export function naturalSort(a, b) {
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+/**
  * Extract the prefix from a filename
  * For Windows logs, the prefix is everything before the first number or date pattern
  * Examples:
@@ -53,9 +74,9 @@ export function groupFilesByPrefix(files) {
     groups.get(prefix).push(file);
   });
   
-  // Sort files within each group by name
+  // Sort files within each group by name (natural sort for numbered files)
   groups.forEach((fileList, prefix) => {
-    fileList.sort((a, b) => a.name.localeCompare(b.name));
+    fileList.sort((a, b) => naturalSort(a.name, b.name));
   });
   
   return groups;
@@ -87,4 +108,94 @@ export function isPartOfFileGroup(fileName) {
  */
 export function getGroupDisplayName(prefix, files) {
   return `${prefix} (${files.length} file${files.length > 1 ? 's' : ''})`;
+}
+
+/**
+ * Extract the directory path from a file's webkitRelativePath
+ * @param {File} file - The file object
+ * @returns {string} The directory path (e.g., "folder1/subfolder") or empty string for root
+ */
+export function extractDirectory(file) {
+  if (!file.webkitRelativePath) return '';
+  
+  const parts = file.webkitRelativePath.split('/');
+  // Remove the filename (last part) and return the directory path
+  parts.pop();
+  return parts.join('/');
+}
+
+/**
+ * Group files by subdirectory structure and prefix
+ * 
+ * Logic:
+ * - If files are in MULTIPLE subdirectories (e.g., AppLogs/, DemLogs/, SystemLogs/):
+ *   Each subdirectory becomes ONE merged group (all files together)
+ * 
+ * - If all files are in ONE directory or flat structure:
+ *   Group files by prefix (e.g., cato_dem, cato_vpn, cato_ua)
+ * 
+ * @param {File[]} files - Array of File objects
+ * @returns {Map<string, File[]>} Map of group key to array of files
+ */
+export function groupFilesByDirectory(files) {
+  // First, group by directory
+  const dirGroups = new Map();
+  
+  files.forEach(file => {
+    const dir = extractDirectory(file);
+    
+    if (!dirGroups.has(dir)) {
+      dirGroups.set(dir, []);
+    }
+    
+    dirGroups.get(dir).push(file);
+  });
+  
+  // Check if we have MULTIPLE subdirectories with valid log files
+  // Ignore subdirectories that only contain non-log files
+  const validDirectories = Array.from(dirGroups.entries())
+    .filter(([dir, files]) => {
+      if (dir === '') return false; // Skip root
+      // Only count directories that have at least one valid log file
+      return files.some(hasValidLogExtension);
+    })
+    .map(([dir]) => dir);
+  
+  const hasMultipleSubdirectories = validDirectories.length > 1;
+  
+  if (hasMultipleSubdirectories) {
+    // If we have MULTIPLE subdirectories, each subdirectory becomes ONE group (no prefix splitting)
+    const finalGroups = new Map();
+    
+    dirGroups.forEach((filesInDir, dir) => {
+      if (dir) {
+        // Only include subdirectories that have valid log files
+        const hasValidFiles = filesInDir.some(hasValidLogExtension);
+        if (hasValidFiles) {
+          // Subdirectory: use directory name as key, include ALL files together
+          // Sort files by name (natural sort for numbered files)
+          filesInDir.sort((a, b) => naturalSort(a.name, b.name));
+          finalGroups.set(dir, filesInDir);
+        }
+        // Subdirectories without valid log files are ignored
+      } else {
+        // Root directory: still group by prefix
+        const prefixGroups = groupFilesByPrefix(filesInDir);
+        prefixGroups.forEach((groupedFiles, prefix) => {
+          finalGroups.set(prefix, groupedFiles);
+        });
+      }
+    });
+    
+    return finalGroups;
+  } else {
+    // No subdirectories OR only one directory: use prefix-based grouping for all files
+    // Combine all files from all directory groups and apply prefix grouping
+    const allFiles = [];
+    dirGroups.forEach((filesInDir) => {
+      allFiles.push(...filesInDir);
+    });
+    
+    return groupFilesByPrefix(allFiles);
+  }
 }

@@ -8,7 +8,7 @@ import AIChat from './AIChat';
 import useLogsModel from './useLogsModel';
 import { getFileIdentifier } from './utils/fileLoader';
 import { saveSession, loadSession, clearSession } from './utils/sessionStorage';
-import { groupFilesByPrefix } from './utils/fileGrouping';
+import { groupFilesByPrefix, groupFilesByDirectory, naturalSort, hasValidLogExtension } from './utils/fileGrouping';
 import { AVAILABLE_COLUMNS } from './ColumnSettings';
 
 const LogViewer = () => {
@@ -307,9 +307,19 @@ const LogViewer = () => {
     const isFileArray = Array.isArray(fileOrFiles);
     const firstFile = isFileArray ? fileOrFiles[0] : fileOrFiles;
     
-    // Only load .txt files or .log files
-    if (!firstFile.name.toLowerCase().endsWith('.txt') && !firstFile.name.toLowerCase().endsWith('.log')) {
-      return;
+    // Only load .txt, .log, or .ips files
+    // For file groups, check if AT LEAST ONE file has a valid extension
+    if (isFileArray) {
+      // For groups, check if at least one file is valid
+      const hasValidFile = fileOrFiles.some(hasValidLogExtension);
+      if (!hasValidFile) {
+        return;
+      }
+    } else {
+      // For single file, check the file itself
+      if (!hasValidLogExtension(fileOrFiles)) {
+        return;
+      }
     }
     
     // Optionally clear all tabs before loading (for new folder)
@@ -656,25 +666,18 @@ const LogViewer = () => {
     setIsFileDropActive(false);
 
     const droppedFiles = Array.from(e.dataTransfer.files);
-    const textFiles = droppedFiles.filter(file =>
-      file.name.toLowerCase().endsWith('.txt') || file.name.toLowerCase().endsWith('.log')
-    );
+    const textFiles = droppedFiles.filter(hasValidLogExtension);
 
-    // Sort files by name before grouping
-    const sortedTextFiles = textFiles.sort((a, b) => a.name.localeCompare(b.name));
+    // Sort files by name before grouping (natural sort for numbered files)
+    const sortedTextFiles = textFiles.sort((a, b) => naturalSort(a.name, b.name));
 
-    // Group files by prefix
-    const groupedFiles = groupFilesByPrefix(sortedTextFiles);
+    // Group files by subdirectory and then by prefix within each subdirectory
+    const groupedFiles = groupFilesByDirectory(sortedTextFiles);
     
-    // Load each group (or individual file)
-    groupedFiles.forEach((filesInGroup, prefix) => {
-      if (filesInGroup.length > 1) {
-        // Multiple files with same prefix - load as a group
-        handleFileLoad(filesInGroup, false, prefix);
-      } else {
-        // Single file - load normally
-        handleFileLoad(filesInGroup[0]);
-      }
+    // Load each group
+    groupedFiles.forEach((filesInGroup, groupKey) => {
+      // Load as merged group with the groupKey as identifier
+      handleFileLoad(filesInGroup, false, groupKey);
     });
   }, [handleFileLoad]);
 

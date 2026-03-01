@@ -5,7 +5,7 @@ import ColumnSettings, { AVAILABLE_COLUMNS } from './ColumnSettings';
 import { CATO_COLORS } from './constants';
 import { openAIChatInNewWindow, openAIChatInNewTab } from './utils/aiChatUtils';
 import { clearSession } from './utils/sessionStorage';
-import { groupFilesByPrefix, getGroupDisplayName } from './utils/fileGrouping';
+import { groupFilesByPrefix, groupFilesByDirectory, getGroupDisplayName, naturalSort } from './utils/fileGrouping';
 
 const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, currentFileHeaders, onClearTabs, currentLogs, currentFileName, visibleColumns, onColumnsChange, logDuration, folderName }) => {
   const fileInputRef = useRef(null);
@@ -63,8 +63,8 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
   const handleFilesSelected = (event) => {
     const files = Array.from(event.target.files);
 
-    // Sort files by name before grouping
-    const sortedFiles = files.sort((a, b) => a.name.localeCompare(b.name));
+    // Sort files by name before grouping (natural sort for numbered files)
+    const sortedFiles = files.sort((a, b) => naturalSort(a.name, b.name));
 
     // Group files by prefix
     const fileGroups = groupFilesByPrefix(sortedFiles);
@@ -100,13 +100,14 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
       onClearTabs();
     }
 
-    // Group files by prefix
-    const fileGroups = groupFilesByPrefix(files);
+    // Group files by subdirectory and then by prefix within each subdirectory
+    const fileGroups = groupFilesByDirectory(files);
 
     // Load all groups (even single-file groups)
-    fileGroups.forEach((groupFiles, prefix) => {
-      // Load as merged group regardless of count
-      onFileLoad(groupFiles, false, prefix);
+    fileGroups.forEach((groupFiles, groupKey) => {
+      // Use the groupKey as-is (includes directory path if present)
+      // This ensures unique identification even if same prefix exists in different folders
+      onFileLoad(groupFiles, false, groupKey);
     });
     
     event.target.value = '';
@@ -417,7 +418,7 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
         ref={fileInputRef}
         type="file"
         multiple
-        accept=".txt,.log"
+        accept=".txt,.log,.ips"
         onChange={handleFilesSelected}
         style={{ display: 'none' }}
       />
