@@ -15,6 +15,7 @@ const LogViewer = () => {
   const {
     logs,
     filteredLogs,
+    moduleOptions,
     selectedLog,
     filters,
     highlightedLogId,
@@ -883,6 +884,7 @@ const LogViewer = () => {
                 <LogViewerFilters
                   filters={filters}
                   onFiltersChange={updateFilters}
+                  moduleOptions={moduleOptions}
                   logsCount={logs.length}
                   filteredLogsCount={filteredLogs.length}
                   searchMatchCount={searchMatchCount}

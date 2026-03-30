@@ -57,6 +57,7 @@ const useLogsModel = () => {
       searchText: '',
       searchQuery: '',
       logLevel: ['all'], // Array to support multiple levels
+      selectedModule: 'all',
       contextLines: 0,
       filterMode, // 'text' or 'regex'
       searchMode  // 'text' or 'regex'
@@ -71,6 +72,7 @@ const useLogsModel = () => {
       const searchMode = localStorage.getItem('logViewer_searchMode') || 'text';
       
       setFilters({
+        selectedModule: 'all',
         ...allFileFilters[currentFileName],
         filterMode,
         searchMode
@@ -704,6 +706,14 @@ const useLogsModel = () => {
         }
       }
 
+      // Module filter
+      if (filters.selectedModule && filters.selectedModule !== 'all') {
+        const logModule = (log.module || '').trim();
+        if (logModule !== filters.selectedModule) {
+          return;
+        }
+      }
+
       // This log matches all filters
       matchingLogIndices.push(index);
     });
@@ -737,6 +747,18 @@ const useLogsModel = () => {
       isContextLine: !matchingIndicesSet.has(index)
     }));
   }, [logs, filters, searchData, normalizeTimestamp]);
+
+  const moduleOptions = useMemo(() => {
+    if (!logs.length) return [];
+
+    return Array.from(
+      new Set(
+        logs
+          .map(log => (log.module || '').trim())
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  }, [logs]);
 
   const scrollToLog = useCallback((lineNumber, sourceFile = null) => {
     try {
@@ -897,9 +919,10 @@ const useLogsModel = () => {
         searchQuery: '',
         searchText: '',
         logLevel: ['all'],
+        selectedModule: 'all',
         contextLines: 0
       }; const fileFilters = allFileFilters[fileName];
-      setFilters(fileFilters ? { ...fileFilters } : defaultFilters);
+      setFilters(fileFilters ? { ...defaultFilters, ...fileFilters } : defaultFilters);
 
       setLogs(processedLogs);
       setSelectedLog(null);
@@ -920,11 +943,12 @@ const useLogsModel = () => {
     const defaultFilters = {
       searchText: '',
       logLevel: ['all'],
+      selectedModule: 'all',
       contextLines: 0
     };
 
     const fileFilters = allFileFilters[fileName];
-    setFilters(fileFilters ? { ...fileFilters } : defaultFilters);
+    setFilters(fileFilters ? { ...defaultFilters, ...fileFilters } : defaultFilters);
 
     setLogs(fileLogs);
     setSelectedLog(null);
@@ -953,6 +977,7 @@ const useLogsModel = () => {
   return {
     logs,
     filteredLogs,
+    moduleOptions,
     selectedLog,
     filters,
     highlightedLogId,

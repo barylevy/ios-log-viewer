@@ -32,7 +32,7 @@ const FILTER_TOOLTIP = `Advanced Filtering Guide:
 
 • Works with log level and context line filters`;
 
-const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCount, searchMatchCount, searchMatchPos, pivotGap, pivotLineNumber, stickyLogs, onRemoveStickyLog, onClearAllStickyLogs, onScrollToLog, onUpdateStickyLogTitle }) => {
+const LogViewerFilters = ({ filters, onFiltersChange, moduleOptions = [], logsCount, filteredLogsCount, searchMatchCount, searchMatchPos, pivotGap, pivotLineNumber, stickyLogs, onRemoveStickyLog, onClearAllStickyLogs, onScrollToLog, onUpdateStickyLogTitle }) => {
   const [isLevelDropdownOpen, setIsLevelDropdownOpen] = useState(false);
   const [isFilterHistoryOpen, setIsFilterHistoryOpen] = useState(false);
   const [isSearchHistoryOpen, setIsSearchHistoryOpen] = useState(false);
@@ -630,12 +630,29 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
     </div>
   );
 
+  const renderModuleFilter = () => (
+    <div className="flex items-center gap-1">
+      <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Module:</label>
+      <select
+        value={filters.selectedModule || 'all'}
+        onChange={(e) => handleFilterChange('selectedModule', e.target.value)}
+        className="px-2 h-6 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs min-w-28"
+        title="Filter logs by module"
+      >
+        <option value="all">All Modules</option>
+        {moduleOptions.map(moduleName => (
+          <option key={moduleName} value={moduleName}>{moduleName}</option>
+        ))}
+      </select>
+    </div>
+  );
+
   const renderClearFiltersButton = () => (
     <button
-      onClick={() => onFiltersChange({ searchText: '', searchQuery: '', logLevel: ['all'], contextLines: 0 })}
-      disabled={!filters.searchText && !filters.searchQuery && filters.logLevel.includes('all') && !filters.contextLines}
-      title="Clear all filters - Reset search text, search query, log level to 'All', and context lines to 0"
-      className={`w-6 h-6 rounded-md transition-colors flex items-center justify-center ${!filters.searchText && !filters.searchQuery && filters.logLevel.includes('all') && !filters.contextLines
+      onClick={() => onFiltersChange({ searchText: '', searchQuery: '', logLevel: ['all'], selectedModule: 'all', contextLines: 0 })}
+      disabled={!filters.searchText && !filters.searchQuery && filters.logLevel.includes('all') && (filters.selectedModule || 'all') === 'all' && !filters.contextLines}
+      title="Clear all filters - Reset search text, search query, log level to 'All', module to 'All Modules', and context lines to 0"
+      className={`w-6 h-6 rounded-md transition-colors flex items-center justify-center ${!filters.searchText && !filters.searchQuery && filters.logLevel.includes('all') && (filters.selectedModule || 'all') === 'all' && !filters.contextLines
         ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
         : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
         }`}
@@ -761,6 +778,8 @@ const LogViewerFilters = ({ filters, onFiltersChange, logsCount, filteredLogsCou
             <div className="space-y-2 flex flex-col items-end">
               {/* Log Level Filter */}
               {renderLogLevelFilter()}
+              {/* Module Filter */}
+              {renderModuleFilter()}
               {/* Context Lines */}
               {renderContextLines()}
             </div>
