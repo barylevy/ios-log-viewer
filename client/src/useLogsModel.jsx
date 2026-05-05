@@ -155,11 +155,14 @@ const useLogsModel = () => {
       // Iterate through all files and collect their sticky logs
       Object.entries(allFileStickyLogs).forEach(([fileName, stickyLogsArray]) => {
         if (fileName !== 'Combined Files' && stickyLogsArray && stickyLogsArray.length > 0) {
-          // Add source file info to each sticky log
+          // Add source file info to each sticky log.
+          // Preserve the original sourceFile when present (e.g. grouped tabs
+          // store the actual filename inside the group); fall back to the
+          // tab's fileName so single-file tabs still resolve correctly.
           stickyLogsArray.forEach(stickyLog => {
             allSticky.push({
               ...stickyLog,
-              sourceFile: fileName // Add source file so we know which tab it came from
+              sourceFile: stickyLog.sourceFile || fileName
             });
           });
         }
@@ -219,6 +222,20 @@ const useLogsModel = () => {
     if (!currentFileName) return;
 
     setAllFileStickyLogs(prev => {
+      // In the combined "All Files" view, the sticky lives in its original
+      // per-file bucket — search every bucket and remove from wherever it is.
+      if (currentFileName === 'Combined Files') {
+        const next = { ...prev };
+        Object.keys(next).forEach(fileName => {
+          if (fileName === 'Combined Files') return;
+          const list = next[fileName] || [];
+          if (list.some(sticky => sticky.id === logId)) {
+            next[fileName] = list.filter(sticky => sticky.id !== logId);
+          }
+        });
+        return next;
+      }
+
       const currentFileStickyLogs = prev[currentFileName] || [];
       const updatedFileStickyLogs = currentFileStickyLogs.filter(sticky => sticky.id !== logId);
 
@@ -233,6 +250,16 @@ const useLogsModel = () => {
     if (!currentFileName) return;
 
     setAllFileStickyLogs(prev => {
+      // In the combined "All Files" view, clearing should empty every
+      // per-file bucket so all stickies disappear.
+      if (currentFileName === 'Combined Files') {
+        const next = {};
+        Object.keys(prev).forEach(fileName => {
+          next[fileName] = [];
+        });
+        return next;
+      }
+
       return {
         ...prev,
         [currentFileName]: []
