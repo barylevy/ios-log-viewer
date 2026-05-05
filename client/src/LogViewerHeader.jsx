@@ -5,7 +5,7 @@ import ColumnSettings, { AVAILABLE_COLUMNS } from './ColumnSettings';
 import { CATO_COLORS } from './constants';
 import { openAIChatInNewWindow, openAIChatInNewTab } from './utils/aiChatUtils';
 import { clearSession } from './utils/sessionStorage';
-import { groupFilesByPrefix, groupFilesByDirectory, getGroupDisplayName, naturalSort } from './utils/fileGrouping';
+import { groupFilesByPrefix, groupFilesByDirectory, groupFilesByDirectoryAndFormat, getGroupDisplayName, naturalSort } from './utils/fileGrouping';
 
 const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, currentFileHeaders, onClearTabs, currentLogs, currentFileName, visibleColumns, onColumnsChange, logDuration, folderName }) => {
   const fileInputRef = useRef(null);
@@ -78,7 +78,7 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
     event.target.value = '';
   };
 
-  const handleDirectorySelected = (event) => {
+  const handleDirectorySelected = async (event) => {
     const allFiles = Array.from(event.target.files);
     
     // Filter out files that should not be loaded
@@ -100,8 +100,9 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
       onClearTabs();
     }
 
-    // Group files by subdirectory and then by prefix within each subdirectory
-    const fileGroups = groupFilesByDirectory(files);
+    // Group by subdirectory + prefix, then split each multi-file group by
+    // detected log pattern so only files sharing a format share a tab.
+    const fileGroups = await groupFilesByDirectoryAndFormat(files);
 
     // Load all groups (even single-file groups)
     fileGroups.forEach((groupFiles, groupKey) => {

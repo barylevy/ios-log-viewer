@@ -8,7 +8,7 @@ import AIChat from './AIChat';
 import useLogsModel from './useLogsModel';
 import { getFileIdentifier } from './utils/fileLoader';
 import { saveSession, loadSession, clearSession } from './utils/sessionStorage';
-import { groupFilesByPrefix, groupFilesByDirectory, naturalSort, hasValidLogExtension } from './utils/fileGrouping';
+import { groupFilesByPrefix, groupFilesByDirectory, groupFilesByDirectoryAndFormat, naturalSort, hasValidLogExtension } from './utils/fileGrouping';
 import { AVAILABLE_COLUMNS } from './ColumnSettings';
 
 const LogViewer = () => {
@@ -662,7 +662,7 @@ const LogViewer = () => {
     setIsFileDropActive(false);
   }, []);
 
-  const handleDrop = useCallback((e) => {
+  const handleDrop = useCallback(async (e) => {
     e.preventDefault();
     setIsFileDropActive(false);
 
@@ -672,8 +672,9 @@ const LogViewer = () => {
     // Sort files by name before grouping (natural sort for numbered files)
     const sortedTextFiles = textFiles.sort((a, b) => naturalSort(a.name, b.name));
 
-    // Group files by subdirectory and then by prefix within each subdirectory
-    const groupedFiles = groupFilesByDirectory(sortedTextFiles);
+    // Group files by subdirectory + prefix, then split by detected log format
+    // so only files sharing the same pattern end up in the same tab.
+    const groupedFiles = await groupFilesByDirectoryAndFormat(sortedTextFiles);
     
     // Load each group
     groupedFiles.forEach((filesInGroup, groupKey) => {

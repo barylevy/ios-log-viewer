@@ -636,8 +636,8 @@ const LogViewerFilters = ({ filters, onFiltersChange, moduleOptions = [], logsCo
       <select
         value={filters.selectedModule || 'all'}
         onChange={(e) => handleFilterChange('selectedModule', e.target.value)}
-        className="px-2 h-6 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs min-w-28"
-        title="Filter logs by module"
+        className="px-2 h-6 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs w-28 max-w-28 truncate"
+        title={filters.selectedModule && filters.selectedModule !== 'all' ? `Module: ${filters.selectedModule}` : 'Filter logs by module'}
       >
         <option value="all">All Modules</option>
         {moduleOptions.map(moduleName => (

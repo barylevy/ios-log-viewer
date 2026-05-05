@@ -639,8 +639,8 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
             </div>
 
             <div className="flex-shrink-0 flex items-center gap-3">
-              {/* Original File Name (when grouped) */}
-              {hasMergedSources && log.sourceFile && (
+              {/* Original File Name (when grouped) - respects sourceFile visibility setting */}
+              {visibleColumns.sourceFile !== false && hasMergedSources && log.sourceFile && (
                 <div className="text-xs text-teal-600 dark:text-teal-400 font-mono bg-teal-50 dark:bg-teal-900/20 px-2 py-0.5 rounded border border-teal-200 dark:border-teal-800 whitespace-nowrap" title={`Original File: ${log.sourceFile}`}>
                   📄 {log.sourceFile.length > 25 ? '...' + log.sourceFile.slice(-25) : log.sourceFile}
                 </div>
