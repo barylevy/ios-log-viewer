@@ -1001,6 +1001,26 @@ const useLogsModel = () => {
     }
   }, []);
 
+  // Reset the entire model — used when closing all tabs.
+  const resetModel = useCallback(() => {
+    setLogs([]);
+    setSelectedLog(null);
+    setHighlightedLogId(null);
+    setLogFileHeaders({});
+    setAllFileLogs({});
+    setAllFileStickyLogs({});
+    setCurrentFileName(null);
+    setFileLoadingState({});
+    setFilters(prev => ({
+      ...prev,
+      searchText: '',
+      searchQuery: '',
+      logLevel: ['all'],
+      selectedModule: 'all',
+      contextLines: 0,
+    }));
+  }, []);
+
   return {
     logs,
     filteredLogs,
@@ -1026,6 +1046,7 @@ const useLogsModel = () => {
     switchToFile,
     removeLogsForFile,
     clearSavedFilters,
+    resetModel,
     getFileDisplayName: (fileId) => getFileDisplayName(fileId), // Use imported function
     getFileFullName: (fileId) => getFileFullName(fileId), // Use imported function
     addStickyLog,

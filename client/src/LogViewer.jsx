@@ -38,7 +38,8 @@ const LogViewer = () => {
     removeStickyLog,
     clearAllStickyLogs,
     updateStickyLogTitle,
-    scrollToLog
+    scrollToLog,
+    resetModel
   } = useLogsModel();
 
   // Pivot time tracking
@@ -549,22 +550,24 @@ const LogViewer = () => {
   }, [activeFileIndex, files, switchToFile, showingCombinedView, removeLogsForFile, allFileLogs, saveSession]);
 
   const handleCloseAll = useCallback(() => {
-    // Remove logs for all files
-    files.forEach(file => {
-      removeLogsForFile(file.id);
-    });
+    // Wipe the entire model (logs, sticky notes, headers, current file, etc.)
+    resetModel();
 
-    // Clear all state
+    // Clear all UI state in this component
     setFiles([]);
     setHasUserInteracted(false);
     setActiveFileIndex(0);
     setShowingCombinedView(false);
     setCombinedViewLoaded(false);
     setHeaderState(null);
-    
+    setLogDuration(null);
+    setPivotLog(null);
+    setHoveredLog(null);
+    setLastHoveredLog(null);
+
     // Clear session storage
     clearSession();
-  }, [files, removeLogsForFile, clearSession]);
+  }, [resetModel, clearSession]);
 
   const handleCombinedViewSelect = useCallback(() => {
     setShowingCombinedView(true);
