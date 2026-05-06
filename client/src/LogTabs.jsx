@@ -1,7 +1,22 @@
 import React from 'react';
 import { getFileDisplayName, getFileFullName } from './useLogsModel';
 
-const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCombinedView, onCombinedViewSelect, allFileLogs = {}, isFileLoading, onCloseAll }) => {
+const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCombinedView, onCombinedViewSelect, allFileLogs = {}, isFileLoading, onCloseAll, onExportActive }) => {
+    const renderExportButton = (label) => (
+        <button
+            onClick={(e) => {
+                e.stopPropagation();
+                onExportActive && onExportActive();
+            }}
+            className="ml-1 text-gray-400 hover:text-blue-600 dark:text-gray-500 dark:hover:text-blue-400"
+            title={`Export visible records of "${label}" to file`}
+        >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+            </svg>
+        </button>
+    );
+
     return (
         <div className="bg-white dark:bg-gray-900">
             <div className="flex items-center overflow-x-auto p-2 pb-0">
@@ -9,10 +24,11 @@ const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCom
                 <div className="flex overflow-x-auto flex-1">
                     {files.map((file, index) => {
                         const loading = isFileLoading ? isFileLoading(file.id) : false;
+                        const isActive = activeFileIndex === index && !showingCombinedView;
                         return (
                             <div
                                 key={index}
-                                className={`flex items-center gap-2 px-4 py-1 mx-1 rounded-t-lg border-b-0 cursor-pointer whitespace-nowrap transition-all duration-200 ${activeFileIndex === index && !showingCombinedView
+                                className={`flex items-center gap-2 px-4 py-1 mx-1 rounded-t-lg border-b-0 cursor-pointer whitespace-nowrap transition-all duration-200 ${isActive
                                     ? 'bg-white dark:bg-gray-800 border-2 border-blue-400 dark:border-blue-400 shadow-sm'
                                     : 'border hover:bg-gray-100 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
                                     }`}
@@ -30,6 +46,7 @@ const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCom
                                         </svg>
                                     )}
                                 </span>
+                                {isActive && !loading && renderExportButton(getFileDisplayName(file.id))}
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -56,6 +73,7 @@ const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCom
                             }}
                         >
                             <span className="text-xs">All Files</span>
+                            {showingCombinedView && renderExportButton('All Files')}
                         </div>
                     )}
                 </div>

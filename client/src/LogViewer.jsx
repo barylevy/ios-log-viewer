@@ -9,6 +9,7 @@ import { getFileIdentifier } from './utils/fileLoader';
 import { saveSession, loadSession, clearSession } from './utils/sessionStorage';
 import { groupFilesByPrefix, groupFilesByDirectory, groupFilesByDirectoryAndFormat, naturalSort, hasValidLogExtension } from './utils/fileGrouping';
 import { isArchiveFile, expandArchivesInList } from './utils/archiveExtractor';
+import { exportLogsToFile } from './utils/exportLogs';
 import { AVAILABLE_COLUMNS } from './ColumnSettings';
 
 const LogViewer = () => {
@@ -547,6 +548,7 @@ const LogViewer = () => {
   const handleCloseAll = useCallback(() => {
     // Wipe the entire model (logs, sticky notes, headers, current file, etc.)
     resetModel();
+    resetModel();
 
     // Clear all UI state in this component
     setFiles([]);
@@ -564,91 +566,114 @@ const LogViewer = () => {
     clearSession();
   }, [resetModel, clearSession]);
 
+  // Export visible records of the active tab. Uses filteredLogs which already
+  // reflects all active filters (text/regex search, level, module, date range,
+  // line ranges, etc.) and works for both single-file tabs and the combined
+  // "All Files" view.
+  const handleExportActive = useCallback(() => {
+    let suggestedName;
+    let tagSourceFile = false;
+    if (showingCombinedView) {
+      suggestedName = 'AllFiles_filtered';
+      tagSourceFile = true;
+    } else if (files[activeFileIndex]) {
+      suggestedName = `${files[activeFileIndex].name}_filtered`;
+    } else {
+      suggestedName = 'logs_filtered';
+    }
+    exportLogsToFile(filteredLogs, suggestedName, { tagSourceFile, header: headerState });
+  }, [showingCombinedView, files, activeFileIndex, filteredLogs, headerState]);
+
+  // Build (or rebuild) the combined "All Files" model from currently-loaded
+  // per-tab logs. Wrapped in useCallback so a useEffect can re-invoke it
+  // whenever a previously-unloaded tab finishes loading.
+  const buildCombinedView = useCallback(() => {
+    if (files.length === 0) return;
+
+    // Combine all existing models from all tabs (no re-parsing!)
+    const allCombinedLogs = files.flatMap((file, fileIndex) => {
+      const fileLogs = allFileLogs[file.id] || [];
+      return fileLogs.map((log, logIndex) => {
+        const newLog = {
+          ...log,
+          baseId: log.baseId || log.id,
+          id: `${file.id}-${log.id}`,
+          sourceFile: log.sourceFile || file.id,
+          originalFileIndex: fileIndex,
+          originalLogIndex: logIndex,
+          originalLogId: log.id
+        };
+        if (log.isContinuation && log.parentLogId !== undefined) {
+          newLog.parentLogId = `${file.id}-${log.parentLogId}`;
+          newLog.originalParentLogId = log.parentLogId;
+        }
+        return newLog;
+      });
+    });
+
+    const normalLogs = [];
+    const continuationsByParent = new Map();
+    allCombinedLogs.forEach(log => {
+      if (log.isContinuation && log.originalParentLogId !== undefined) {
+        const key = `${log.originalFileIndex}:${log.originalParentLogId}`;
+        if (!continuationsByParent.has(key)) continuationsByParent.set(key, []);
+        continuationsByParent.get(key).push(log);
+      } else {
+        normalLogs.push(log);
+      }
+    });
+
+    normalLogs.sort((a, b) => {
+      if (a.timestampMs && b.timestampMs && a.timestampMs !== b.timestampMs) {
+        return a.timestampMs - b.timestampMs;
+      }
+      if (a.timestamp && b.timestamp && a.timestamp !== b.timestamp) {
+        return a.timestamp.localeCompare(b.timestamp);
+      }
+      if (a.originalFileIndex !== b.originalFileIndex) {
+        return a.originalFileIndex - b.originalFileIndex;
+      }
+      return a.originalLogIndex - b.originalLogIndex;
+    });
+
+    const combinedLogs = [];
+    normalLogs.forEach(log => {
+      combinedLogs.push(log);
+      const key = `${log.originalFileIndex}:${log.originalLogId}`;
+      const continuations = continuationsByParent.get(key) || [];
+      continuations.forEach(contLog => combinedLogs.push(contLog));
+    });
+
+    setLogsForFile('Combined Files', combinedLogs);
+  }, [files, allFileLogs, setLogsForFile]);
+
   const handleCombinedViewSelect = useCallback(() => {
     setShowingCombinedView(true);
 
-    // Lazy load combined view only if not already loaded
-    if (!combinedViewLoaded && files.length > 0) {
+    // Force-load any tabs whose logs aren't in memory yet so the combined
+    // view will include records from every tab, not just the previously
+    // visited ones.
+    files.forEach(file => {
+      if (!allFileLogs[file.id] && file.fileObj) {
+        requestFileLoad(file.id, file.fileObj);
+      }
+    });
 
-      // Combine all existing models from all tabs (no re-parsing!)
-      const allCombinedLogs = files.flatMap((file, fileIndex) => {
-        const fileLogs = allFileLogs[file.id] || [];
-        return fileLogs.map((log, logIndex) => {
-          const newLog = {
-            ...log,
-            baseId: log.baseId || log.id, // Preserve baseId for sticky log matching
-            id: `${file.id}-${log.id}`, // Ensure unique IDs
-            sourceFile: log.sourceFile || file.id, // Use existing sourceFile (from grouped files) or file.id (for single files)
-            originalFileIndex: fileIndex, // Track which file this came from
-            originalLogIndex: logIndex, // Track position within original file
-            originalLogId: log.id // Save original log ID before we change it
-          };
-          
-          // Update parentLogId reference to use new combined ID format
-          if (log.isContinuation && log.parentLogId !== undefined) {
-            newLog.parentLogId = `${file.id}-${log.parentLogId}`;
-            newLog.originalParentLogId = log.parentLogId; // Keep original parent ID
-          }
-          
-          return newLog;
-        });
-      });
-
-      // Sort by timestamp, but keep continuation lines with their parent
-      // Strategy: separate normal logs from continuation logs, sort normal logs, then insert continuations
-      const normalLogs = [];
-      const continuationsByParent = new Map();
-      
-      allCombinedLogs.forEach(log => {
-        if (log.isContinuation && log.originalParentLogId !== undefined) {
-          // Create key from file index and original parent ID
-          const key = `${log.originalFileIndex}:${log.originalParentLogId}`;
-          if (!continuationsByParent.has(key)) {
-            continuationsByParent.set(key, []);
-          }
-          continuationsByParent.get(key).push(log);
-        } else {
-          normalLogs.push(log);
-        }
-      });
-      
-      // Sort only normal logs by timestamp, then by file/position for stability
-      normalLogs.sort((a, b) => {
-        // Primary sort: by timestamp
-        if (a.timestampMs && b.timestampMs && a.timestampMs !== b.timestampMs) {
-          return a.timestampMs - b.timestampMs;
-        }
-        if (a.timestamp && b.timestamp && a.timestamp !== b.timestamp) {
-          return a.timestamp.localeCompare(b.timestamp);
-        }
-        // Secondary sort: by file order
-        if (a.originalFileIndex !== b.originalFileIndex) {
-          return a.originalFileIndex - b.originalFileIndex;
-        }
-        // Tertiary sort: by position within file
-        return a.originalLogIndex - b.originalLogIndex;
-      });
-      
-      // Rebuild: insert continuation logs right after their parent
-      const combinedLogs = [];
-      normalLogs.forEach(log => {
-        combinedLogs.push(log);
-        
-        // Insert continuation logs right after this parent
-        const key = `${log.originalFileIndex}:${log.originalLogId}`;
-        const continuations = continuationsByParent.get(key) || [];
-        continuations.forEach(contLog => {
-          combinedLogs.push(contLog);
-        });
-      });
-
-      setLogsForFile('Combined Files', combinedLogs);
+    if (files.length > 0) {
+      buildCombinedView();
       setCombinedViewLoaded(true);
-    } else if (combinedViewLoaded) {
-      // Switch to already loaded combined view
-      switchToFile('Combined Files');
     }
-  }, [files, allFileLogs, setLogsForFile, switchToFile, combinedViewLoaded]);
+    switchToFile('Combined Files');
+  }, [files, allFileLogs, requestFileLoad, buildCombinedView, switchToFile]);
+
+  // While the combined view is active, rebuild it whenever a tab finishes
+  // loading (allFileLogs grows) or the set of tabs changes. This guarantees
+  // every visible record — and therefore every export — reflects all tabs.
+  useEffect(() => {
+    if (!showingCombinedView) return;
+    if (files.length === 0) return;
+    buildCombinedView();
+  }, [showingCombinedView, files, allFileLogs, buildCombinedView]);
 
   const handleDragOver = useCallback((e) => {
     e.preventDefault();
@@ -824,6 +849,7 @@ const LogViewer = () => {
                 allFileLogs={allFileLogs}
                 isFileLoading={isFileLoading}
                 onCloseAll={handleCloseAll}
+                onExportActive={handleExportActive}
               />
             )}
 
