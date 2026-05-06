@@ -11,10 +11,12 @@
     "test:ui": "vitest --ui"
   },
   "dependencies": {
+    "jszip": "^3.10.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^7.8.2",
-    "react-virtuoso": "^4.14.0"
+    "react-virtuoso": "^4.14.0",
+    "xz-decompress": "^0.2.3"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.8.0",

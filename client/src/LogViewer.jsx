@@ -8,6 +8,7 @@ import useLogsModel from './useLogsModel';
 import { getFileIdentifier } from './utils/fileLoader';
 import { saveSession, loadSession, clearSession } from './utils/sessionStorage';
 import { groupFilesByPrefix, groupFilesByDirectory, groupFilesByDirectoryAndFormat, naturalSort, hasValidLogExtension } from './utils/fileGrouping';
+import { isArchiveFile, expandArchivesInList } from './utils/archiveExtractor';
 import { AVAILABLE_COLUMNS } from './ColumnSettings';
 
 const LogViewer = () => {
@@ -664,7 +665,19 @@ const LogViewer = () => {
     setIsFileDropActive(false);
 
     const droppedFiles = Array.from(e.dataTransfer.files);
-    const textFiles = droppedFiles.filter(hasValidLogExtension);
+    if (!droppedFiles.length) return;
+
+    // Expand any dropped .zip / .tar.xz archives in place.
+    const hasArchive = droppedFiles.some(isArchiveFile);
+    let allFiles;
+    try {
+      allFiles = hasArchive ? await expandArchivesInList(droppedFiles) : droppedFiles;
+    } catch (err) {
+      alert(`Failed to extract archive: ${err.message || err}`);
+      return;
+    }
+
+    const textFiles = allFiles.filter(hasValidLogExtension);
 
     // Sort files by name before grouping (natural sort for numbered files)
     const sortedTextFiles = textFiles.sort((a, b) => naturalSort(a.name, b.name));
@@ -672,13 +685,16 @@ const LogViewer = () => {
     // Group files by subdirectory + prefix, then split by detected log format
     // so only files sharing the same pattern end up in the same tab.
     const groupedFiles = await groupFilesByDirectoryAndFormat(sortedTextFiles);
-    
+
+    // If an archive was dropped, treat it like a folder load (clear tabs first).
+    if (hasArchive) handleClearTabs();
+
     // Load each group
     groupedFiles.forEach((filesInGroup, groupKey) => {
       // Load as merged group with the groupKey as identifier
       handleFileLoad(filesInGroup, false, groupKey);
     });
-  }, [handleFileLoad]);
+  }, [handleFileLoad, handleClearTabs]);
 
 
   // Toggle log selection - if same log is clicked, close it; if different log, open it

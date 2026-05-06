@@ -4,6 +4,7 @@ import ColumnSettings, { AVAILABLE_COLUMNS } from './ColumnSettings';
 import { CATO_COLORS } from './constants';
 import { clearSession } from './utils/sessionStorage';
 import { groupFilesByPrefix, groupFilesByDirectory, groupFilesByDirectoryAndFormat, getGroupDisplayName, naturalSort } from './utils/fileGrouping';
+import { isArchiveFile, expandArchivesInList } from './utils/archiveExtractor';
 
 const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs, visibleColumns, onColumnsChange, logDuration, folderName }) => {
   const fileInputRef = useRef(null);
@@ -53,22 +54,39 @@ const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs,
     setShowFileDropdown(false);
   };
 
-  const handleFilesSelected = (event) => {
-    const files = Array.from(event.target.files);
+  const handleFilesSelected = async (event) => {
+    const picked = Array.from(event.target.files);
+    event.target.value = '';
+    if (!picked.length) return;
 
-    // Sort files by name before grouping (natural sort for numbered files)
+    const hasArchive = picked.some(isArchiveFile);
+
+    let files;
+    try {
+      files = hasArchive ? await expandArchivesInList(picked) : picked;
+    } catch (err) {
+      alert(`Failed to extract archive: ${err.message || err}`);
+      return;
+    }
+
+    // If the picked input contained an archive, treat it like a folder load:
+    // clear current tabs and use the directory+format grouper so each
+    // subdirectory becomes its own tab.
+    if (hasArchive) {
+      if (onClearTabs) onClearTabs();
+      const fileGroups = await groupFilesByDirectoryAndFormat(files);
+      fileGroups.forEach((groupFiles, groupKey) => {
+        onFileLoad(groupFiles, false, groupKey);
+      });
+      return;
+    }
+
+    // Otherwise: standard "individual files" flow — group by name prefix.
     const sortedFiles = files.sort((a, b) => naturalSort(a.name, b.name));
-
-    // Group files by prefix
     const fileGroups = groupFilesByPrefix(sortedFiles);
-
-    // Load all files as groups (even single files)
     fileGroups.forEach((groupFiles, prefix) => {
-      // Load as merged group regardless of count
       onFileLoad(groupFiles, false, prefix);
     });
-    
-    event.target.value = '';
   };
 
   const handleDirectorySelected = async (event) => {
@@ -329,7 +347,7 @@ const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs,
         ref={fileInputRef}
         type="file"
         multiple
-        accept=".txt,.log,.ips"
+        accept=".txt,.log,.ips,.zip,.xz,.txz"
         onChange={handleFilesSelected}
         style={{ display: 'none' }}
       />
