@@ -4,7 +4,6 @@ import LogModal from './LogModal';
 import LogViewerHeader from './LogViewerHeader';
 import LogViewerFilters from './LogViewerFilters';
 import LogTabs from './LogTabs';
-import AIChat from './AIChat';
 import useLogsModel from './useLogsModel';
 import { getFileIdentifier } from './utils/fileLoader';
 import { saveSession, loadSession, clearSession } from './utils/sessionStorage';
@@ -298,11 +297,6 @@ const LogViewer = () => {
     setLogDuration(null); // Clear time range
   }, []);
 
-  // AI Chat
-  const [showAIChat, setShowAIChat] = useState(false);
-  const [chatPanelWidth, setChatPanelWidth] = useState(400);
-  const [isResizing, setIsResizing] = useState(false);
-  const [isAIChatFullWidth, setIsAIChatFullWidth] = useState(false);
 
   const handleFileLoad = useCallback((fileOrFiles, clearTabsFirst = false, groupPrefix = null) => {
     // Support both single file and array of files (for grouped Windows logs)
@@ -686,53 +680,6 @@ const LogViewer = () => {
     });
   }, [handleFileLoad]);
 
-  // Chat panel resizing
-  const handleMouseDown = useCallback((e) => {
-    setIsResizing(true);
-    e.preventDefault();
-  }, []);
-
-  useEffect(() => {
-    const handleMouseMove = (e) => {
-      if (!isResizing) return;
-
-      const newWidth = window.innerWidth - e.clientX;
-      setChatPanelWidth(Math.max(300, Math.min(800, newWidth)));
-    };
-
-    const handleMouseUp = () => {
-      setIsResizing(false);
-    };
-
-    if (isResizing) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-    }
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isResizing]);
-
-  // Get current display context for AI
-  const currentDisplayContext = useMemo(() => {
-    if (showingCombinedView) {
-      return {
-        logs: allFileLogs['Combined Files'] || [],
-        filteredLogs: allFileLogs['Combined Files'] || [], // Same for combined view
-        fileName: `Combined Files (${files.map(f => f.name).join(', ')})`
-      };
-    } else if (files[activeFileIndex]) {
-      // Use the current logs from useLogsModel, which should be the active file's logs
-      return {
-        logs: logs || [],
-        filteredLogs: filteredLogs || [], // Pass filtered logs for AI
-        fileName: files[activeFileIndex].name
-      };
-    }
-    return { logs: [], filteredLogs: [], fileName: 'No File' };
-  }, [files, activeFileIndex, showingCombinedView, allFileLogs, logs, filteredLogs]);
 
   // Toggle log selection - if same log is clicked, close it; if different log, open it
   const handleLogClick = useCallback((log) => {
@@ -838,35 +785,17 @@ const LogViewer = () => {
       <LogViewerHeader
         onClearTabs={handleClearTabs}
         onFileLoad={handleFileLoad}
-        onToggleAIChat={() => {
-          setShowAIChat(!showAIChat);
-          if (showAIChat) {
-            // If closing AI chat, also reset full-width mode
-            setIsAIChatFullWidth(false);
-          }
-        }}
-        showAIChat={showAIChat}
         hasLogs={files.length > 0}
         currentFileHeaders={headerState}
-        currentLogs={currentDisplayContext.logs}
-        currentFileName={currentDisplayContext.fileName}
         visibleColumns={visibleColumns}
         onColumnsChange={handleColumnsChange}
         logDuration={logDuration}
         folderName={currentFolderName}
       />
 
-      {/* Main content area - Split panel container */}
+      {/* Main content area */}
       <div className="flex-1 overflow-hidden flex">
-        {/* Left panel - Contains tabs, filters, and log content */}
-        {!isAIChatFullWidth && (
-          <div
-            className="overflow-hidden flex flex-col"
-            style={{
-              width: showAIChat ? `calc(100% - ${chatPanelWidth}px - 4px)` : '100%',
-              transition: isResizing ? 'none' : 'width 0.2s ease'
-            }}
-          >
+        <div className="overflow-hidden flex flex-col w-full">
             {/* Tabs - now inside left panel */}
             {files.length > 0 && (
               <LogTabs
@@ -910,42 +839,7 @@ const LogViewer = () => {
                 {memoizedContent}
               </div>
             )}
-          </div>
-        )}
-
-        {/* AI Chat Panel - Right panel */}
-        {showAIChat && (
-          <>
-            {/* Dynamic separator/resize handle - only show when not in full width mode */}
-            {!isAIChatFullWidth && (
-              <div
-                className="w-1 bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 cursor-col-resize flex-shrink-0"
-                onMouseDown={handleMouseDown}
-                style={{ cursor: isResizing ? 'col-resize' : 'col-resize' }}
-              />
-            )}
-            {/* Right panel - AI Chat */}
-            <div
-              className="bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 flex-shrink-0 mr-2"
-              style={{
-                width: isAIChatFullWidth ? '100%' : chatPanelWidth,
-                transition: isResizing ? 'none' : 'width 0.2s ease'
-              }}
-            >
-              <AIChat
-                logs={currentDisplayContext.filteredLogs}
-                fileName={currentDisplayContext.fileName}
-                isOpen={showAIChat}
-                onClose={() => {
-                  setShowAIChat(false);
-                  setIsAIChatFullWidth(false);
-                }}
-                isFullWidth={isAIChatFullWidth}
-                onToggleFullWidth={() => setIsAIChatFullWidth(!isAIChatFullWidth)}
-              />
-            </div>
-          </>
-        )}
+        </div>
       </div>
 
       {selectedLog && (

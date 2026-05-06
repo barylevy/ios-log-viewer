@@ -1,20 +1,16 @@
 import React, { useRef, useState, useEffect } from 'react';
 import AboutModal from './AboutModal';
-import AIConfigSettings from './Settings';
 import ColumnSettings, { AVAILABLE_COLUMNS } from './ColumnSettings';
 import { CATO_COLORS } from './constants';
-import { openAIChatInNewWindow, openAIChatInNewTab } from './utils/aiChatUtils';
 import { clearSession } from './utils/sessionStorage';
 import { groupFilesByPrefix, groupFilesByDirectory, groupFilesByDirectoryAndFormat, getGroupDisplayName, naturalSort } from './utils/fileGrouping';
 
-const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, currentFileHeaders, onClearTabs, currentLogs, currentFileName, visibleColumns, onColumnsChange, logDuration, folderName }) => {
+const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs, visibleColumns, onColumnsChange, logDuration, folderName }) => {
   const fileInputRef = useRef(null);
   const directoryInputRef = useRef(null);
   const [showFileDropdown, setShowFileDropdown] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [showColumnSettings, setShowColumnSettings] = useState(false);
-  const [showAIChatDropdown, setShowAIChatDropdown] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(
     () => localStorage.getItem('theme') === 'dark' ||
@@ -27,9 +23,6 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
       if (showDropdown && !event.target.closest('.settings-dropdown')) {
         setShowDropdown(false);
       }
-      if (showAIChatDropdown && !event.target.closest('.ai-chat-dropdown')) {
-        setShowAIChatDropdown(false);
-      }
       if (showFileDropdown && !event.target.closest('.file-dropdown')) {
         setShowFileDropdown(false);
       }
@@ -37,7 +30,7 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showDropdown, showAIChatDropdown, showFileDropdown]);
+  }, [showDropdown, showFileDropdown]);
 
   // Apply theme on mount and when theme changes
   useEffect(() => {
@@ -132,11 +125,6 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
     setShowDropdown(false);
   };
 
-  const handleAIConfigClick = () => {
-    setShowSettings(true);
-    setShowDropdown(false);
-  };
-
   const handleColumnSettingsClick = () => {
     setShowColumnSettings(true);
     setShowDropdown(false);
@@ -148,44 +136,22 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
   };
 
   const handleClearCache = () => {
-    // Get API key before clearing (to preserve it)
-    const apiKey = localStorage.getItem('openai_api_key');
-    
     // Clear all localStorage
     localStorage.clear();
-    
+
     // Clear session storage (IndexedDB)
     clearSession();
-    
-    // Restore API key if it existed
-    if (apiKey) {
-      localStorage.setItem('openai_api_key', apiKey);
-    }
-    
+
     // Restore theme preference
     localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
-    
+
     setShowDropdown(false);
-    
+
     // Show confirmation
     alert('Cache cleared successfully! The page will reload.');
-    
+
     // Reload the page to reset all state
     window.location.reload();
-  };
-
-  const handleOpenAIChatNewWindow = () => {
-    if (currentLogs && currentFileName) {
-      openAIChatInNewWindow(currentLogs, currentFileName);
-    }
-    setShowAIChatDropdown(false);
-  };
-
-  const handleOpenAIChatNewTab = () => {
-    if (currentLogs && currentFileName) {
-      openAIChatInNewTab(currentLogs, currentFileName);
-    }
-    setShowAIChatDropdown(false);
   };
 
   return (
@@ -306,62 +272,6 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
             )}
           </div>
 
-          {hasLogs && (
-            <div className="relative ai-chat-dropdown">
-              <div className="flex">
-                {/* Main AI Chat Button */}
-                <button
-                  onClick={onToggleAIChat}
-                  className={`px-4 py-2 rounded-l-md text-sm font-medium transition-colors ${showAIChat
-                    ? 'bg-red-600 hover:bg-red-700 text-white'
-                    : 'bg-green-600 hover:bg-green-700 text-white'
-                    }`}
-                >
-                  {showAIChat ? 'Hide AI Chat' : 'Show AI Chat'}
-                </button>
-
-                {/* Dropdown Arrow Button */}
-                <button
-                  onClick={() => setShowAIChatDropdown(!showAIChatDropdown)}
-                  className={`px-2 py-2 rounded-r-md text-sm font-medium transition-colors border-l border-opacity-20 ${showAIChat
-                    ? 'bg-red-600 hover:bg-red-700 text-white border-white'
-                    : 'bg-green-600 hover:bg-green-700 text-white border-white'
-                    }`}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-              </div>
-
-              {/* Dropdown Menu */}
-              {showAIChatDropdown && (
-                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-600 z-50">
-                  <div className="py-1">
-                    <button
-                      onClick={onToggleAIChat}
-                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                    >
-                      {showAIChat ? 'Hide Side Panel' : 'Show Side Panel'}
-                    </button>
-                    <button
-                      onClick={handleOpenAIChatNewTab}
-                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                    >
-                      Open in New Tab
-                    </button>
-                    <button
-                      onClick={handleOpenAIChatNewWindow}
-                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                    >
-                      Open in New Window
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Settings Dropdown */}
           <div className="relative settings-dropdown">
             <button
@@ -433,9 +343,6 @@ const LogViewerHeader = ({ onFileLoad, onToggleAIChat, showAIChat, hasLogs, curr
 
       {/* About Modal */}
       <AboutModal isOpen={showAbout} onClose={() => setShowAbout(false)} />
-
-      {/* AI Config Settings Modal */}
-      <AIConfigSettings isOpen={showSettings} onClose={() => setShowSettings(false)} />
 
       {/* Column Settings Modal */}
       <ColumnSettings
