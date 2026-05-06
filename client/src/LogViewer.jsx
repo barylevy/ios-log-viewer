@@ -65,6 +65,31 @@ const LogViewer = () => {
   // Column change version to force re-render
   const [columnVersion, setColumnVersion] = useState(0);
 
+  // Order of all log-row columns. Persisted via the Column Settings modal.
+  // Falls back to the default order and merges in any new column ids added
+  // in future versions.
+  const DEFAULT_COLUMN_ORDER = ['timestamp', 'lineNumber', 'logLevel', 'message', 'module', 'sourceFile', 'timeGap', 'processThread'];
+  const [rightColumnOrder, setRightColumnOrder] = useState(() => {
+    try {
+      const saved = localStorage.getItem('logViewerColumnOrder');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const known = parsed.filter(id => DEFAULT_COLUMN_ORDER.includes(id));
+          DEFAULT_COLUMN_ORDER.forEach(id => { if (!known.includes(id)) known.push(id); });
+          return known;
+        }
+      }
+    } catch { /* ignore */ }
+    return DEFAULT_COLUMN_ORDER.slice();
+  });
+
+  const handleRightColumnOrderChange = useCallback((newOrder) => {
+    setRightColumnOrder(newOrder);
+    try { localStorage.setItem('logViewerColumnOrder', JSON.stringify(newOrder)); } catch { /* ignore */ }
+    setColumnVersion(prev => prev + 1);
+  }, []);
+
   // Handler that updates columns and increments version
   const handleColumnsChange = useCallback((newColumns) => {
     setVisibleColumns(newColumns);
@@ -675,17 +700,30 @@ const LogViewer = () => {
     buildCombinedView();
   }, [showingCombinedView, files, allFileLogs, buildCombinedView]);
 
+  // Only treat a drag as a file-drop when the OS is actually dragging files.
+  // Internal drags (e.g. column reorder in the Column Settings modal) use
+  // the 'text/plain' type and must not trigger the file-drop overlay.
+  const isFileDrag = (e) => {
+    const types = e.dataTransfer && e.dataTransfer.types;
+    if (!types) return false;
+    // DataTransferItemList vs DOMStringList — both support contains/includes via Array.from
+    return Array.from(types).includes('Files');
+  };
+
   const handleDragOver = useCallback((e) => {
+    if (!isFileDrag(e)) return;
     e.preventDefault();
     setIsFileDropActive(true);
   }, []);
 
   const handleDragLeave = useCallback((e) => {
+    if (!isFileDrag(e)) return;
     e.preventDefault();
     setIsFileDropActive(false);
   }, []);
 
   const handleDrop = useCallback(async (e) => {
+    if (!isFileDrag(e)) return;
     e.preventDefault();
     setIsFileDropActive(false);
 
@@ -810,9 +848,10 @@ const LogViewer = () => {
         onAddStickyLog={addStickyLog}
         highlightLog={highlightLog}
         visibleColumns={visibleColumns}
+        columnOrder={rightColumnOrder}
       />
     );
-  }, [hasUserInteracted, files.length, filteredLogs, handleLogClick, highlightedLogId, filters, pivotLog, setPivotTime, clearPivotTime, stickyLogs, addStickyLog, highlightLog, setSearchPos, setSearchTotal, updateFilters, setHoveredLog, visibleColumns, columnVersion]);
+  }, [hasUserInteracted, files.length, filteredLogs, handleLogClick, highlightedLogId, filters, pivotLog, setPivotTime, clearPivotTime, stickyLogs, addStickyLog, highlightLog, setSearchPos, setSearchTotal, updateFilters, setHoveredLog, visibleColumns, columnVersion, rightColumnOrder]);
 
   // Remove old currentFileHeaders logic - now using headerState
 
@@ -830,6 +869,8 @@ const LogViewer = () => {
         currentFileHeaders={headerState}
         visibleColumns={visibleColumns}
         onColumnsChange={handleColumnsChange}
+        rightColumnOrder={rightColumnOrder}
+        onRightColumnOrderChange={handleRightColumnOrderChange}
         logDuration={logDuration}
         folderName={currentFolderName}
       />

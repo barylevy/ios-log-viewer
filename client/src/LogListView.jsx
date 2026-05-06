@@ -10,6 +10,164 @@ import {
 import { cleanMessage } from './utils/logLevelColors';
 import { replaceProcessIdWithType } from './utils/processTypeMapper';
 
+// Unified column registry. Each entry can render its own header label and
+// body cell. The whole row is laid out as a single flex container; columns
+// are rendered in the order supplied by `columnOrder`. The "message" column
+// is the only flex-grow cell.
+const COLUMN_DEFS = {
+  timestamp: {
+    label: 'Time',
+    headerTitle: 'Timestamp of the log entry',
+    isVisible: (vc) => vc.timestamp !== false,
+    headerStyle: { flex: '0 0 80px' },
+    bodyStyle: { flex: '0 0 80px' },
+    headerClass: 'text-xs font-semibold text-gray-700 dark:text-gray-300 font-mono text-center',
+    renderBody: (log, ctx) => (
+      <div className={`text-xs font-mono text-center ${ctx.hasSticky ? 'underline decoration-solid decoration-1' : ''} ${log.isContinuation
+        ? 'text-gray-400 dark:text-gray-500'
+        : ctx.timeInfo === '--:--:--.---'
+          ? 'text-gray-300 dark:text-gray-600 opacity-50'
+          : ctx.timeGapInfo.hasGap
+            ? 'text-orange-600 dark:text-orange-400 font-semibold'
+            : 'text-gray-500 dark:text-gray-400'}`}>
+        {log.isContinuation ? '↳' : ctx.timeInfo}
+      </div>
+    ),
+  },
+  lineNumber: {
+    label: 'Line',
+    headerTitle: 'Line number in the log file',
+    isVisible: (vc) => vc.lineNumber !== false,
+    headerStyle: { flex: '0 0 50px' },
+    bodyStyle: { flex: '0 0 50px' },
+    headerClass: 'text-xs font-semibold text-gray-700 dark:text-gray-300 font-mono text-center',
+    renderBody: (log) => (
+      <div className="text-xs text-gray-400 dark:text-gray-500 font-mono text-center">
+        {log.lineNumber}
+      </div>
+    ),
+  },
+  logLevel: {
+    label: 'Lvl',
+    headerTitle: 'Log level (Error, Warning, Info, etc.)',
+    isVisible: (vc) => vc.logLevel !== false,
+    headerStyle: { flex: '0 0 40px' },
+    bodyStyle: { flex: '0 0 40px' },
+    headerClass: 'text-xs font-semibold text-gray-700 dark:text-gray-300 font-mono text-center',
+    renderBody: (log, ctx) => (
+      <div className={`text-xs font-semibold uppercase text-center ${log.isContinuation ? 'text-gray-300 dark:text-gray-600' : ctx.logLevelColor}`}>
+        {log.isContinuation ? '⋮' : ctx.logLevel.charAt(0).toUpperCase()}
+      </div>
+    ),
+  },
+  message: {
+    label: 'Message',
+    headerTitle: 'Log message content',
+    isVisible: () => true, // always visible
+    headerStyle: { flex: '1 1 0%', minWidth: 0 },
+    bodyStyle: { flex: '1 1 0%', minWidth: 0 },
+    headerClass: 'text-xs font-semibold text-gray-700 dark:text-gray-300',
+    renderBody: (log, ctx) => (
+      <div className="flex-1 min-w-0">
+        <div
+          ref={ctx.contentRef}
+          className={`text-xs break-words ${log.isContextLine
+            ? 'text-gray-600 dark:text-gray-400'
+            : log.isContinuation
+              ? 'text-gray-700 dark:text-gray-300 pl-2'
+              : 'text-gray-800 dark:text-gray-200'} ${!ctx.isExpanded ? 'line-clamp-3' : ''}`}
+        >
+          {log.isContextLine && (
+            <span className="text-gray-400 dark:text-gray-500 font-mono mr-1">~</span>
+          )}
+          {log.isContinuation && (
+            <span className="text-gray-400 dark:text-gray-500 font-mono mr-1">⤷</span>
+          )}
+          <span dangerouslySetInnerHTML={{ __html: ctx.highlightedMessage }} />
+        </div>
+        {ctx.needsExpand && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              ctx.onToggleExpanded(log.id);
+            }}
+            className="mt-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline"
+          >
+            {ctx.isExpanded ? 'Show less' : 'Show more'}
+          </button>
+        )}
+      </div>
+    ),
+  },
+  module: {
+    label: 'Module',
+    headerTitle: 'Module or component name',
+    isVisible: (vc) => vc.module !== false,
+    hasData: (logs) => logs.some(l => l.module),
+    headerClass: 'text-xs font-semibold text-gray-700 dark:text-gray-300',
+    renderBody: (log) => (log.module ? (
+      <div className="text-xs text-blue-600 dark:text-blue-400 font-mono bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 whitespace-nowrap" title={`Module: ${log.module}`}>
+        {log.module}
+      </div>
+    ) : null),
+  },
+  sourceFile: {
+    label: 'Source File',
+    headerTitle: 'Source file and line number',
+    isVisible: (vc) => vc.sourceFile !== false,
+    hasData: (logs) => logs.some(l => l.sourceFile || l.sourceName),
+    headerClass: 'text-xs font-semibold text-gray-700 dark:text-gray-300',
+    renderBody: (log, ctx) => {
+      const items = [];
+      if (ctx.hasMergedSources && log.sourceFile) {
+        items.push(
+          <div key="sf-merged" className="text-xs text-teal-600 dark:text-teal-400 font-mono bg-teal-50 dark:bg-teal-900/20 px-2 py-0.5 rounded border border-teal-200 dark:border-teal-800 whitespace-nowrap" title={`Original File: ${log.sourceFile}`}>
+            📄 {log.sourceFile.length > 25 ? '...' + log.sourceFile.slice(-25) : log.sourceFile}
+          </div>
+        );
+      }
+      if (log.sourceName) {
+        items.push(
+          <div key="sf-name" className="text-xs text-purple-600 dark:text-purple-400 font-mono bg-purple-50 dark:bg-purple-900/20 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-800 whitespace-nowrap" title={`Source: ${log.sourceName}${log.sourceLine ? ':' + log.sourceLine : ''}`}>
+            {log.processName && log.processName !== log.process ? replaceProcessIdWithType(log.sourceName, log.module) : log.sourceName}{log.sourceLine ? ':' + log.sourceLine : ''}
+          </div>
+        );
+      }
+      if (!items.length) return null;
+      return <div className="flex items-center gap-2">{items}</div>;
+    },
+  },
+  timeGap: {
+    label: 'Time Gap',
+    headerTitle: 'Time gap from previous log',
+    isVisible: (vc) => vc.timeGap !== false,
+    hasData: (logs) => logs.some(l => l.timestamp),
+    headerClass: 'text-xs font-semibold text-gray-700 dark:text-gray-300',
+    renderBody: (log, ctx) => (ctx.timeGapInfo && ctx.timeGapInfo.hasGap ? (
+      <div className="text-xs text-orange-600 dark:text-orange-400 font-mono bg-orange-100 dark:bg-orange-900/30 px-1 rounded">
+        +{ctx.timeGapInfo.gapSeconds >= 60
+          ? `${Math.floor(ctx.timeGapInfo.gapSeconds / 60)}m${Math.floor(ctx.timeGapInfo.gapSeconds % 60)}s`
+          : `${Math.floor(ctx.timeGapInfo.gapSeconds)}s`}
+      </div>
+    ) : null),
+  },
+  processThread: {
+    label: 'P:T',
+    headerTitle: 'Process ID and Thread ID',
+    isVisible: (vc) => vc.processThread !== false,
+    hasData: (logs) => logs.some(l => l.process || l.thread),
+    headerClass: 'text-xs font-semibold text-gray-700 dark:text-gray-300 pr-2',
+    renderBody: (log, ctx) => (ctx.fileInfo ? (
+      <div className="text-xs text-gray-400 dark:text-gray-500 font-mono pr-2" dangerouslySetInnerHTML={{ __html: ctx.fileInfo.html }} />
+    ) : null),
+  },
+};
+
+export const DEFAULT_COLUMN_ORDER = [
+  'timestamp', 'lineNumber', 'logLevel', 'message',
+  'module', 'sourceFile', 'timeGap', 'processThread',
+];
+
 // Custom hook to track dark mode with better performance
 const useDarkMode = () => {
   const [isDarkMode, setIsDarkMode] = useState(() => 
@@ -286,7 +444,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
 };
 
 // Component definition
-const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, index, onFiltersChange, previousLog, contextMenu, setContextMenu, onHover, pivotLog, stickyLogsSet, visibleColumns = {}, isExpanded, onToggleExpanded, hasMergedSources = false }) => {
+const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, index, onFiltersChange, previousLog, contextMenu, setContextMenu, onHover, pivotLog, stickyLogsSet, visibleColumns = {}, isExpanded, onToggleExpanded, hasMergedSources = false, columnOrder = DEFAULT_COLUMN_ORDER }) => {
   // Ref to measure content height
   const contentRef = useRef(null);
 
@@ -564,126 +722,25 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
         onClick={() => onClick({ ...log, lineIndex: index + 1 })}
         onContextMenu={handleContextMenu}
       >
-        <div 
-          style={{ 
-            display: 'grid', 
-            gridTemplateColumns: [
-              visibleColumns.timestamp !== false ? '80px' : '',
-              visibleColumns.lineNumber !== false ? '40px' : '',
-              visibleColumns.logLevel !== false ? '20px' : '',
-              '1fr'
-            ].filter(Boolean).join(' '),
-            gap: '1.5rem',
-            alignItems: 'start'
-          }}
-        >
-          {/* Timestamp */}
-          {visibleColumns.timestamp !== false && (
-          <div className={`text-xs font-mono text-center ${hasSticky ? 'underline decoration-solid decoration-1' : ''} ${log.isContinuation
-            ? 'text-gray-400 dark:text-gray-500'
-            : timeInfo === '--:--:--.---'
-            ? 'text-gray-300 dark:text-gray-600 opacity-50'
-            : timeGapInfo.hasGap
-              ? 'text-orange-600 dark:text-orange-400 font-semibold'
-              : 'text-gray-500 dark:text-gray-400'
-            }`}>
-            {log.isContinuation ? '↳' : timeInfo}
-          </div>
-          )}
-
-          {/* Line Number */}
-          {visibleColumns.lineNumber !== false && (
-          <div className="text-xs text-gray-400 dark:text-gray-500 font-mono text-center">
-            {log.lineNumber}
-          </div>
-          )}
-
-          {/* Log Level Indicator */}
-          {visibleColumns.logLevel !== false && (
-          <div className={`text-xs font-semibold uppercase text-center ${log.isContinuation ? 'text-gray-300 dark:text-gray-600' : logLevelColor}`}>
-            {log.isContinuation ? '⋮' : logLevel.charAt(0).toUpperCase()}
-          </div>
-          )}
-
-          {/* Message content */}
-          <div className="flex items-start justify-between gap-2 min-w-0">
-            <div className="flex-1 min-w-0">
-              <div
-                ref={contentRef}
-                className={`text-xs break-words ${log.isContextLine
-                  ? 'text-gray-600 dark:text-gray-400'
-                  : log.isContinuation
-                  ? 'text-gray-700 dark:text-gray-300 pl-2'
-                  : 'text-gray-800 dark:text-gray-200'
-                  } ${!isExpanded ? 'line-clamp-3' : ''}`}
-              >
-                {log.isContextLine && (
-                  <span className="text-gray-400 dark:text-gray-500 font-mono mr-1">~</span>
-                )}
-                {log.isContinuation && (
-                  <span className="text-gray-400 dark:text-gray-500 font-mono mr-1">⤷</span>
-                )}
-                <span dangerouslySetInnerHTML={{ __html: highlightedMessage }} />
-              </div>
-              {needsExpand && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleExpanded(log.id);
-                  }}
-                  className="mt-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline"
-                >
-                  {isExpanded ? 'Show less' : 'Show more'}
-                </button>
-              )}
-            </div>
-
-            <div className="flex-shrink-0 flex items-center gap-3">
-              {/* Original File Name (when grouped) - respects sourceFile visibility setting */}
-              {visibleColumns.sourceFile !== false && hasMergedSources && log.sourceFile && (
-                <div className="text-xs text-teal-600 dark:text-teal-400 font-mono bg-teal-50 dark:bg-teal-900/20 px-2 py-0.5 rounded border border-teal-200 dark:border-teal-800 whitespace-nowrap" title={`Original File: ${log.sourceFile}`}>
-                  📄 {log.sourceFile.length > 25 ? '...' + log.sourceFile.slice(-25) : log.sourceFile}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1.5rem' }}>
+          {(() => {
+            const ctx = {
+              hasSticky, timeInfo, timeGapInfo, logLevel, logLevelColor,
+              hasMergedSources, fileInfo, contentRef, isExpanded,
+              onToggleExpanded, needsExpand, highlightedMessage,
+            };
+            return columnOrder.map(id => {
+              const def = COLUMN_DEFS[id];
+              if (!def || !def.isVisible(visibleColumns)) return null;
+              const cell = def.renderBody(log, ctx);
+              if (cell == null) return null;
+              return (
+                <div key={id} style={def.bodyStyle}>
+                  {cell}
                 </div>
-              )}
-              
-              {/* Module Name */}
-              {visibleColumns.module !== false && log.module && (
-                <div className="text-xs text-blue-600 dark:text-blue-400 font-mono bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 whitespace-nowrap" title={`Module: ${log.module}`}>
-                  {log.module}
-                </div>
-              )}
-              
-              {/* Source File:Line */}
-              {visibleColumns.sourceFile !== false && log.sourceName && (
-                <div className="text-xs text-purple-600 dark:text-purple-400 font-mono bg-purple-50 dark:bg-purple-900/20 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-800 whitespace-nowrap" title={`Source: ${log.sourceName}${log.sourceLine ? ':' + log.sourceLine : ''}`}>
-                  {log.processName && log.processName !== log.process ? replaceProcessIdWithType(log.sourceName, log.module) : log.sourceName}{log.sourceLine ? ':' + log.sourceLine : ''}
-                </div>
-              )}
-
-              {/* Process/Thread info with gap time at the end */}
-              {((visibleColumns.processThread !== false && fileInfo) || (visibleColumns.timeGap !== false && timeGapInfo.hasGap)) && (
-                <div className="flex items-center gap-3 pr-2">
-                  {/* Time Gap Indicator */}
-                  {visibleColumns.timeGap !== false && timeGapInfo.hasGap && (
-                    <div className="text-xs text-orange-600 dark:text-orange-400 font-mono bg-orange-100 dark:bg-orange-900/30 px-1 rounded">
-                      +{timeGapInfo.gapSeconds >= 60
-                        ? `${Math.floor(timeGapInfo.gapSeconds / 60)}m${Math.floor(timeGapInfo.gapSeconds % 60)}s`
-                        : `${Math.floor(timeGapInfo.gapSeconds)}s`
-                      }
-                    </div>
-                  )}
-
-                  {/* Process/Thread info */}
-                  {visibleColumns.processThread !== false && fileInfo && (
-                    <div 
-                      className="text-xs text-gray-400 dark:text-gray-500 font-mono"
-                      dangerouslySetInnerHTML={{ __html: fileInfo.html }}
-                    />
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
+              );
+            });
+          })()}
         </div>
       </div>
     </>
@@ -695,7 +752,7 @@ const LogItem = memo(LogItemComponent);
 
 LogItem.displayName = 'LogItem';
 
-const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogId, filters, onFiltersChange, onSearchMatchUpdate, onHover, pivotLog, onSetPivot, onClearPivot, stickyLogs, onAddStickyLog, highlightLog, visibleColumns = {} }) => {
+const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogId, filters, onFiltersChange, onSearchMatchUpdate, onHover, pivotLog, onSetPivot, onClearPivot, stickyLogs, onAddStickyLog, highlightLog, visibleColumns = {}, columnOrder = DEFAULT_COLUMN_ORDER }) => {
   const virtuosoRef = useRef(null);
   // Refs for each item element to allow focus
   const itemRefs = useRef({});
@@ -704,6 +761,16 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
   const hasMergedSources = useMemo(() => {
     const sourceFiles = new Set(logs.map(log => log.sourceFile).filter(Boolean));
     return sourceFiles.size > 1;
+  }, [logs]);
+
+  // Whether each column has any data across the visible logs. Columns with
+  // no data anywhere are dropped from the header so we don't show empty titles.
+  const columnHasData = useMemo(() => {
+    const out = {};
+    Object.entries(COLUMN_DEFS).forEach(([id, def]) => {
+      out[id] = def.hasData ? def.hasData(logs) : true;
+    });
+    return out;
   }, [logs]);
   
   // Convert stickyLogs to Set for O(1) lookup instead of O(n) array.some()
@@ -1512,56 +1579,17 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
 
       {/* Column Headers - Fixed */}
       <div className="px-3 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
-        <div 
-          style={{ 
-            display: 'grid', 
-            gridTemplateColumns: [
-              visibleColumns.timestamp !== false ? '80px' : '',
-              visibleColumns.lineNumber !== false ? '50px' : '',
-              visibleColumns.logLevel !== false ? '40px' : '',
-              '1fr'
-            ].filter(Boolean).join(' '),
-            gap: '1rem',
-            alignItems: 'start'
-          }}
-        >
-          {visibleColumns.timestamp !== false && (
-            <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 font-mono text-center" title="Timestamp of the log entry">
-              Time
-            </div>
-          )}
-          {visibleColumns.lineNumber !== false && (
-            <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 font-mono text-center" title="Line number in the log file">
-              Line
-            </div>
-          )}
-          {visibleColumns.logLevel !== false && (
-            <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 font-mono text-center" title="Log level (Error, Warning, Info, etc.)">
-              Lvl
-            </div>
-          )}
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-xs font-semibold text-gray-700 dark:text-gray-300" title="Log message content">
-              Message
-            </div>
-            <div className="flex items-center gap-3">
-              {visibleColumns.module !== false && (
-                <div className="text-xs font-semibold text-gray-700 dark:text-gray-300" title="Module or component name">
-                  Module
-                </div>
-              )}
-              {visibleColumns.sourceFile !== false && (
-                <div className="text-xs font-semibold text-gray-700 dark:text-gray-300" title="Source file and line number">
-                  Source File
-                </div>
-              )}
-              {visibleColumns.processThread !== false && (
-                <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 pr-2" title="Process ID and Thread ID">
-                  P:T
-                </div>
-              )}
-            </div>
-          </div>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
+          {columnOrder.map(id => {
+            const def = COLUMN_DEFS[id];
+            if (!def || !def.isVisible(visibleColumns)) return null;
+            if (!columnHasData[id]) return null;
+            return (
+              <div key={id} style={def.headerStyle} className={def.headerClass} title={def.headerTitle || def.label}>
+                {def.label}
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -1613,6 +1641,7 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
                   isExpanded={expandedLogs[log.id] || false}
                   onToggleExpanded={toggleLogExpanded}
                   hasMergedSources={hasMergedSources}
+                  columnOrder={columnOrder}
                 />
               </div>
             );

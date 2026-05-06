@@ -780,17 +780,20 @@ const LogViewerFilters = ({ filters, onFiltersChange, moduleOptions = [], logsCo
               {renderLogLevelFilter()}
               {/* Module Filter */}
               {renderModuleFilter()}
-              {/* Context Lines */}
-              {renderContextLines()}
             </div>
             {/* Clear Filters Button */}
             {renderClearFiltersButton()}
           </div>
         </div>
 
-        {/* Bottom row with stats only */}
-        <div className="flex items-center mt-2">
-          {renderStats()}
+        {/* Bottom row: stats on the left, context lines pinned to the right under Module */}
+        <div className="flex items-center gap-4 mt-2">
+          <div className="flex-1 min-w-0">
+            {renderStats()}
+          </div>
+          {renderContextLines()}
+          {/* Spacer matching the Clear Filters button width so Context aligns under Module */}
+          <div className="w-6" />
         </div>
       </div>
     </div>
