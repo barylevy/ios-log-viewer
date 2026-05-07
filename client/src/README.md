@@ -98,6 +98,7 @@ Grouping logic: `utils/fileGrouping.js` — `groupFilesByPrefix()`, `groupFilesB
 - A **"All Files"** combined-view tab (green) appears automatically when 2+ files are open
 - **Loading spinner** shown while a file is being parsed
 - **"Close All"** button removes every open tab at once
+- Grouped tabs (multi-file groups) display the file count as a `(N)` suffix in the tab title; single-file tabs show only the file name (no count)
 
 ---
 
@@ -105,7 +106,7 @@ Grouping logic: `utils/fileGrouping.js` — `groupFilesByPrefix()`, `groupFilesB
 
 ### Togglable Columns
 
-Managed via the **Column Settings** modal (`ColumnSettings.jsx`). Column state saved to `localStorage` key `logViewerColumns`.
+Column visibility is managed via the **Column Settings** modal (`ColumnSettings.jsx`). Visibility state is saved to `localStorage` key `logViewerColumns`.
 
 | Column ID | Label | Default | Notes |
 |-----------|-------|---------|-------|
@@ -113,10 +114,23 @@ Managed via the **Column Settings** modal (`ColumnSettings.jsx`). Column state s
 | `lineNumber` | Line # | ✅ visible | Original line number in source file |
 | `logLevel` | Level | ✅ visible | Colour-coded label |
 | `message` | Message | always | Cannot be hidden |
-| `module` | Module | ✅ visible | Source module/class name |
-| `sourceFile` | Source file | ✅ visible | For merged views |
+| `module` | Module | ⬜ hidden | Source module/class name |
+| `sourceFile` | Source file | ⬜ hidden | For merged views |
 | `processThread` | P:T | ✅ visible | Process : Thread IDs |
-| `timeGap` | Time Gap | ✅ visible | Seconds gap from previous log |
+| `timeGap` | Time Gap | ⬜ hidden | Seconds gap from previous log |
+
+### Column Reorder & Resize (TanStack Table)
+
+Column state (order, visibility, sizes) is managed via [`@tanstack/react-table`](https://tanstack.com/table) inside `LogListView.jsx`. Rows are still rendered by `react-virtuoso`; TanStack is used purely for column-state management so headers and rows share an identical layout.
+
+- **Drag-and-drop reorder**: grab any column header title and drop it onto another header to reorder. Persisted to `localStorage` key `logViewerColumnOrder`.
+- **Resize**: hover the right edge of any header to reveal a 1 px vertical separator with a 12 px hit area; drag horizontally to resize. Live-updates the body in real time (header + body share the same `columnLayout`). Persisted to `localStorage` key `logViewerColumnSizing`.
+- **Hide empty headers**: if a column is enabled but no row in the current view has data for it (e.g. no `module` parsed), its header label is hidden so the column appears empty rather than mislabelled.
+- **Reset to Default** (Column Settings modal): clears `logViewerColumnOrder` + `logViewerColumnSizing`, restores the default visibility set, and forces `LogListView` to remount via a bumped `columnResetKey` so all column state is freshly initialised.
+
+Column alignment:
+- **Headers**: all centred.
+- **Body**: `timestamp`, `lineNumber`, `logLevel`, `timeGap`, `processThread` are centred; `message`, `module`, `sourceFile` are left-aligned. `module` and `sourceFile` render as plain neutral-gray text (no chip / border background).
 
 ### Log Level Colours
 
@@ -408,6 +422,9 @@ Each browser tab has its own unique session key (stored in `sessionStorage`, uni
 | Per-file filters | localStorage (`logViewerFilters`) |
 | Sticky logs per file | localStorage (`logViewerStickyLogs`) |
 | Column visibility | localStorage (`logViewerColumns`) |
+| Column order | localStorage (`logViewerColumnOrder`) |
+| Column widths | localStorage (`logViewerColumnSizing`) |
+| Scroll position (per tab) | localStorage (`logViewerScrollPosition:<viewKey>`) |
 | Pivot log | localStorage (`logViewer_pivotLog`) |
 | Filter/search mode | localStorage (`logViewer_filterMode/searchMode`) |
 | Filter/search history | localStorage (`logViewer_filterHistory/searchHistory`) |
@@ -520,6 +537,14 @@ Key state:
 ### Virtual Rendering
 
 `react-virtuoso` renders only visible rows — handles 100 000+ lines smoothly.
+
+### Scroll position (per tab)
+
+The scroll position of the log list is saved per active view, not globally. `LogViewer.jsx` passes a `viewKey` prop to `LogListView` (`'combined'` for the All-Files tab, or `file:<filename>` per file tab); `LogListView` reads/writes `localStorage.logViewerScrollPosition:<viewKey>` and resets its internal restore-once guard whenever `viewKey` changes, so each tab keeps and restores its own scroll position when switched back to. On view change the list always repositions (defaulting to index 0 if no saved position) so Virtuoso never retains a stale pixel offset from a previous tab.
+
+### Column state via TanStack Table
+
+`LogListView` builds a `useReactTable` instance fed an empty `data` array and uses it only to manage column order / visibility / sizing state. The actual rows are rendered by `react-virtuoso`, but each row consumes a memoised `columnLayout` derived from the table headers, so the body always matches the header widths and order — including live updates while a column is being resized.
 
 ### Combined View
 
