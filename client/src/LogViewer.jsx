@@ -96,6 +96,22 @@ const LogViewer = () => {
     setColumnVersion(prev => prev + 1);
   }, []);
 
+  // Bumped only when the user clicks "Reset to Default" so the log list
+  // remounts and re-initialises column-sizing state from (now empty) storage.
+  const [columnResetKey, setColumnResetKey] = useState(0);
+
+  // Reset column order and per-column widths to defaults. Visibility is reset
+  // by ColumnSettings itself (it owns the temp checkbox state).
+  const handleResetColumnDefaults = useCallback(() => {
+    setRightColumnOrder(DEFAULT_COLUMN_ORDER.slice());
+    try {
+      localStorage.removeItem('logViewerColumnOrder');
+      localStorage.removeItem('logViewerColumnSizing');
+    } catch { /* ignore */ }
+    setColumnResetKey(prev => prev + 1);
+    setColumnVersion(prev => prev + 1);
+  }, []);
+
   // Update lastHoveredLog whenever hoveredLog changes to a non-null value
   useEffect(() => {
     if (hoveredLog) {
@@ -829,6 +845,7 @@ const LogViewer = () => {
     // Only render the list; filters toolbar is rendered above
     return (
       <LogListView
+        key={columnResetKey}
         logs={filteredLogs}
         allLogs={logs}
         onLogClick={handleLogClick}
@@ -849,9 +866,10 @@ const LogViewer = () => {
         highlightLog={highlightLog}
         visibleColumns={visibleColumns}
         columnOrder={rightColumnOrder}
+        onColumnOrderChange={handleRightColumnOrderChange}
       />
     );
-  }, [hasUserInteracted, files.length, filteredLogs, handleLogClick, highlightedLogId, filters, pivotLog, setPivotTime, clearPivotTime, stickyLogs, addStickyLog, highlightLog, setSearchPos, setSearchTotal, updateFilters, setHoveredLog, visibleColumns, columnVersion, rightColumnOrder]);
+  }, [hasUserInteracted, files.length, filteredLogs, handleLogClick, highlightedLogId, filters, pivotLog, setPivotTime, clearPivotTime, stickyLogs, addStickyLog, highlightLog, setSearchPos, setSearchTotal, updateFilters, setHoveredLog, visibleColumns, columnVersion, rightColumnOrder, handleRightColumnOrderChange, columnResetKey]);
 
   // Remove old currentFileHeaders logic - now using headerState
 
@@ -869,8 +887,7 @@ const LogViewer = () => {
         currentFileHeaders={headerState}
         visibleColumns={visibleColumns}
         onColumnsChange={handleColumnsChange}
-        rightColumnOrder={rightColumnOrder}
-        onRightColumnOrderChange={handleRightColumnOrderChange}
+        onResetColumnDefaults={handleResetColumnDefaults}
         logDuration={logDuration}
         folderName={currentFolderName}
       />

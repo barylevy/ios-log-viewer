@@ -6,7 +6,7 @@ import { clearSession } from './utils/sessionStorage';
 import { groupFilesByPrefix, groupFilesByDirectory, groupFilesByDirectoryAndFormat, getGroupDisplayName, naturalSort } from './utils/fileGrouping';
 import { isArchiveFile, expandArchivesInList } from './utils/archiveExtractor';
 
-const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs, visibleColumns, onColumnsChange, rightColumnOrder, onRightColumnOrderChange, logDuration, folderName }) => {
+const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs, visibleColumns, onColumnsChange, onResetColumnDefaults, rightColumnOrder, onRightColumnOrderChange, logDuration, folderName }) => {
   const fileInputRef = useRef(null);
   const directoryInputRef = useRef(null);
   const [showFileDropdown, setShowFileDropdown] = useState(false);
@@ -368,8 +368,7 @@ const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs,
         onClose={() => setShowColumnSettings(false)}
         visibleColumns={visibleColumns}
         onColumnsChange={onColumnsChange}
-        rightColumnOrder={rightColumnOrder}
-        onRightColumnOrderChange={onRightColumnOrderChange}
+        onResetDefaults={onResetColumnDefaults}
       />
     </header>
   );

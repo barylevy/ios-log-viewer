@@ -1,5 +1,9 @@
 import React, { memo, useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import { Virtuoso } from 'react-virtuoso';
+import {
+  useReactTable,
+  getCoreRowModel,
+} from '@tanstack/react-table';
 import { LOG_LEVEL_MATRIX, CATO_COLORS } from './constants';
 import {
   extractTimeGapFromSearch,
@@ -19,8 +23,8 @@ const COLUMN_DEFS = {
     label: 'Time',
     headerTitle: 'Timestamp of the log entry',
     isVisible: (vc) => vc.timestamp !== false,
-    headerStyle: { flex: '0 0 80px' },
-    bodyStyle: { flex: '0 0 80px' },
+    size: 90,
+    minSize: 60,
     headerClass: 'text-xs font-semibold text-gray-700 dark:text-gray-300 font-mono text-center',
     renderBody: (log, ctx) => (
       <div className={`text-xs font-mono text-center ${ctx.hasSticky ? 'underline decoration-solid decoration-1' : ''} ${log.isContinuation
@@ -38,8 +42,8 @@ const COLUMN_DEFS = {
     label: 'Line',
     headerTitle: 'Line number in the log file',
     isVisible: (vc) => vc.lineNumber !== false,
-    headerStyle: { flex: '0 0 50px' },
-    bodyStyle: { flex: '0 0 50px' },
+    size: 60,
+    minSize: 40,
     headerClass: 'text-xs font-semibold text-gray-700 dark:text-gray-300 font-mono text-center',
     renderBody: (log) => (
       <div className="text-xs text-gray-400 dark:text-gray-500 font-mono text-center">
@@ -51,8 +55,8 @@ const COLUMN_DEFS = {
     label: 'Lvl',
     headerTitle: 'Log level (Error, Warning, Info, etc.)',
     isVisible: (vc) => vc.logLevel !== false,
-    headerStyle: { flex: '0 0 40px' },
-    bodyStyle: { flex: '0 0 40px' },
+    size: 50,
+    minSize: 30,
     headerClass: 'text-xs font-semibold text-gray-700 dark:text-gray-300 font-mono text-center',
     renderBody: (log, ctx) => (
       <div className={`text-xs font-semibold uppercase text-center ${log.isContinuation ? 'text-gray-300 dark:text-gray-600' : ctx.logLevelColor}`}>
@@ -64,9 +68,11 @@ const COLUMN_DEFS = {
     label: 'Message',
     headerTitle: 'Log message content',
     isVisible: () => true, // always visible
-    headerStyle: { flex: '1 1 0%', minWidth: 0 },
-    bodyStyle: { flex: '1 1 0%', minWidth: 0 },
-    headerClass: 'text-xs font-semibold text-gray-700 dark:text-gray-300',
+    size: 600,
+    minSize: 200,
+    isFlex: true, // grows to fill remaining space
+    enableResizing: false,
+    headerClass: 'text-xs font-semibold text-gray-700 dark:text-gray-300 text-center',
     renderBody: (log, ctx) => (
       <div className="flex-1 min-w-0">
         <div
@@ -104,9 +110,11 @@ const COLUMN_DEFS = {
     headerTitle: 'Module or component name',
     isVisible: (vc) => vc.module !== false,
     hasData: (logs) => logs.some(l => l.module),
-    headerClass: 'text-xs font-semibold text-gray-700 dark:text-gray-300',
+    size: 140,
+    minSize: 60,
+    headerClass: 'text-xs font-semibold text-gray-700 dark:text-gray-300 text-center',
     renderBody: (log) => (log.module ? (
-      <div className="text-xs text-blue-600 dark:text-blue-400 font-mono bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 whitespace-nowrap" title={`Module: ${log.module}`}>
+      <div className="text-xs text-gray-800 dark:text-gray-200 font-mono whitespace-nowrap" title={`Module: ${log.module}`}>
         {log.module}
       </div>
     ) : null),
@@ -116,19 +124,21 @@ const COLUMN_DEFS = {
     headerTitle: 'Source file and line number',
     isVisible: (vc) => vc.sourceFile !== false,
     hasData: (logs) => logs.some(l => l.sourceFile || l.sourceName),
-    headerClass: 'text-xs font-semibold text-gray-700 dark:text-gray-300',
+    size: 220,
+    minSize: 80,
+    headerClass: 'text-xs font-semibold text-gray-700 dark:text-gray-300 text-center',
     renderBody: (log, ctx) => {
       const items = [];
       if (ctx.hasMergedSources && log.sourceFile) {
         items.push(
-          <div key="sf-merged" className="text-xs text-teal-600 dark:text-teal-400 font-mono bg-teal-50 dark:bg-teal-900/20 px-2 py-0.5 rounded border border-teal-200 dark:border-teal-800 whitespace-nowrap" title={`Original File: ${log.sourceFile}`}>
-            📄 {log.sourceFile.length > 25 ? '...' + log.sourceFile.slice(-25) : log.sourceFile}
+          <div key="sf-merged" className="text-xs text-gray-800 dark:text-gray-200 font-mono whitespace-nowrap" title={`Original File: ${log.sourceFile}`}>
+            {log.sourceFile.length > 25 ? '...' + log.sourceFile.slice(-25) : log.sourceFile}
           </div>
         );
       }
       if (log.sourceName) {
         items.push(
-          <div key="sf-name" className="text-xs text-purple-600 dark:text-purple-400 font-mono bg-purple-50 dark:bg-purple-900/20 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-800 whitespace-nowrap" title={`Source: ${log.sourceName}${log.sourceLine ? ':' + log.sourceLine : ''}`}>
+          <div key="sf-name" className="text-xs text-gray-800 dark:text-gray-200 font-mono whitespace-nowrap" title={`Source: ${log.sourceName}${log.sourceLine ? ':' + log.sourceLine : ''}`}>
             {log.processName && log.processName !== log.process ? replaceProcessIdWithType(log.sourceName, log.module) : log.sourceName}{log.sourceLine ? ':' + log.sourceLine : ''}
           </div>
         );
@@ -142,9 +152,11 @@ const COLUMN_DEFS = {
     headerTitle: 'Time gap from previous log',
     isVisible: (vc) => vc.timeGap !== false,
     hasData: (logs) => logs.some(l => l.timestamp),
-    headerClass: 'text-xs font-semibold text-gray-700 dark:text-gray-300',
+    size: 80,
+    minSize: 50,
+    headerClass: 'text-xs font-semibold text-gray-700 dark:text-gray-300 text-center',
     renderBody: (log, ctx) => (ctx.timeGapInfo && ctx.timeGapInfo.hasGap ? (
-      <div className="text-xs text-orange-600 dark:text-orange-400 font-mono bg-orange-100 dark:bg-orange-900/30 px-1 rounded">
+      <div className="text-xs text-orange-600 dark:text-orange-400 font-mono bg-orange-100 dark:bg-orange-900/30 px-1 rounded text-center">
         +{ctx.timeGapInfo.gapSeconds >= 60
           ? `${Math.floor(ctx.timeGapInfo.gapSeconds / 60)}m${Math.floor(ctx.timeGapInfo.gapSeconds % 60)}s`
           : `${Math.floor(ctx.timeGapInfo.gapSeconds)}s`}
@@ -156,9 +168,11 @@ const COLUMN_DEFS = {
     headerTitle: 'Process ID and Thread ID',
     isVisible: (vc) => vc.processThread !== false,
     hasData: (logs) => logs.some(l => l.process || l.thread),
-    headerClass: 'text-xs font-semibold text-gray-700 dark:text-gray-300 pr-2',
+    size: 120,
+    minSize: 40,
+    headerClass: 'text-xs font-semibold text-gray-700 dark:text-gray-300 text-center pr-2',
     renderBody: (log, ctx) => (ctx.fileInfo ? (
-      <div className="text-xs text-gray-400 dark:text-gray-500 font-mono pr-2" dangerouslySetInnerHTML={{ __html: ctx.fileInfo.html }} />
+      <div className="text-xs text-gray-400 dark:text-gray-500 font-mono pr-2 text-center" dangerouslySetInnerHTML={{ __html: ctx.fileInfo.html }} />
     ) : null),
   },
 };
@@ -167,6 +181,13 @@ export const DEFAULT_COLUMN_ORDER = [
   'timestamp', 'lineNumber', 'logLevel', 'message',
   'module', 'sourceFile', 'timeGap', 'processThread',
 ];
+
+// Stable empty array reference for the TanStack table — it's only used for
+// column state management, not row data (rows are rendered via Virtuoso).
+const EMPTY_DATA = [];
+
+// Minimum horizontal space between adjacent columns (header and body share this).
+const COLUMN_GAP = '1rem';
 
 // Custom hook to track dark mode with better performance
 const useDarkMode = () => {
@@ -444,7 +465,7 @@ const cleanAndCombineFilters = (currentFilter, newFilterType, newFilterValue) =>
 };
 
 // Component definition
-const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, index, onFiltersChange, previousLog, contextMenu, setContextMenu, onHover, pivotLog, stickyLogsSet, visibleColumns = {}, isExpanded, onToggleExpanded, hasMergedSources = false, columnOrder = DEFAULT_COLUMN_ORDER }) => {
+const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, index, onFiltersChange, previousLog, contextMenu, setContextMenu, onHover, pivotLog, stickyLogsSet, isExpanded, onToggleExpanded, hasMergedSources = false, columnLayout = [] }) => {
   // Ref to measure content height
   const contentRef = useRef(null);
 
@@ -722,20 +743,22 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
         onClick={() => onClick({ ...log, lineIndex: index + 1 })}
         onContextMenu={handleContextMenu}
       >
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start' }}>
           {(() => {
             const ctx = {
               hasSticky, timeInfo, timeGapInfo, logLevel, logLevelColor,
               hasMergedSources, fileInfo, contentRef, isExpanded,
               onToggleExpanded, needsExpand, highlightedMessage,
             };
-            return columnOrder.map(id => {
-              const def = COLUMN_DEFS[id];
-              if (!def || !def.isVisible(visibleColumns)) return null;
+            return columnLayout.map(col => {
+              const def = COLUMN_DEFS[col.id];
+              if (!def) return null;
               const cell = def.renderBody(log, ctx);
-              if (cell == null) return null;
+              const style = col.isFlex
+                ? { flex: '1 1 0%', minWidth: 0, paddingRight: COLUMN_GAP }
+                : { width: col.size, flex: '0 0 auto', paddingRight: COLUMN_GAP };
               return (
-                <div key={id} style={def.bodyStyle}>
+                <div key={col.id} style={style}>
                   {cell}
                 </div>
               );
@@ -752,7 +775,7 @@ const LogItem = memo(LogItemComponent);
 
 LogItem.displayName = 'LogItem';
 
-const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogId, filters, onFiltersChange, onSearchMatchUpdate, onHover, pivotLog, onSetPivot, onClearPivot, stickyLogs, onAddStickyLog, highlightLog, visibleColumns = {}, columnOrder = DEFAULT_COLUMN_ORDER }) => {
+const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogId, filters, onFiltersChange, onSearchMatchUpdate, onHover, pivotLog, onSetPivot, onClearPivot, stickyLogs, onAddStickyLog, highlightLog, visibleColumns = {}, columnOrder = DEFAULT_COLUMN_ORDER, onColumnOrderChange }) => {
   const virtuosoRef = useRef(null);
   // Refs for each item element to allow focus
   const itemRefs = useRef({});
@@ -772,6 +795,108 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
     });
     return out;
   }, [logs]);
+
+  // TanStack Table — used purely for column state management (order, visibility, sizing).
+  // Rows are still rendered manually via Virtuoso, so we feed `data: []`.
+  const tableColumns = useMemo(() => Object.keys(COLUMN_DEFS).map(id => ({
+    id,
+    header: COLUMN_DEFS[id].label,
+    accessorKey: id,
+    size: COLUMN_DEFS[id].size,
+    minSize: COLUMN_DEFS[id].minSize,
+    maxSize: 1000,
+    enableResizing: COLUMN_DEFS[id].enableResizing !== false,
+    enableHiding: id !== 'message',
+  })), []);
+
+  const columnVisibilityState = useMemo(() => {
+    const out = {};
+    Object.keys(COLUMN_DEFS).forEach(id => {
+      const def = COLUMN_DEFS[id];
+      out[id] = def.isVisible(visibleColumns) && (columnHasData[id] !== false);
+    });
+    return out;
+  }, [visibleColumns, columnHasData]);
+
+  // Column sizing — owned and persisted entirely inside this component to
+  // avoid stale-closure / re-mount churn during a fast resize drag.
+  const [columnSizing, setColumnSizing] = useState(() => {
+    try {
+      const saved = localStorage.getItem('logViewerColumnSizing');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch { /* ignore */ }
+    return {};
+  });
+
+  const table = useReactTable({
+    data: EMPTY_DATA,
+    columns: tableColumns,
+    state: {
+      columnOrder,
+      columnVisibility: columnVisibilityState,
+      columnSizing,
+    },
+    onColumnSizingChange: (updater) => {
+      setColumnSizing(prev => {
+        const next = typeof updater === 'function' ? updater(prev) : updater;
+        try { localStorage.setItem('logViewerColumnSizing', JSON.stringify(next)); } catch { /* ignore */ }
+        return next;
+      });
+    },
+    onColumnOrderChange: (updater) => {
+      if (!onColumnOrderChange) return;
+      const next = typeof updater === 'function' ? updater(columnOrder) : updater;
+      onColumnOrderChange(next);
+    },
+    columnResizeMode: 'onChange',
+    getCoreRowModel: getCoreRowModel(),
+  });
+
+  const headers = table.getHeaderGroups()[0].headers;
+
+  // Layout used by both header and body cells — guarantees identical widths.
+  // Depend on `columnSizing` (and not just `headers`) because TanStack reuses
+  // the same headers array reference even when column sizes change, which
+  // would otherwise leave this memo stale during a resize drag.
+  const columnLayout = useMemo(() => headers.map(h => ({
+    id: h.column.id,
+    size: h.getSize(),
+    isFlex: COLUMN_DEFS[h.column.id]?.isFlex === true,
+  })), [headers, columnSizing]);
+
+  // Drag-and-drop reorder for column headers.
+  const draggingColIdRef = useRef(null);
+  const [dragOverColId, setDragOverColId] = useState(null);
+  const handleHeaderDragStart = (id) => (e) => {
+    draggingColIdRef.current = id;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+  };
+  const handleHeaderDragOver = (id) => (e) => {
+    if (!draggingColIdRef.current) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (id !== dragOverColId) setDragOverColId(id);
+  };
+  const handleHeaderDrop = (targetId) => (e) => {
+    e.preventDefault();
+    const dragId = draggingColIdRef.current;
+    draggingColIdRef.current = null;
+    setDragOverColId(null);
+    if (!dragId || dragId === targetId || !onColumnOrderChange) return;
+    const next = columnOrder.filter(id => id !== dragId);
+    const idx = next.indexOf(targetId);
+    if (idx === -1) return;
+    next.splice(idx, 0, dragId);
+    onColumnOrderChange(next);
+  };
+  const handleHeaderDragEnd = () => {
+    draggingColIdRef.current = null;
+    setDragOverColId(null);
+  };
   
   // Convert stickyLogs to Set for O(1) lookup instead of O(n) array.some()
   // Include both direct IDs and composite keys (baseId + sourceFile) for cross-tab matching
@@ -1579,14 +1704,54 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
 
       {/* Column Headers - Fixed */}
       <div className="px-3 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
-          {columnOrder.map(id => {
+        <div style={{ display: 'flex', alignItems: 'stretch' }}>
+          {headers.map(header => {
+            const id = header.column.id;
             const def = COLUMN_DEFS[id];
-            if (!def || !def.isVisible(visibleColumns)) return null;
-            if (!columnHasData[id]) return null;
+            if (!def) return null;
+            const isFlex = def.isFlex === true;
+            const isDragging = draggingColIdRef.current === id;
+            const isDragOver = dragOverColId === id && draggingColIdRef.current && draggingColIdRef.current !== id;
+            const wrapperStyle = isFlex
+              ? { flex: '1 1 0%', minWidth: 0, position: 'relative', paddingRight: COLUMN_GAP }
+              : { width: header.getSize(), flex: '0 0 auto', position: 'relative', paddingRight: COLUMN_GAP };
             return (
-              <div key={id} style={def.headerStyle} className={def.headerClass} title={def.headerTitle || def.label}>
-                {def.label}
+              <div
+                key={id}
+                style={wrapperStyle}
+                className={`select-none ${isDragOver ? 'ring-2 ring-blue-400 dark:ring-blue-500 rounded' : ''}`}
+              >
+                <div
+                  draggable
+                  onDragStart={handleHeaderDragStart(id)}
+                  onDragOver={handleHeaderDragOver(id)}
+                  onDrop={handleHeaderDrop(id)}
+                  onDragEnd={handleHeaderDragEnd}
+                  className={`${def.headerClass} cursor-grab active:cursor-grabbing ${isDragging ? 'opacity-50' : ''}`}
+                  title={def.headerTitle || def.label}
+                >
+                  {def.label}
+                </div>
+                {def.enableResizing !== false && (
+                  <div
+                    onMouseDown={header.getResizeHandler()}
+                    onTouchStart={header.getResizeHandler()}
+                    onClick={(e) => e.stopPropagation()}
+                    onDragStart={(e) => e.preventDefault()}
+                    draggable={false}
+                    title="Drag to resize column"
+                    aria-label="Resize column"
+                    role="separator"
+                    aria-orientation="vertical"
+                    className={`absolute top-0 h-full w-3 cursor-col-resize select-none touch-none z-20 flex items-center justify-center group ${header.column.getIsResizing() ? 'bg-blue-500/10' : 'hover:bg-blue-400/10 dark:hover:bg-blue-500/20'}`}
+                    style={{ userSelect: 'none', right: 0 }}
+                  >
+                    {/* Vertical separator line with grip dots */}
+                    <div
+                      className={`w-px h-3/5 transition-colors ${header.column.getIsResizing() ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600 group-hover:bg-blue-400 dark:group-hover:bg-blue-500'}`}
+                    />
+                  </div>
+                )}
               </div>
             );
           })}
@@ -1637,11 +1802,10 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
                   onHover={handleHover}
                   pivotLog={pivotLog}
                   stickyLogsSet={stickyLogsSet}
-                  visibleColumns={visibleColumns}
                   isExpanded={expandedLogs[log.id] || false}
                   onToggleExpanded={toggleLogExpanded}
                   hasMergedSources={hasMergedSources}
-                  columnOrder={columnOrder}
+                  columnLayout={columnLayout}
                 />
               </div>
             );
