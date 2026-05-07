@@ -6,6 +6,7 @@ import LogViewerFilters from './LogViewerFilters';
 import LogTabs from './LogTabs';
 import useLogsModel from './useLogsModel';
 import { getFileIdentifier } from './utils/fileLoader';
+import { getFileDisplayName } from './utils/fileLoader';
 import { saveSession, loadSession, clearSession } from './utils/sessionStorage';
 import { groupFilesByPrefix, groupFilesByDirectory, groupFilesByDirectoryAndFormat, naturalSort, hasValidLogExtension } from './utils/fileGrouping';
 import { isArchiveFile, expandArchivesInList } from './utils/archiveExtractor';
@@ -26,6 +27,7 @@ const LogViewer = () => {
     loadLogs,
     requestFileLoad,
     isFileLoading,
+    isAnyFileLoading,
     setSelectedLog,
     updateFilters,
     highlightLog,
@@ -219,6 +221,12 @@ const LogViewer = () => {
   const [headerState, setHeaderState] = useState(null);
   const [logDuration, setLogDuration] = useState(null);
   const [notification, setNotification] = useState(null);
+  // Counter of in-flight "prepare files" operations (archive expand, grouping,
+  // dispatching loads). The loading overlay stays visible while > 0 OR while
+  // any single file is still being parsed by the model.
+  const [prepareFilesCount, setPrepareFilesCount] = useState(0);
+  const beginPreparingFiles = useCallback(() => setPrepareFilesCount(c => c + 1), []);
+  const endPreparingFiles = useCallback(() => setPrepareFilesCount(c => Math.max(0, c - 1)), []);
 
   // Compute number of search matches
   const searchMatchCount = useMemo(() => {
@@ -513,6 +521,30 @@ const LogViewer = () => {
     }
   }, [files, allFileLogs, requestFileLoad, switchToFile]);
 
+  // After all files finish loading + sorting, auto-select the first tab
+  // (alphabetically by display title — same order as the sorted tab strip).
+  const wasLoadingRef = React.useRef(false);
+  useEffect(() => {
+    const isLoading = isAnyFileLoading || prepareFilesCount > 0;
+    if (wasLoadingRef.current && !isLoading) {
+      // Just transitioned from loading → idle. Pick the first sorted tab.
+      if (files.length > 0 && !showingCombinedView && !isRestoringSession) {
+        const sorted = files
+          .map((file, originalIndex) => ({
+            originalIndex,
+            label: getFileDisplayName(file.id),
+          }))
+          .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base', numeric: true }));
+
+        const firstIndex = sorted[0].originalIndex;
+        if (firstIndex !== activeFileIndex) {
+          handleFileSelect(firstIndex);
+        }
+      }
+    }
+    wasLoadingRef.current = isLoading;
+  }, [isAnyFileLoading, prepareFilesCount, files, showingCombinedView, isRestoringSession, activeFileIndex, handleFileSelect]);
+
   const handleFileClose = useCallback((index) => {
     const fileToClose = files[index];
 
@@ -747,34 +779,39 @@ const LogViewer = () => {
     const droppedFiles = Array.from(e.dataTransfer.files);
     if (!droppedFiles.length) return;
 
-    // Expand any dropped .zip / .tar.xz archives in place.
-    const hasArchive = droppedFiles.some(isArchiveFile);
-    let allFiles;
+    beginPreparingFiles();
     try {
-      allFiles = hasArchive ? await expandArchivesInList(droppedFiles) : droppedFiles;
-    } catch (err) {
-      alert(`Failed to extract archive: ${err.message || err}`);
-      return;
+      // Expand any dropped .zip / .tar.xz archives in place.
+      const hasArchive = droppedFiles.some(isArchiveFile);
+      let allFiles;
+      try {
+        allFiles = hasArchive ? await expandArchivesInList(droppedFiles) : droppedFiles;
+      } catch (err) {
+        alert(`Failed to extract archive: ${err.message || err}`);
+        return;
+      }
+
+      const textFiles = allFiles.filter(hasValidLogExtension);
+
+      // Sort files by name before grouping (natural sort for numbered files)
+      const sortedTextFiles = textFiles.sort((a, b) => naturalSort(a.name, b.name));
+
+      // Group files by subdirectory + prefix, then split by detected log format
+      // so only files sharing the same pattern end up in the same tab.
+      const groupedFiles = await groupFilesByDirectoryAndFormat(sortedTextFiles);
+
+      // If an archive was dropped, treat it like a folder load (clear tabs first).
+      if (hasArchive) handleClearTabs();
+
+      // Load each group
+      groupedFiles.forEach((filesInGroup, groupKey) => {
+        // Load as merged group with the groupKey as identifier
+        handleFileLoad(filesInGroup, false, groupKey);
+      });
+    } finally {
+      endPreparingFiles();
     }
-
-    const textFiles = allFiles.filter(hasValidLogExtension);
-
-    // Sort files by name before grouping (natural sort for numbered files)
-    const sortedTextFiles = textFiles.sort((a, b) => naturalSort(a.name, b.name));
-
-    // Group files by subdirectory + prefix, then split by detected log format
-    // so only files sharing the same pattern end up in the same tab.
-    const groupedFiles = await groupFilesByDirectoryAndFormat(sortedTextFiles);
-
-    // If an archive was dropped, treat it like a folder load (clear tabs first).
-    if (hasArchive) handleClearTabs();
-
-    // Load each group
-    groupedFiles.forEach((filesInGroup, groupKey) => {
-      // Load as merged group with the groupKey as identifier
-      handleFileLoad(filesInGroup, false, groupKey);
-    });
-  }, [handleFileLoad, handleClearTabs]);
+  }, [handleFileLoad, handleClearTabs, beginPreparingFiles, endPreparingFiles]);
 
 
   // Toggle log selection - if same log is clicked, close it; if different log, open it
@@ -885,6 +922,8 @@ const LogViewer = () => {
       <LogViewerHeader
         onClearTabs={handleClearTabs}
         onFileLoad={handleFileLoad}
+        onPrepareFilesStart={beginPreparingFiles}
+        onPrepareFilesEnd={endPreparingFiles}
         hasLogs={files.length > 0}
         currentFileHeaders={headerState}
         visibleColumns={visibleColumns}
@@ -954,6 +993,21 @@ const LogViewer = () => {
           hasNext={hasNextLog}
           hasPrev={hasPrevLog}
         />
+      )}
+
+      {/* Loading overlay shown while any file is being parsed or prepared */}
+      {(isAnyFileLoading || prepareFilesCount > 0) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/60">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl px-6 py-5 flex items-center gap-3 border border-gray-200 dark:border-gray-700">
+            <svg className="animate-spin h-6 w-6 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+            </svg>
+            <div className="text-sm text-gray-800 dark:text-gray-100">
+              Loading log files…
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Sticky Log Notification */}

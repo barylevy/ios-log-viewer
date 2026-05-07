@@ -484,6 +484,12 @@ const useLogsModel = () => {
     return !!fileLoadingState[fileId];
   }, [fileLoadingState]);
 
+  // True while any file is currently being loaded
+  const isAnyFileLoading = useMemo(
+    () => Object.values(fileLoadingState).some(Boolean),
+    [fileLoadingState]
+  );
+
   // Pre-compile search terms and regexes for performance
   // Parse row range filter or date range filter if present
   const searchData = useMemo(() => {
@@ -1036,6 +1042,7 @@ const useLogsModel = () => {
     loadLogs,
     requestFileLoad,
     isFileLoading,
+    isAnyFileLoading,
     setSelectedLog,
     updateFilters,
     highlightLog,

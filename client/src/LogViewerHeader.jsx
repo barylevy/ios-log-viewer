@@ -6,7 +6,7 @@ import { clearSession } from './utils/sessionStorage';
 import { groupFilesByPrefix, groupFilesByDirectory, groupFilesByDirectoryAndFormat, getGroupDisplayName, naturalSort } from './utils/fileGrouping';
 import { isArchiveFile, expandArchivesInList } from './utils/archiveExtractor';
 
-const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs, visibleColumns, onColumnsChange, onResetColumnDefaults, rightColumnOrder, onRightColumnOrderChange, logDuration, folderName }) => {
+const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs, visibleColumns, onColumnsChange, onResetColumnDefaults, rightColumnOrder, onRightColumnOrderChange, logDuration, folderName, onPrepareFilesStart, onPrepareFilesEnd }) => {
   const fileInputRef = useRef(null);
   const directoryInputRef = useRef(null);
   const [showFileDropdown, setShowFileDropdown] = useState(false);
@@ -59,39 +59,44 @@ const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs,
     event.target.value = '';
     if (!picked.length) return;
 
-    const hasArchive = picked.some(isArchiveFile);
-
-    let files;
+    onPrepareFilesStart && onPrepareFilesStart();
     try {
-      files = hasArchive ? await expandArchivesInList(picked) : picked;
-    } catch (err) {
-      alert(`Failed to extract archive: ${err.message || err}`);
-      return;
-    }
+      const hasArchive = picked.some(isArchiveFile);
 
-    // If the picked input contained an archive, treat it like a folder load:
-    // clear current tabs and use the directory+format grouper so each
-    // subdirectory becomes its own tab.
-    if (hasArchive) {
-      if (onClearTabs) onClearTabs();
-      const fileGroups = await groupFilesByDirectoryAndFormat(files);
-      fileGroups.forEach((groupFiles, groupKey) => {
-        onFileLoad(groupFiles, false, groupKey);
+      let files;
+      try {
+        files = hasArchive ? await expandArchivesInList(picked) : picked;
+      } catch (err) {
+        alert(`Failed to extract archive: ${err.message || err}`);
+        return;
+      }
+
+      // If the picked input contained an archive, treat it like a folder load:
+      // clear current tabs and use the directory+format grouper so each
+      // subdirectory becomes its own tab.
+      if (hasArchive) {
+        if (onClearTabs) onClearTabs();
+        const fileGroups = await groupFilesByDirectoryAndFormat(files);
+        fileGroups.forEach((groupFiles, groupKey) => {
+          onFileLoad(groupFiles, false, groupKey);
+        });
+        return;
+      }
+
+      // Otherwise: standard "individual files" flow — group by name prefix.
+      const sortedFiles = files.sort((a, b) => naturalSort(a.name, b.name));
+      const fileGroups = groupFilesByPrefix(sortedFiles);
+      fileGroups.forEach((groupFiles, prefix) => {
+        onFileLoad(groupFiles, false, prefix);
       });
-      return;
+    } finally {
+      onPrepareFilesEnd && onPrepareFilesEnd();
     }
-
-    // Otherwise: standard "individual files" flow — group by name prefix.
-    const sortedFiles = files.sort((a, b) => naturalSort(a.name, b.name));
-    const fileGroups = groupFilesByPrefix(sortedFiles);
-    fileGroups.forEach((groupFiles, prefix) => {
-      onFileLoad(groupFiles, false, prefix);
-    });
   };
 
   const handleDirectorySelected = async (event) => {
     const allFiles = Array.from(event.target.files);
-    
+
     // Filter out files that should not be loaded
     const EXCLUDED_FILES = [
       'systemextensionsctl_list.txt',
@@ -103,25 +108,30 @@ const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs,
       'ifconfig.txt',
       'launchctl_list.txt'
     ];
-    
+
     const files = allFiles.filter(file => !EXCLUDED_FILES.includes(file.name));
 
-    // Clear previous files when loading new directory
-    if (onClearTabs) {
-      onClearTabs();
+    onPrepareFilesStart && onPrepareFilesStart();
+    try {
+      // Clear previous files when loading new directory
+      if (onClearTabs) {
+        onClearTabs();
+      }
+
+      // Group by subdirectory + prefix, then split each multi-file group by
+      // detected log pattern so only files sharing a format share a tab.
+      const fileGroups = await groupFilesByDirectoryAndFormat(files);
+
+      // Load all groups (even single-file groups)
+      fileGroups.forEach((groupFiles, groupKey) => {
+        // Use the groupKey as-is (includes directory path if present)
+        // This ensures unique identification even if same prefix exists in different folders
+        onFileLoad(groupFiles, false, groupKey);
+      });
+    } finally {
+      onPrepareFilesEnd && onPrepareFilesEnd();
     }
 
-    // Group by subdirectory + prefix, then split each multi-file group by
-    // detected log pattern so only files sharing a format share a tab.
-    const fileGroups = await groupFilesByDirectoryAndFormat(files);
-
-    // Load all groups (even single-file groups)
-    fileGroups.forEach((groupFiles, groupKey) => {
-      // Use the groupKey as-is (includes directory path if present)
-      // This ensures unique identification even if same prefix exists in different folders
-      onFileLoad(groupFiles, false, groupKey);
-    });
-    
     event.target.value = '';
   };
 

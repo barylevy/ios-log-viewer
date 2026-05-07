@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { getFileDisplayName, getFileFullName } from './useLogsModel';
 
 const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCombinedView, onCombinedViewSelect, allFileLogs = {}, isFileLoading, onCloseAll, onExportActive }) => {
@@ -17,24 +17,37 @@ const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCom
         </button>
     );
 
+    // Render tabs sorted alphabetically by display title (case-insensitive),
+    // while preserving the original index so click/close handlers still
+    // address the correct entry in `files`.
+    const sortedTabs = useMemo(() => {
+        return files
+            .map((file, originalIndex) => ({
+                file,
+                originalIndex,
+                label: getFileDisplayName(file.id),
+            }))
+            .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base', numeric: true }));
+    }, [files]);
+
     return (
         <div className="bg-white dark:bg-gray-900">
             <div className="flex items-center overflow-x-auto p-2 pb-0">
                 {/* File Tabs */}
                 <div className="flex overflow-x-auto flex-1">
-                    {files.map((file, index) => {
+                    {sortedTabs.map(({ file, originalIndex, label }) => {
                         const loading = isFileLoading ? isFileLoading(file.id) : false;
-                        const isActive = activeFileIndex === index && !showingCombinedView;
-                        const tabLabel = getFileDisplayName(file.id);
+                        const isActive = activeFileIndex === originalIndex && !showingCombinedView;
+                        const tabLabel = label;
                         return (
                             <div
-                                key={index}
+                                key={file.id || originalIndex}
                                 className={`flex items-center gap-2 px-4 py-1 mx-1 rounded-t-lg border-b-0 cursor-pointer whitespace-nowrap transition-all duration-200 ${isActive
                                     ? 'bg-white dark:bg-gray-800 border-2 border-blue-400 dark:border-blue-400 shadow-sm'
                                     : 'border hover:bg-gray-100 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
                                     }`}
                                 onClick={() => {
-                                    onFileSelect(index);
+                                    onFileSelect(originalIndex);
                                 }}
                                 title={getFileFullName(file.id)}
                             >
@@ -51,7 +64,7 @@ const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCom
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        onFileClose(index);
+                                        onFileClose(originalIndex);
                                     }}
                                     className="ml-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-lg"
                                     title="Close file"
