@@ -867,9 +867,10 @@ const LogViewer = () => {
         visibleColumns={visibleColumns}
         columnOrder={rightColumnOrder}
         onColumnOrderChange={handleRightColumnOrderChange}
+        viewKey={showingCombinedView ? 'combined' : `file:${files[activeFileIndex]?.name || activeFileIndex}`}
       />
     );
-  }, [hasUserInteracted, files.length, filteredLogs, handleLogClick, highlightedLogId, filters, pivotLog, setPivotTime, clearPivotTime, stickyLogs, addStickyLog, highlightLog, setSearchPos, setSearchTotal, updateFilters, setHoveredLog, visibleColumns, columnVersion, rightColumnOrder, handleRightColumnOrderChange, columnResetKey]);
+  }, [hasUserInteracted, files, activeFileIndex, showingCombinedView, filteredLogs, handleLogClick, highlightedLogId, filters, pivotLog, setPivotTime, clearPivotTime, stickyLogs, addStickyLog, highlightLog, setSearchPos, setSearchTotal, updateFilters, setHoveredLog, visibleColumns, columnVersion, rightColumnOrder, handleRightColumnOrderChange, columnResetKey]);
 
   // Remove old currentFileHeaders logic - now using headerState
 

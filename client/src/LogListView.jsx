@@ -775,7 +775,7 @@ const LogItem = memo(LogItemComponent);
 
 LogItem.displayName = 'LogItem';
 
-const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogId, filters, onFiltersChange, onSearchMatchUpdate, onHover, pivotLog, onSetPivot, onClearPivot, stickyLogs, onAddStickyLog, highlightLog, visibleColumns = {}, columnOrder = DEFAULT_COLUMN_ORDER, onColumnOrderChange }) => {
+const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogId, filters, onFiltersChange, onSearchMatchUpdate, onHover, pivotLog, onSetPivot, onClearPivot, stickyLogs, onAddStickyLog, highlightLog, visibleColumns = {}, columnOrder = DEFAULT_COLUMN_ORDER, onColumnOrderChange, viewKey = 'default' }) => {
   const virtuosoRef = useRef(null);
   // Refs for each item element to allow focus
   const itemRefs = useRef({});
@@ -1284,66 +1284,74 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
   }, [hoveredLogId, selectedLogId, highlightedLogId, logs, onLogClick, flatLogs]);
 
   // ===== SCROLL POSITION PERSISTENCE =====
+  // Per-view storage key so each tab keeps its own scroll position
+  const scrollStorageKey = `logViewerScrollPosition:${viewKey}`;
+
+  // Reset the restore-once guard whenever the active view changes,
+  // so we re-apply the saved position for the newly selected tab.
+  useEffect(() => {
+    scrollRestoredRef.current = false;
+  }, [viewKey]);
+
   // Save scroll position continuously as user scrolls (with debounce via useEffect dependencies)
   useEffect(() => {
-    if (visibleRange && flatLogs.length > 0) {
+    if (visibleRange && flatLogs.length > 0 && scrollRestoredRef.current) {
       const scrollData = {
         startIndex: visibleRange.startIndex,
         endIndex: visibleRange.endIndex,
         timestamp: Date.now()
       };
-      localStorage.setItem('logViewerScrollPosition', JSON.stringify(scrollData));
+      localStorage.setItem(scrollStorageKey, JSON.stringify(scrollData));
     }
-  }, [visibleRange, flatLogs]);
+  }, [visibleRange, flatLogs, scrollStorageKey]);
 
   // Also save on page unload to catch any last-minute changes
   useEffect(() => {
     const saveScrollPosition = () => {
-      if (visibleRange && flatLogs.length > 0) {
+      if (visibleRange && flatLogs.length > 0 && scrollRestoredRef.current) {
         const scrollData = {
           startIndex: visibleRange.startIndex,
           endIndex: visibleRange.endIndex,
           timestamp: Date.now()
         };
-        localStorage.setItem('logViewerScrollPosition', JSON.stringify(scrollData));
+        localStorage.setItem(scrollStorageKey, JSON.stringify(scrollData));
       }
     };
 
     window.addEventListener('beforeunload', saveScrollPosition);
     return () => window.removeEventListener('beforeunload', saveScrollPosition);
-  }, [visibleRange, flatLogs]);
+  }, [visibleRange, flatLogs, scrollStorageKey]);
 
-  // Restore scroll position after page load
+  // Restore scroll position after page load or when switching to a different view
   useEffect(() => {
     if (virtuosoRef.current && flatLogs.length > 0 && !scrollRestoredRef.current) {
-      const savedScrollData = localStorage.getItem('logViewerScrollPosition');
-      
+      const savedScrollData = localStorage.getItem(scrollStorageKey);
+      let targetIndex = 0;
+
       if (savedScrollData) {
         try {
           const { startIndex, timestamp } = JSON.parse(savedScrollData);
-          
-          // Only restore if saved within the last 24 hours
           const twentyFourHours = 24 * 60 * 60 * 1000;
           if (Date.now() - timestamp < twentyFourHours && startIndex < flatLogs.length) {
-            // Delay scroll restoration to ensure Virtuoso is fully initialized
-            setTimeout(() => {
-              virtuosoRef.current?.scrollToIndex({
-                index: startIndex,
-                align: 'start',
-                behavior: 'auto'
-              });
-              scrollRestoredRef.current = true;
-            }, 100);
+            targetIndex = startIndex;
           }
         } catch (error) {
           console.error('Failed to restore scroll position:', error);
         }
-      } else {
-        // Mark as restored even if no saved position exists
-        scrollRestoredRef.current = true;
       }
+
+      // Always reposition (even to 0) on view change so Virtuoso doesn't
+      // retain a pixel offset from the previously displayed tab.
+      setTimeout(() => {
+        virtuosoRef.current?.scrollToIndex({
+          index: targetIndex,
+          align: 'start',
+          behavior: 'auto'
+        });
+        scrollRestoredRef.current = true;
+      }, 100);
     }
-  }, [flatLogs]);
+  }, [flatLogs, scrollStorageKey]);
 
   // ===== STICKY LOG SCROLL LISTENER =====
   useEffect(() => {
