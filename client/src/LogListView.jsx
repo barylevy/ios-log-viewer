@@ -810,13 +810,22 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
   })), []);
 
   const columnVisibilityState = useMemo(() => {
+    // The Time Gap column requires an active `#gap=N` directive in either
+    // the filter or the search field — even when the user has it checked
+    // in Column Settings, an empty `#gap` filter would render an empty column.
+    const gapFilterActive =
+      (extractTimeGapFromSearch(filters.searchText) || 0) > 0 ||
+      (extractTimeGapFromSearch(filters.searchQuery) || 0) > 0;
+
     const out = {};
     Object.keys(COLUMN_DEFS).forEach(id => {
       const def = COLUMN_DEFS[id];
-      out[id] = def.isVisible(visibleColumns) && (columnHasData[id] !== false);
+      let visible = def.isVisible(visibleColumns) && (columnHasData[id] !== false);
+      if (id === 'timeGap') visible = visible && gapFilterActive;
+      out[id] = visible;
     });
     return out;
-  }, [visibleColumns, columnHasData]);
+  }, [visibleColumns, columnHasData, filters.searchText, filters.searchQuery]);
 
   // Column sizing — owned and persisted entirely inside this component to
   // avoid stale-closure / re-mount churn during a fast resize drag.
