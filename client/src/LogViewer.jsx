@@ -922,7 +922,7 @@ const LogViewer = () => {
                   moduleOptions={moduleOptions}
                   logsCount={logs.length}
                   filteredLogsCount={filteredLogs.length}
-                  searchMatchCount={searchMatchCount}
+                  searchMatchCount={searchTotal}
                   searchMatchPos={searchPos}
                   pivotGap={currentPivotGap}
                   pivotLineNumber={pivotLog?.lineNumber}

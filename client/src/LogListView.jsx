@@ -1051,12 +1051,27 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
   const matchIndices = useMemo(() => {
     if (!filters.searchQuery || !flatLogs.length) return [];
 
-    const terms = filters.searchQuery
+    const rawTerms = filters.searchQuery
       .split('||')
       .map(t => t.trim())
       .filter(Boolean);
 
-    if (!terms.length) return [];
+    if (!rawTerms.length) return [];
+
+    // Pull out any `#gap=N` directives — they're matched structurally against
+    // each log's time gap from the previous log, not against text content.
+    let gapThreshold = 0;
+    const terms = [];
+    for (const term of rawTerms) {
+      const gapValue = extractTimeGapFromSearch(term);
+      if (gapValue > 0) {
+        gapThreshold = Math.max(gapThreshold, gapValue);
+      } else {
+        terms.push(term);
+      }
+    }
+
+    if (!terms.length && gapThreshold <= 0) return [];
 
     // Helper function to get all searchable text from a log entry
     const getSearchableText = (log) => {
@@ -1074,30 +1089,39 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
     };
 
     const indices = [];
+    let prevTimestampMs = null;
     for (let idx = 0; idx < flatLogs.length; idx++) {
       const log = flatLogs[idx];
-      const searchableText = getSearchableText(log);
 
-      // Check if any term matches
-      const matches = terms.some(term => {
-        try {
-          if (filters.searchMode === 'regex') {
-            // Use term as regex pattern
-            const regex = new RegExp(term, 'i');
-            return regex.test(searchableText);
-          } else {
-            // Simple text search (case-insensitive)
+      // Gap match: row matches if gap from previous log >= threshold.
+      let gapMatches = false;
+      if (gapThreshold > 0 && prevTimestampMs != null && log.timestampMs != null) {
+        const gapSeconds = (log.timestampMs - prevTimestampMs) / 1000;
+        if (gapSeconds >= gapThreshold) gapMatches = true;
+      }
+
+      // Text term matches (OR semantics, like elsewhere)
+      let textMatches = false;
+      if (terms.length) {
+        const searchableText = getSearchableText(log);
+        textMatches = terms.some(term => {
+          try {
+            if (filters.searchMode === 'regex') {
+              const regex = new RegExp(term, 'i');
+              return regex.test(searchableText);
+            }
+            return searchableText.toLowerCase().includes(term.toLowerCase());
+          } catch (e) {
             return searchableText.toLowerCase().includes(term.toLowerCase());
           }
-        } catch (e) {
-          // If regex is invalid, fall back to text search
-          return searchableText.toLowerCase().includes(term.toLowerCase());
-        }
-      });
+        });
+      }
 
-      if (matches) {
+      if (textMatches || gapMatches) {
         indices.push(idx);
       }
+
+      if (log.timestampMs != null) prevTimestampMs = log.timestampMs;
     }
 
     return indices;
@@ -1131,6 +1155,24 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
   // }, [selectedLogId, flatLogs, visibleRange]);
 
   // Next/Prev navigation
+  const flashHighlightTimerRef = useRef(null);
+  const flashHighlightForLog = useCallback((logId) => {
+    if (!highlightLog || logId == null) return;
+    if (flashHighlightTimerRef.current) {
+      clearTimeout(flashHighlightTimerRef.current);
+    }
+    highlightLog(logId);
+    flashHighlightTimerRef.current = setTimeout(() => {
+      // Only clear if it's still the same log (avoid clobbering a later highlight)
+      if (highlightLog) highlightLog(null);
+      flashHighlightTimerRef.current = null;
+    }, 1200);
+  }, [highlightLog]);
+
+  useEffect(() => () => {
+    if (flashHighlightTimerRef.current) clearTimeout(flashHighlightTimerRef.current);
+  }, []);
+
   const goToNextMatch = useCallback(() => {
     if (!virtuosoRef.current || !matchIndices.length) return;
     // Non-cyclic: stop if already at last match
@@ -1144,12 +1186,14 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
       behavior: 'auto'
     });
     setCurrentMatchIndex(next);
+    const targetLog = flatLogs[target];
+    if (targetLog) flashHighlightForLog(targetLog.id);
     // Focus the target item after scrolling
     setTimeout(() => {
       const wrapper = itemRefs.current[target];
       if (wrapper) wrapper.focus();
     }, 100);
-  }, [currentMatchIndex, matchIndices]);
+  }, [currentMatchIndex, matchIndices, flatLogs, flashHighlightForLog]);
   const goToPreviousMatch = useCallback(() => {
     if (!virtuosoRef.current || !matchIndices.length) return;
     // Non-cyclic: stop if already at first match
@@ -1163,12 +1207,14 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
       behavior: 'auto'
     });
     setCurrentMatchIndex(prev);
+    const targetLog = flatLogs[target];
+    if (targetLog) flashHighlightForLog(targetLog.id);
     // Focus the target item after scrolling
     setTimeout(() => {
       const wrapper = itemRefs.current[target];
       if (wrapper) wrapper.focus();
     }, 100);
-  }, [currentMatchIndex, matchIndices]);
+  }, [currentMatchIndex, matchIndices, flatLogs, flashHighlightForLog]);
 
   // Notify parent when match position or total changes
   useEffect(() => {
