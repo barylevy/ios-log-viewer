@@ -367,8 +367,9 @@ const LogViewer = () => {
     }
     
     // For grouped files, use the prefix with file count as the identifier
-    const fileId = isFileArray && groupPrefix 
-      ? `${groupPrefix} (${fileOrFiles.length})` 
+    // (only append the count when there is more than one file in the group)
+    const fileId = isFileArray && groupPrefix
+      ? (fileOrFiles.length > 1 ? `${groupPrefix} (${fileOrFiles.length})` : groupPrefix)
       : getFileIdentifier(firstFile);
     
     // Check if file/group already exists
@@ -382,7 +383,7 @@ const LogViewer = () => {
     
     setFiles(prev => {
       const displayName = isFileArray && groupPrefix
-        ? `${groupPrefix} (${fileOrFiles.length})`
+        ? (fileOrFiles.length > 1 ? `${groupPrefix} (${fileOrFiles.length})` : groupPrefix)
         : firstFile.name;
       
       const newFiles = [...prev, { 

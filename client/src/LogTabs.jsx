@@ -25,6 +25,7 @@ const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCom
                     {files.map((file, index) => {
                         const loading = isFileLoading ? isFileLoading(file.id) : false;
                         const isActive = activeFileIndex === index && !showingCombinedView;
+                        const tabLabel = getFileDisplayName(file.id);
                         return (
                             <div
                                 key={index}
@@ -38,7 +39,7 @@ const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCom
                                 title={getFileFullName(file.id)}
                             >
                                 <span className="text-xs flex items-center">
-                                    {getFileDisplayName(file.id)}
+                                    {tabLabel}
                                     {loading && (
                                         <svg className="ml-2 animate-spin h-4 w-4 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -46,7 +47,7 @@ const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCom
                                         </svg>
                                     )}
                                 </span>
-                                {isActive && !loading && renderExportButton(getFileDisplayName(file.id))}
+                                {isActive && !loading && renderExportButton(tabLabel)}
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
