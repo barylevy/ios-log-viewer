@@ -52,7 +52,7 @@ const COLUMN_DEFS = {
     ),
   },
   logLevel: {
-    label: 'Lvl',
+    label: 'Level',
     headerTitle: 'Log level (Error, Warning, Info, etc.)',
     isVisible: (vc) => vc.logLevel !== false,
     size: 50,
@@ -164,7 +164,7 @@ const COLUMN_DEFS = {
     ) : null),
   },
   processThread: {
-    label: 'P:T',
+    label: 'Process:Thread',
     headerTitle: 'Process ID and Thread ID',
     isVisible: (vc) => vc.processThread !== false,
     hasData: (logs) => logs.some(l => l.process || l.thread),
@@ -754,11 +754,12 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
               const def = COLUMN_DEFS[col.id];
               if (!def) return null;
               const cell = def.renderBody(log, ctx);
+              const padRight = col.isCollapsed ? 0 : COLUMN_GAP;
               const style = col.isFlex
-                ? { flex: '1 1 0%', minWidth: 0, paddingRight: COLUMN_GAP }
-                : { width: col.size, flex: '0 0 auto', paddingRight: COLUMN_GAP };
+                ? { flex: '1 1 0%', minWidth: 0, paddingRight: padRight }
+                : { width: col.size, flex: '0 0 auto', paddingRight: padRight };
               return (
-                <div key={col.id} style={style}>
+                <div key={col.id} data-col-id={col.id} style={style}>
                   {cell}
                 </div>
               );
@@ -840,6 +841,49 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
     return {};
   });
 
+  // Set of column ids that the user has "collapsed" via double-clicking the
+  // separator. Collapsed columns drop their right-edge padding so the next
+  // column visually attaches to them. Persisted to localStorage so the look
+  // survives reloads.
+  const [collapsedColIds, setCollapsedColIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem('logViewerCollapsedColumns');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return new Set(parsed);
+      }
+    } catch { /* ignore */ }
+    return new Set();
+  });
+
+  const persistCollapsedColIds = useCallback((set) => {
+    try {
+      localStorage.setItem('logViewerCollapsedColumns', JSON.stringify([...set]));
+    } catch { /* ignore */ }
+  }, []);
+
+  // Ref to outermost list container, used to query rendered cells for
+  // measuring auto-fit widths.
+  const containerRef = useRef(null);
+
+  // Compute the natural width required to display the given column's currently
+  // rendered header + body cells without truncation. Returns a px number.
+  const computeAutoFitWidth = useCallback((colId) => {
+    const root = containerRef.current;
+    if (!root) return null;
+    const cells = root.querySelectorAll(`[data-col-id="${colId}"]`);
+    if (!cells.length) return null;
+    let max = 0;
+    cells.forEach(cell => {
+      // The wrapper carries the column padding-right; measure the inner content
+      // so we don't accumulate padding into the width.
+      const inner = cell.firstElementChild || cell;
+      const w = inner.scrollWidth;
+      if (w > max) max = w;
+    });
+    return max;
+  }, []);
+
   const table = useReactTable({
     data: EMPTY_DATA,
     columns: tableColumns,
@@ -874,7 +918,8 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
     id: h.column.id,
     size: h.getSize(),
     isFlex: COLUMN_DEFS[h.column.id]?.isFlex === true,
-  })), [headers, columnSizing]);
+    isCollapsed: collapsedColIds.has(h.column.id),
+  })), [headers, columnSizing, collapsedColIds]);
 
   // Drag-and-drop reorder for column headers.
   const draggingColIdRef = useRef(null);
@@ -1713,7 +1758,7 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
   }
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-gray-900">
+    <div ref={containerRef} className="h-full flex flex-col bg-white dark:bg-gray-900">
       {/* Fixed Date Header with Navigation - Outside of scroll container */}
       {currentStickyDate && (
         <div className="flex-shrink-0 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-0.5">
@@ -1775,12 +1820,15 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
             const isFlex = def.isFlex === true;
             const isDragging = draggingColIdRef.current === id;
             const isDragOver = dragOverColId === id && draggingColIdRef.current && draggingColIdRef.current !== id;
+            const isCollapsed = collapsedColIds.has(id);
+            const padRight = isCollapsed ? 0 : COLUMN_GAP;
             const wrapperStyle = isFlex
-              ? { flex: '1 1 0%', minWidth: 0, position: 'relative', paddingRight: COLUMN_GAP }
-              : { width: header.getSize(), flex: '0 0 auto', position: 'relative', paddingRight: COLUMN_GAP };
+              ? { flex: '1 1 0%', minWidth: 0, position: 'relative', paddingRight: padRight }
+              : { width: header.getSize(), flex: '0 0 auto', position: 'relative', paddingRight: padRight };
             return (
               <div
                 key={id}
+                data-col-id={id}
                 style={wrapperStyle}
                 className={`select-none ${isDragOver ? 'ring-2 ring-blue-400 dark:ring-blue-500 rounded' : ''}`}
               >
@@ -1800,9 +1848,54 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
                     onMouseDown={header.getResizeHandler()}
                     onTouchStart={header.getResizeHandler()}
                     onClick={(e) => e.stopPropagation()}
+                    onDoubleClick={(e) => {
+                      // Double-click the separator: "attach" this column to
+                      // the next one by removing its right-edge padding and
+                      // shrinking its width to fit just its content.
+                      // Double-clicking again restores the normal gap.
+                      e.stopPropagation();
+                      e.preventDefault();
+                      const wasCollapsed = collapsedColIds.has(id);
+                      if (wasCollapsed) {
+                        // Restore: remove from collapsed set; clear any stored
+                        // width so the column returns to its default size.
+                        setCollapsedColIds(prev => {
+                          const next = new Set(prev);
+                          next.delete(id);
+                          persistCollapsedColIds(next);
+                          return next;
+                        });
+                        setColumnSizing(prev => {
+                          if (!(id in prev)) return prev;
+                          const next = { ...prev };
+                          delete next[id];
+                          try { localStorage.setItem('logViewerColumnSizing', JSON.stringify(next)); } catch { /* ignore */ }
+                          return next;
+                        });
+                        return;
+                      }
+                      // Mark as collapsed first so the next render uses
+                      // padding-right=0; measure the inner content to size it.
+                      const measured = computeAutoFitWidth(id);
+                      const minSize = def.minSize || 30;
+                      const target = measured != null
+                        ? Math.max(minSize, Math.ceil(measured) + 2)
+                        : minSize;
+                      setCollapsedColIds(prev => {
+                        const next = new Set(prev);
+                        next.add(id);
+                        persistCollapsedColIds(next);
+                        return next;
+                      });
+                      setColumnSizing(prev => {
+                        const next = { ...prev, [id]: target };
+                        try { localStorage.setItem('logViewerColumnSizing', JSON.stringify(next)); } catch { /* ignore */ }
+                        return next;
+                      });
+                    }}
                     onDragStart={(e) => e.preventDefault()}
                     draggable={false}
-                    title="Drag to resize column"
+                    title="Drag to resize column · Double-click to attach to next column"
                     aria-label="Resize column"
                     role="separator"
                     aria-orientation="vertical"

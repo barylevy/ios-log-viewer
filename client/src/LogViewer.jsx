@@ -109,6 +109,7 @@ const LogViewer = () => {
     try {
       localStorage.removeItem('logViewerColumnOrder');
       localStorage.removeItem('logViewerColumnSizing');
+      localStorage.removeItem('logViewerCollapsedColumns');
     } catch { /* ignore */ }
     setColumnResetKey(prev => prev + 1);
     setColumnVersion(prev => prev + 1);
