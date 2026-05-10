@@ -6,7 +6,7 @@ import { clearSession } from './utils/sessionStorage';
 import { groupFilesByPrefix, groupFilesByDirectory, groupFilesByDirectoryAndFormat, getGroupDisplayName, naturalSort } from './utils/fileGrouping';
 import { isArchiveFile, expandArchivesInList } from './utils/archiveExtractor';
 
-const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs, visibleColumns, onColumnsChange, onResetColumnDefaults, rightColumnOrder, onRightColumnOrderChange, logDuration, folderName, onPrepareFilesStart, onPrepareFilesEnd }) => {
+const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs, visibleColumns, onColumnsChange, onResetColumnDefaults, rightColumnOrder, onRightColumnOrderChange, logDuration, folderName, onPrepareFilesStart, onPrepareFilesEnd, onDownloadMerged, isDownloadingMerged }) => {
   const fileInputRef = useRef(null);
   const directoryInputRef = useRef(null);
   const [showFileDropdown, setShowFileDropdown] = useState(false);
@@ -252,6 +252,31 @@ const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs,
         </div>
 
         <div className="flex items-center gap-3">
+        {onDownloadMerged && (
+          <button
+            onClick={onDownloadMerged}
+            disabled={!hasLogs || isDownloadingMerged}
+            title="Run mergeLogs.py on the loaded folder and download the merged output"
+            className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
+          >
+            {isDownloadingMerged ? (
+              <>
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                  <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" className="opacity-75" />
+                </svg>
+                Merging…
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4" />
+                </svg>
+                Download Merged
+              </>
+            )}
+          </button>
+        )}
         <div className="relative file-dropdown">
             <div className="flex">
               {/* Main Button */}

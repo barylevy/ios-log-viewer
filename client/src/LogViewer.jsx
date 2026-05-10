@@ -228,6 +228,7 @@ const LogViewer = () => {
   const [prepareFilesCount, setPrepareFilesCount] = useState(0);
   const beginPreparingFiles = useCallback(() => setPrepareFilesCount(c => c + 1), []);
   const endPreparingFiles = useCallback(() => setPrepareFilesCount(c => Math.max(0, c - 1)), []);
+  const [isDownloadingMerged, setIsDownloadingMerged] = useState(false);
 
   // Compute number of search matches
   const searchMatchCount = useMemo(() => {
@@ -724,6 +725,9 @@ const LogViewer = () => {
 
   const handleCombinedViewSelect = useCallback(() => {
     setShowingCombinedView(true);
+    // Force a rebuild on (re)entry — the dedupe ref below would otherwise
+    // skip the build if the source signature happens to match the last one.
+    lastBuiltSignatureRef.current = null;
 
     // Force-load any tabs whose logs aren't in memory yet so the combined
     // view will include records from every tab, not just the previously
@@ -742,13 +746,22 @@ const LogViewer = () => {
   }, [files, allFileLogs, requestFileLoad, buildCombinedView, switchToFile]);
 
   // While the combined view is active, rebuild it whenever a tab finishes
-  // loading (allFileLogs grows) or the set of tabs changes. This guarantees
-  // every visible record — and therefore every export — reflects all tabs.
+  // loading (one of its per-file log arrays appears/changes) or the set of
+  // tabs changes. We deliberately key off the per-file entries only —
+  // `allFileLogs['Combined Files']` is written *by* this rebuild, so
+  // depending on the whole `allFileLogs` object would create an infinite
+  // loop (and tank scroll performance).
+  const combinedSourceSignature = useMemo(() => (
+    files.map(f => `${f.id}:${(allFileLogs[f.id] || []).length}`).join('|')
+  ), [files, allFileLogs]);
+  const lastBuiltSignatureRef = React.useRef(null);
   useEffect(() => {
     if (!showingCombinedView) return;
     if (files.length === 0) return;
+    if (lastBuiltSignatureRef.current === combinedSourceSignature) return;
+    lastBuiltSignatureRef.current = combinedSourceSignature;
     buildCombinedView();
-  }, [showingCombinedView, files, allFileLogs, buildCombinedView]);
+  }, [showingCombinedView, files.length, combinedSourceSignature, buildCombinedView]);
 
   // Only treat a drag as a file-drop when the OS is actually dragging files.
   // Internal drags (e.g. column reorder in the Column Settings modal) use
@@ -758,6 +771,64 @@ const LogViewer = () => {
     if (!types) return false;
     // DataTransferItemList vs DOMStringList — both support contains/includes via Array.from
     return Array.from(types).includes('Files');
+  };
+
+  // Recursively walk DataTransferItem entries (FileSystemEntry) and collect
+  // every File. Sets webkitRelativePath on each file so directory-based
+  // grouping works the same as the <input type="file" webkitdirectory> path.
+  const collectFilesFromEntries = async (entries) => {
+    const results = [];
+
+    const readDirectory = (dirReader) => new Promise((resolve, reject) => {
+      const all = [];
+      const readBatch = () => {
+        dirReader.readEntries((batch) => {
+          if (!batch.length) {
+            resolve(all);
+          } else {
+            all.push(...batch);
+            readBatch();
+          }
+        }, reject);
+      };
+      readBatch();
+    });
+
+    const getFile = (fileEntry) => new Promise((resolve, reject) => {
+      fileEntry.file(resolve, reject);
+    });
+
+    const walk = async (entry, pathPrefix) => {
+      if (!entry) return;
+      if (entry.isFile) {
+        try {
+          const file = await getFile(entry);
+          const relPath = pathPrefix ? `${pathPrefix}/${file.name}` : file.name;
+          // webkitRelativePath is read-only on File; redefine it so downstream
+          // grouping by directory works as expected.
+          try {
+            Object.defineProperty(file, 'webkitRelativePath', {
+              value: relPath,
+              configurable: true,
+              writable: false,
+            });
+          } catch (_) { /* ignore — best effort */ }
+          results.push(file);
+        } catch (_) { /* skip unreadable file */ }
+      } else if (entry.isDirectory) {
+        const reader = entry.createReader();
+        const children = await readDirectory(reader);
+        const nextPrefix = pathPrefix ? `${pathPrefix}/${entry.name}` : entry.name;
+        for (const child of children) {
+          await walk(child, nextPrefix);
+        }
+      }
+    };
+
+    for (const entry of entries) {
+      await walk(entry, '');
+    }
+    return results;
   };
 
   const handleDragOver = useCallback((e) => {
@@ -777,7 +848,18 @@ const LogViewer = () => {
     e.preventDefault();
     setIsFileDropActive(false);
 
-    const droppedFiles = Array.from(e.dataTransfer.files);
+    // If folders were dropped, walk their entries so we get every file with
+    // a webkitRelativePath set (matches the folder-picker code path).
+    const items = e.dataTransfer.items ? Array.from(e.dataTransfer.items) : [];
+    const entries = items
+      .filter((it) => it.kind === 'file')
+      .map((it) => (typeof it.webkitGetAsEntry === 'function' ? it.webkitGetAsEntry() : null))
+      .filter(Boolean);
+
+    let droppedFiles = entries.length
+      ? await collectFilesFromEntries(entries)
+      : Array.from(e.dataTransfer.files);
+
     if (!droppedFiles.length) return;
 
     beginPreparingFiles();
@@ -813,6 +895,54 @@ const LogViewer = () => {
       endPreparingFiles();
     }
   }, [handleFileLoad, handleClearTabs, beginPreparingFiles, endPreparingFiles]);
+
+
+  // Run the JS port of mergeLogs.py against the currently loaded folder
+  // and trigger a download of the resulting <folder>_merged.zip.
+  const handleDownloadMerged = useCallback(async () => {
+    if (!files || files.length === 0) return;
+
+    // Collect every raw File from the loaded tabs. `file.fileObj` may be a
+    // single File or an array (for grouped tabs). De-duplicate by identity.
+    const rawFiles = [];
+    const seen = new Set();
+    files.forEach(entry => {
+      const obj = entry && entry.fileObj;
+      if (!obj) return;
+      const list = Array.isArray(obj) ? obj : [obj];
+      list.forEach(f => {
+        if (f && !seen.has(f)) { seen.add(f); rawFiles.push(f); }
+      });
+    });
+
+    if (!rawFiles.length) {
+      alert('No source files available to merge. Try re-loading the folder.');
+      return;
+    }
+
+    setIsDownloadingMerged(true);
+    try {
+      const { mergeLogsToZip } = await import('./utils/mergeLogsScript');
+      const folderLeaf = (currentFolderName || '').split('/').pop();
+      const outputFolderName = folderLeaf ? `${folderLeaf}_merged` : undefined;
+      const { blob, fileName, log } = await mergeLogsToZip(rawFiles, { outputFolderName });
+      if (log && log.length) console.log('[merge-logs]\n' + log.join('\n'));
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Download Merged failed:', err);
+      alert(`Download Merged failed: ${err.message || err}`);
+    } finally {
+      setIsDownloadingMerged(false);
+    }
+  }, [files, currentFolderName]);
 
 
   // Toggle log selection - if same log is clicked, close it; if different log, open it
@@ -932,6 +1062,8 @@ const LogViewer = () => {
         onResetColumnDefaults={handleResetColumnDefaults}
         logDuration={logDuration}
         folderName={currentFolderName}
+        onDownloadMerged={handleDownloadMerged}
+        isDownloadingMerged={isDownloadingMerged}
       />
 
       {/* Main content area */}

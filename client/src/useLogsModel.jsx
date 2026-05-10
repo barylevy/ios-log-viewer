@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { LOG_LEVEL_MATRIX } from './constants';
 import {
   getFileIdentifier,
@@ -48,6 +48,10 @@ const useLogsModel = () => {
     }
   }); // Store filters per file
   const [currentFileName, setCurrentFileName] = useState(null); // Track current file
+  // Mirror of currentFileName accessible inside async callbacks (e.g. the
+  // file-load .then handlers) without making them stale-closure dependent.
+  const currentFileNameRef = useRef(null);
+  useEffect(() => { currentFileNameRef.current = currentFileName; }, [currentFileName]);
   const [filters, setFilters] = useState(() => {
     // Initialize with localStorage values for modes
     const filterMode = localStorage.getItem('logViewer_filterMode') || 'text';
@@ -376,12 +380,17 @@ const useLogsModel = () => {
           if (Object.keys(combinedHeaders).length > 0) {
             setLogFileHeaders(prev => ({ ...prev, [storeId]: combinedHeaders }));
           }
-          
-          // Set as current logs
-          setLogs(combinedLogs);
-          setSelectedLog(null);
-          setHighlightedLogId(null);
-          setCurrentFileName(storeId);
+
+          // Only swap the visible logs/selection if the user is on this tab
+          // (or hasn't picked one yet). Otherwise we'd clobber a click made
+          // in another tab — e.g. while "All Files" is showing.
+          const activeTab = currentFileNameRef.current;
+          if (!activeTab || activeTab === storeId) {
+            setLogs(combinedLogs);
+            setSelectedLog(null);
+            setHighlightedLogId(null);
+            setCurrentFileName(storeId);
+          }
           
           // Clear loading state
           setFileLoadingState(prev => {
@@ -430,10 +439,16 @@ const useLogsModel = () => {
           });
           
           setAllFileLogs(prev => ({ ...prev, [fileId]: logs }));
-          setLogs(logs);
-          setSelectedLog(null);
-          setHighlightedLogId(null);
-          setCurrentFileName(fileId);
+          // Only swap the visible logs/selection if the user is on this tab
+          // (or hasn't picked one yet). Avoids clobbering selection while
+          // "All Files" or another tab is active.
+          const activeTab = currentFileNameRef.current;
+          if (!activeTab || activeTab === fileId) {
+            setLogs(logs);
+            setSelectedLog(null);
+            setHighlightedLogId(null);
+            setCurrentFileName(fileId);
+          }
           setFileLoadingState(prev => ({ ...prev, [fileId]: false }));
         })
         .catch(error => {
@@ -944,26 +959,38 @@ const useLogsModel = () => {
         [fileName]: processedLogs
       }));
 
+      // Detect a true tab switch vs. a rebuild of the currently visible
+      // view. We must not clear the user's selected log on a rebuild,
+      // otherwise clicking a row in "All Files" closes its modal as soon as
+      // the combined view rebuilds in response to the re-render.
+      const isSwitching = currentFileName !== fileName;
+
       // Set current file name
       setCurrentFileName(fileName);
 
-      // Load filters for this file if they exist, otherwise use default filters
-      const defaultFilters = {
-        searchQuery: '',
-        searchText: '',
-        logLevel: ['all'],
-        selectedModule: 'all',
-        contextLines: 0
-      }; const fileFilters = allFileFilters[fileName];
-      setFilters(fileFilters ? { ...defaultFilters, ...fileFilters } : defaultFilters);
+      if (isSwitching) {
+        // Load filters for this file if they exist, otherwise use defaults
+        const defaultFilters = {
+          searchQuery: '',
+          searchText: '',
+          logLevel: ['all'],
+          selectedModule: 'all',
+          contextLines: 0
+        };
+        const fileFilters = allFileFilters[fileName];
+        setFilters(fileFilters ? { ...defaultFilters, ...fileFilters } : defaultFilters);
+      }
 
       setLogs(processedLogs);
-      setSelectedLog(null);
-      setHighlightedLogId(null);
+
+      if (isSwitching) {
+        setSelectedLog(null);
+        setHighlightedLogId(null);
+      }
     } catch (error) {
       console.error('❌ Error in setLogsForFile:', error);
     }
-  }, [allFileFilters]);
+  }, [allFileFilters, currentFileName]);
 
   // Switch to show logs for a specific file
   const switchToFile = useCallback((fileName) => {
