@@ -13,6 +13,32 @@ import { isArchiveFile, expandArchivesInList } from './utils/archiveExtractor';
 import { exportLogsToFile } from './utils/exportLogs';
 import { AVAILABLE_COLUMNS } from './ColumnSettings';
 
+// Turn a raw folder name like "2387341752-260422074919 (1)" into the short
+// label we want in the page title.
+//   - drop any trailing " (N)" duplicate marker
+//   - if the name is "<id>-<YYMMDDHHMMSS>" or just "<YYMMDDHHMMSS>", format
+//     the timestamp as "YY.MM.DD-HHMMSS"  (e.g. 260428063435 -> 26.04.28-063435)
+//   - otherwise: if it's "<id>-<suffix>", keep just the suffix
+function cleanFolderLabel(name) {
+  if (!name) return '';
+  let label = String(name).trim();
+  label = label.replace(/\s*\(\d+\)\s*$/, '');
+
+  // Look at the part after the last '-' (or the whole label if no '-').
+  const dashIdx = label.lastIndexOf('-');
+  const tail = dashIdx >= 0 ? label.slice(dashIdx + 1) : label;
+  const tsMatch = /^(\d{2})(\d{2})(\d{2})(\d{6})$/.exec(tail);
+  if (tsMatch) {
+    const [, yy, mm, dd, hms] = tsMatch;
+    return `${yy}.${mm}.${dd}-${hms}`;
+  }
+
+  if (dashIdx >= 0 && dashIdx < label.length - 1) {
+    label = label.slice(dashIdx + 1);
+  }
+  return label.trim();
+}
+
 const LogViewer = () => {
   const {
     logs,
@@ -453,39 +479,73 @@ const LogViewer = () => {
   // Get folder name from current file
   const currentFolderName = useMemo(() => {
     if (!files || files.length === 0) return null;
-    
-    // Try to get folder from any file (they should all be from the same folder)
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      
-      // Check webkitRelativePath - return the full path without the filename
-      if (file && file.fileObj && file.fileObj.webkitRelativePath) {
-        const pathParts = file.fileObj.webkitRelativePath.split('/');
-        // Return the full path excluding the filename (last part)
-        if (pathParts.length > 1) {
-          return pathParts.slice(0, -1).join('/');
+
+    // Walk every loaded tab and every underlying File to collect the parent
+    // path of each file. We then pick the first non-empty parent path that
+    // contains a separator (i.e. has a real folder, not a bare filename).
+    const collectPaths = () => {
+      const paths = [];
+      const visit = (obj) => {
+        if (!obj) return;
+        if (Array.isArray(obj)) { obj.forEach(visit); return; }
+        if (obj.webkitRelativePath) paths.push(obj.webkitRelativePath);
+        else if (obj.path) paths.push(obj.path);
+      };
+      files.forEach(file => {
+        visit(file && file.fileObj);
+        if (file && file.id && typeof file.id === 'string' && file.id.includes('/')) {
+          paths.push(file.id);
         }
-      }
-      
-      // Also try extracting from file.id if it contains path
-      if (file && file.id && file.id.includes('/')) {
-        const pathParts = file.id.split('/');
-        if (pathParts.length > 1) {
-          return pathParts.slice(0, -1).join('/');
-        }
-      }
-      
-      // Try to get path from fileObj.path (some browsers/contexts provide this)
-      if (file && file.fileObj && file.fileObj.path) {
-        const pathParts = file.fileObj.path.split('/');
-        if (pathParts.length > 1) {
-          return pathParts.slice(0, -1).join('/');
-        }
-      }
+      });
+      return paths;
+    };
+
+    const paths = collectPaths();
+    for (const p of paths) {
+      const parts = p.split('/').filter(Boolean);
+      if (parts.length > 1) return parts.slice(0, -1).join('/');
     }
-    
+    // Fallback: a bare folder name with no children (rare).
+    for (const p of paths) {
+      const parts = p.split('/').filter(Boolean);
+      if (parts.length === 1) return parts[0];
+    }
     return null;
   }, [files]);
+
+  // Update the document title based on what's loaded:
+  //   - Folder load (multiple files OR a single file whose webkitRelativePath
+  //     contains a parent folder)  -> "Log Viewer - <folder leaf>"
+  //   - Single file load and nothing previously loaded -> "Log Viewer - <file>"
+  //   - Single file added on top of existing content   -> leave title alone
+  //   - No files loaded                                -> reset to default
+  const DEFAULT_TITLE = 'Cato Client Log Viewer';
+  const previousFilesCountRef = React.useRef(0);
+  useEffect(() => {
+    const count = files ? files.length : 0;
+
+    if (count === 0) {
+      document.title = DEFAULT_TITLE;
+      previousFilesCountRef.current = 0;
+      return;
+    }
+
+    const folderLeaf = currentFolderName
+      ? cleanFolderLabel(currentFolderName.split('/').filter(Boolean)[0])
+      : null;
+
+    if (folderLeaf) {
+      document.title = `Log Viewer-${folderLeaf}`;
+    } else if (previousFilesCountRef.current === 0) {
+      // First load and it's a single file with no folder context.
+      const first = files[0];
+      const fileLabel = first ? getFileDisplayName(first.id) : 'file';
+      document.title = `Log Viewer-${fileLabel}`;
+    }
+    // else: file added while content was already loaded -> keep current title
+
+    previousFilesCountRef.current = count;
+  }, [files, currentFolderName]);
 
   // Calculate log time range (start - end)
   useEffect(() => {
