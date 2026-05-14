@@ -462,6 +462,19 @@ export const parseLogLine = (line, lineNumber, logId, dateFormat = 'DD/MM/YY') =
         // Create display strings
         displayDate = formatDateWithMonthName(isoDate);
         displayTime = `${hours}:${minutes}:${seconds}.${ms}`;
+      } else {
+        // Handle ISO-T format with optional Z: "2026-05-11T08:49:19.3907Z"
+        // Subseconds may be 3-6 digits; truncate/pad to 3 for display.
+        const isoTMatch = timestamp.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.(\d{3,6})Z?$/);
+        if (isoTMatch) {
+          const [, year, month, day, hours, minutes, seconds, frac] = isoTMatch;
+          const isoDate = `${year}-${month}-${day}`;
+          const ms3 = frac.length >= 3 ? frac.slice(0, 3) : frac.padEnd(3, '0');
+          const dateObj = new Date(`${isoDate}T${hours}:${minutes}:${seconds}.${ms3}Z`);
+          timestampMs = dateObj.getTime();
+          displayDate = formatDateWithMonthName(isoDate);
+          displayTime = `${hours}:${minutes}:${seconds}.${ms3}`;
+        }
       }
     }
   }
@@ -475,7 +488,7 @@ export const parseLogLine = (line, lineNumber, logId, dateFormat = 'DD/MM/YY') =
     displayDate: displayDate, // Formatted date with month name (e.g., "23-May-2025")
     displayTime: displayTime, // Formatted time (e.g., "14:23:45.123")
     level: parsedFormat?.logLevel || extractLogLevel(line),
-    module: extractModule(line),
+    module: parsedFormat?.moduleName || extractModule(line),
     sourceName: parsedFormat?.sourceName || '',
     sourceLine: parsedFormat?.sourceLine || '',
     thread: parsedFormat?.threadId || extractThread(line),
@@ -572,6 +585,48 @@ export const parseLogContent = (content, headerLines = [], dateFormat = 'DD/MM/Y
  * @returns {Object|null} - Parsed components or null if not a recognized format
  */
 export const parseLogFormat = (line) => {
+  // Cato socket format (Linux daemon, pipe-separated):
+  //   2026-05-11T08:49:19.3907Z<ANSI>? [thread] function:line|LEVEL|MODULE|aux|[state|]?message<ANSI>?
+  // Example:
+  //   2026-05-11T08:49:19.3907Z\x1b[32m [multi_job_] socket_cm__configuration_update_pha:2293|I|CONFIG_MNGR |        | connected:candidate | LAN Firewall:\x1b[0m
+  // Multiline records continue without a timestamp on subsequent lines and are
+  // handled at the parseLogContent level (as continuations of the parent).
+  const catoSocketMatch = line.match(
+    /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3,6}Z)(?:\x1b\[\d+(?:;\d+)*m)?\s+\[([^\]]+)\]\s+([^:|\n]+?)\s*:\s*(\d+)\|(.*)$/
+  );
+  if (catoSocketMatch) {
+    const [, dateTime, thread, fn, lineNo, rest] = catoSocketMatch;
+    // Strip a trailing ANSI reset/colour code from the tail (e.g. "...[0m").
+    const restNoAnsi = rest.replace(/\x1b\[\d+(?:;\d+)*m\s*$/, '');
+    const parts = restNoAnsi.split('|');
+    const logLevel = (parts[0] || '').trim();
+    const moduleName = (parts[1] || '').trim();
+    // parts[2] is typically a blank aux/padding field. If there are more than
+    // 4 fields, the next one is a context/state (e.g. "connected:candidate").
+    let state = '';
+    let message;
+    if (parts.length >= 5) {
+      state = (parts[3] || '').trim();
+      message = parts.slice(4).join('|').trim();
+    } else {
+      message = parts.slice(3).join('|').trim();
+    }
+    // Render the state inline at the start of the message for visibility
+    // (it's also exposed as a separate field below).
+    if (state) message = `${state} | ${message}`;
+    return {
+      format: 'cato-socket',
+      dateTime,
+      threadId: thread.trim(),
+      sourceName: fn.trim(),
+      sourceLine: lineNo,
+      logLevel,
+      moduleName,
+      state,
+      message,
+    };
+  }
+
   // iOS/macOS explicit format: date time [module:line] [level] [t:thread] [p:process] message
   const iosExplicitMatch = line.match(/^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}:\d{3})\s+\[([^\]]+)\]\s+\[([DIWEVT])\]\s+\[t:(\d+)\]\s+\[p:(\d+)\]\s+(.*)$/);
   if (iosExplicitMatch) {
