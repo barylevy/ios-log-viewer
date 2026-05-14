@@ -514,38 +514,28 @@ export const parseLogContent = (content, headerLines = [], dateFormat = 'DD/MM/Y
   // First pass: parse all logs
   allLines.forEach((line, idx) => {
     if (!line.trim() || headerLines.includes(idx)) return;
-    
-    const hasTimestamp = extractTimestamp(line);
+
+    // If the line starts with whitespace (space/tab/newline) or with '{' or
+    // '}', treat it as a continuation of the previous record even if a
+    // timestamp happens to appear later in the line. This keeps indented
+    // blocks (e.g. JSON payloads emitted under a parent log) attached to
+    // their parent row.
+    const isContinuationLine = /^[\s{}]/.test(line);
+    const hasTimestamp = !isContinuationLine && extractTimestamp(line);
     
     if (hasTimestamp) {
       // Start a new log entry
       if (currentLog) logs.push(currentLog);
       currentLog = parseLogLine(line, idx + 1, logs.length, dateFormat);
       lastLogWithTimestamp = currentLog;
-    } else if (lastLogWithTimestamp) {
-      // Create a continuation log entry (displays as separate line but inherits parent's metadata)
-      if (currentLog) logs.push(currentLog);
-      
-      currentLog = {
-        id: logs.length,
-        raw: line,
-        message: line,
-        timestamp: lastLogWithTimestamp.timestamp,
-        timestampMs: lastLogWithTimestamp.timestampMs,
-        displayDate: lastLogWithTimestamp.displayDate,
-        displayTime: lastLogWithTimestamp.displayTime,
-        level: lastLogWithTimestamp.level,
-        module: lastLogWithTimestamp.module,
-        sourceName: lastLogWithTimestamp.sourceName,
-        sourceLine: lastLogWithTimestamp.sourceLine,
-        thread: lastLogWithTimestamp.thread,
-        process: lastLogWithTimestamp.process,
-        processName: lastLogWithTimestamp.processName,
-        lineNumber: idx + 1,
-        originalLineNumbers: [idx + 1],
-        isContinuation: true, // Mark as continuation line
-        parentLogId: lastLogWithTimestamp.id // Reference to parent log
-      };
+    } else if (currentLog) {
+      // Append continuation line to the current log's message/raw so the
+      // whole multiline block (e.g. an indented JSON payload) renders as
+      // a single record instead of a separate row per line.
+      currentLog.raw = (currentLog.raw || '') + '\n' + line;
+      currentLog.message = (currentLog.message || '') + '\n' + line;
+      if (!currentLog.originalLineNumbers) currentLog.originalLineNumbers = [currentLog.lineNumber];
+      currentLog.originalLineNumbers.push(idx + 1);
     } else {
       // If the first line(s) have no timestamp, treat as a log
       if (currentLog) logs.push(currentLog);
