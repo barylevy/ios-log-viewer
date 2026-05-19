@@ -4,6 +4,7 @@ import LogModal from './LogModal';
 import LogViewerHeader from './LogViewerHeader';
 import LogViewerFilters from './LogViewerFilters';
 import LogTabs from './LogTabs';
+import MergeTabsDialog from './MergeTabsDialog';
 import useLogsModel from './useLogsModel';
 import { getFileIdentifier } from './utils/fileLoader';
 import { getFileDisplayName } from './utils/fileLoader';
@@ -255,6 +256,7 @@ const LogViewer = () => {
   const beginPreparingFiles = useCallback(() => setPrepareFilesCount(c => c + 1), []);
   const endPreparingFiles = useCallback(() => setPrepareFilesCount(c => Math.max(0, c - 1)), []);
   const [isDownloadingMerged, setIsDownloadingMerged] = useState(false);
+  const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
 
   // Compute number of search matches
   const searchMatchCount = useMemo(() => {
@@ -961,16 +963,21 @@ const LogViewer = () => {
   }, [handleFileLoad, handleClearTabs, beginPreparingFiles, endPreparingFiles]);
 
 
-  // Run the JS port of mergeLogs.py against the currently loaded folder
-  // and trigger a download of the resulting <folder>_merged.zip.
-  const handleDownloadMerged = useCallback(async () => {
+  // Open the tab-selection dialog
+  const handleDownloadMerged = useCallback(() => {
     if (!files || files.length === 0) return;
+    setIsMergeDialogOpen(true);
+  }, [files]);
 
-    // Collect every raw File from the loaded tabs. `file.fileObj` may be a
-    // single File or an array (for grouped tabs). De-duplicate by identity.
+  // Run the JS port of mergeLogs.py against the selected tabs
+  const handleConfirmMerge = useCallback(async (selectedIds) => {
+    setIsMergeDialogOpen(false);
+
+    // Collect raw File objects only from selected tabs
     const rawFiles = [];
     const seen = new Set();
     files.forEach(entry => {
+      if (!selectedIds.includes(entry.id)) return;
       const obj = entry && entry.fileObj;
       if (!obj) return;
       const list = Array.isArray(obj) ? obj : [obj];
@@ -1114,6 +1121,12 @@ const LogViewer = () => {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      <MergeTabsDialog
+        isOpen={isMergeDialogOpen}
+        onClose={() => setIsMergeDialogOpen(false)}
+        files={files}
+        onConfirm={handleConfirmMerge}
+      />
       <LogViewerHeader
         onClearTabs={handleClearTabs}
         onFileLoad={handleFileLoad}
