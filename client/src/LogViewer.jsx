@@ -261,7 +261,11 @@ const LogViewer = () => {
     if (!filters.searchQuery) return 0;
     const terms = filters.searchQuery
       .split('||')
-      .map(t => t.trim().toLowerCase())
+      .flatMap(part => {
+        let inner = part.trim();
+        if (inner.startsWith('(') && inner.endsWith(')')) inner = inner.slice(1, -1).trim();
+        return inner.split('&&').map(t => t.trim().toLowerCase());
+      })
       .filter(Boolean);
     if (!terms.length) return 0;
     return filteredLogs.reduce((cnt, log) => {

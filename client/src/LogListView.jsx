@@ -536,8 +536,13 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
 
       const terms = searchText
         .split('||')
-        .map(term => term.trim())
-        .filter(term => term.length > 0 && !GAP_PATTERN.test(term)); // Exclude #gap=X patterns
+        .flatMap(part => {
+          // Strip outer parentheses, then split by &&
+          let inner = part.trim();
+          if (inner.startsWith('(') && inner.endsWith(')')) inner = inner.slice(1, -1).trim();
+          return inner.split('&&').map(t => t.trim());
+        })
+        .filter(term => term.length > 0 && !GAP_PATTERN.test(term) && !term.startsWith('!')); // Exclude #gap=X and !exclude patterns
 
       terms.forEach(term => {
         try {
@@ -1098,7 +1103,11 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
 
     const rawTerms = filters.searchQuery
       .split('||')
-      .map(t => t.trim())
+      .flatMap(part => {
+        let inner = part.trim();
+        if (inner.startsWith('(') && inner.endsWith(')')) inner = inner.slice(1, -1).trim();
+        return inner.split('&&').map(t => t.trim());
+      })
       .filter(Boolean);
 
     if (!rawTerms.length) return [];

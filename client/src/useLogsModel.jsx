@@ -592,48 +592,77 @@ const useLogsModel = () => {
       searchText = searchText.replace(GAP_PATTERN, '').replace(/\|\|\s*\|\|/g, '||').replace(/^\s*\|\|/, '').replace(/\|\|\s*$/, '').trim();
     }
 
-    // Split by ||, trim, and classify as include/exclude
-    const terms = searchText.split('||').map(term => term.trim()).filter(Boolean);
-    const includeTerms = terms.filter(term => !term.startsWith('!'));
-    const excludeTerms = terms.filter(term => term.startsWith('!')).map(term => term.slice(1));
+    // Parse expression supporting || (OR) and && (AND) with parentheses.
+    // Split by || respecting parentheses, then split each OR group by &&.
+    const splitByOr = (text) => {
+      const groups = [];
+      let depth = 0;
+      let current = '';
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (ch === '(') { depth++; current += ch; }
+        else if (ch === ')') { depth--; current += ch; }
+        else if (ch === '|' && text[i + 1] === '|' && depth === 0) {
+          groups.push(current.trim());
+          current = '';
+          i++; // skip second |
+        } else {
+          current += ch;
+        }
+      }
+      if (current.trim()) groups.push(current.trim());
+      return groups.filter(Boolean);
+    };
 
-    // Build regexes for each term (case-insensitive, supports spaces)
-    // If filterMode is 'regex', treat terms as regex patterns; otherwise escape special chars
-    const includeRegexes = includeTerms.map(term => {
+    const buildRegex = (term) => {
       try {
         if (filters.filterMode === 'regex') {
-          // Use term as regex pattern directly
-          console.log('Filter Mode: REGEX - Using term as pattern:', term);
           return new RegExp(term, 'i');
         } else {
-          // Escape special regex characters for text search
-          console.log('Filter Mode: TEXT - Escaping term:', term);
           return new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
         }
       } catch (e) {
         console.error('Invalid regex pattern:', term, e);
         return null;
       }
-    });
-    const excludeRegexes = excludeTerms.map(term => {
-      try {
-        if (filters.filterMode === 'regex') {
-          // Use term as regex pattern directly
-          return new RegExp(term, 'i');
-        } else {
-          // Escape special regex characters for text search
-          return new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-        }
-      } catch (e) {
-        console.error('Invalid regex pattern:', term, e);
-        return null;
+    };
+
+    const orSegments = splitByOr(searchText);
+    const includeGroups = []; // each entry = { terms: [...], regexes: [...] }
+    const excludeTerms = [];
+    const excludeRegexes = [];
+
+    orSegments.forEach(segment => {
+      // Strip outer parentheses
+      let inner = segment;
+      if (inner.startsWith('(') && inner.endsWith(')')) {
+        inner = inner.slice(1, -1).trim();
+      }
+      // Split by && within this OR group
+      const andTerms = inner.split('&&').map(t => t.trim()).filter(Boolean);
+      const inclTerms = andTerms.filter(t => !t.startsWith('!'));
+      const exclTerms = andTerms.filter(t => t.startsWith('!')).map(t => t.slice(1));
+
+      exclTerms.forEach(term => {
+        excludeTerms.push(term);
+        excludeRegexes.push(buildRegex(term));
+      });
+
+      if (inclTerms.length > 0) {
+        includeGroups.push({
+          terms: inclTerms,
+          regexes: inclTerms.map(buildRegex)
+        });
       }
     });
+
+    // Flat list of all include terms (for backwards-compat where needed)
+    const includeTerms = includeGroups.flatMap(g => g.terms);
 
     return {
+      includeGroups,
       includeTerms,
       excludeTerms,
-      includeRegexes,
       excludeRegexes,
       rowStart,
       rowEnd,
@@ -668,7 +697,7 @@ const useLogsModel = () => {
 
     logs.forEach((log, index) => {
       if (searchData) {
-        const { includeTerms, excludeTerms, includeRegexes, excludeRegexes, rowStart, rowEnd, dateStart, dateEnd, gapThreshold } = searchData;
+        const { includeGroups, excludeTerms, excludeRegexes, rowStart, rowEnd, dateStart, dateEnd, gapThreshold } = searchData;
         const searchableText = getSearchableText(log);
         const lowerText = lowerTexts[index];
 
@@ -722,18 +751,16 @@ const useLogsModel = () => {
         });
         if (isExcluded) return;
 
-        // Include logic: if there are include terms, at least one must match
-        if (includeTerms.length > 0) {
-          const matchesAnyInclude = includeTerms.some((term, i) => {
-            const regex = includeRegexes[i];
-            if (regex) {
-              // In regex mode, test against full searchable text
-              return regex.test(searchableText);
-            }
-            // In text mode, use lowercase comparison
-            return lowerText.includes(term.toLowerCase());
-          });
-          if (!matchesAnyInclude) return;
+        // Include logic: if there are include groups, at least one group must fully match (AND within group, OR between groups)
+        if (includeGroups.length > 0) {
+          const matchesAnyGroup = includeGroups.some(group =>
+            group.terms.every((term, i) => {
+              const regex = group.regexes[i];
+              if (regex) return regex.test(searchableText);
+              return lowerText.includes(term.toLowerCase());
+            })
+          );
+          if (!matchesAnyGroup) return;
         }
       }
       

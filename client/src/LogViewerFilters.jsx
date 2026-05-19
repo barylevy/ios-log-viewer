@@ -5,7 +5,10 @@ import { getLevelBackgroundColor } from './utils/logLevelColors';
 // Extract tooltip text to avoid inline strings
 const FILTER_TOOLTIP = `Advanced Filtering Guide:
 
-• Multiple terms: Use '||' (OR logic): error || warning
+• OR logic: Use '||': error || warning
+• AND logic: Use '&&': bary && moshe
+• Combine both: (bary && moshe) || david
+• Grouping: Use parentheses to control precedence
 • Exclude terms: Use '!' prefix: !heartbeat
 • Exact phrases: Use quotes: "connection lost"
 • Regex mode: Switch dropdown to 'Regex' for pattern matching: \\berror\\b || warn.*
@@ -95,7 +98,7 @@ const LogViewerFilters = ({ filters, onFiltersChange, moduleOptions = [], logsCo
     const value = filters.searchText;
     if (value && value.trim()) {
       // Split by || and save each phrase individually
-      const phrases = value.split('||').map(phrase => phrase.trim()).filter(phrase => phrase.length > 0);
+      const phrases = value.split(/\|\||&&/).map(phrase => phrase.trim().replace(/^\(|\)$/g, '')).filter(phrase => phrase.length > 0);
       phrases.forEach(phrase => saveToFilterHistory(phrase));
     }
   };
@@ -111,8 +114,8 @@ const LogViewerFilters = ({ filters, onFiltersChange, moduleOptions = [], logsCo
   const handleSearchBlur = () => {
     const value = filters.searchQuery;
     if (value && value.trim()) {
-      // Split by || and save each phrase individually
-      const phrases = value.split('||').map(phrase => phrase.trim()).filter(phrase => phrase.length > 0);
+      // Split by || and && and save each phrase individually
+      const phrases = value.split(/\|\||&&/).map(phrase => phrase.trim().replace(/^\(|\)$/g, '')).filter(phrase => phrase.length > 0);
       phrases.forEach(phrase => saveToSearchHistory(phrase));
     }
   };
@@ -673,9 +676,9 @@ const LogViewerFilters = ({ filters, onFiltersChange, moduleOptions = [], logsCo
           </span>
         )}
       </span>
-      {filters.searchText && filters.searchText.includes('||') && (
+      {filters.searchText && (filters.searchText.includes('||') || filters.searchText.includes('&&')) && (
         <span className="text-gray-400 dark:text-gray-500 opacity-75">
-          Filtering for: {filters.searchText.split('||').map(t => t.trim()).filter(t => t).length} terms
+          Filtering for: {filters.searchText.split('||').flatMap(p => { let s = p.trim(); if (s.startsWith('(') && s.endsWith(')')) s = s.slice(1,-1).trim(); return s.split('&&'); }).map(t => t.trim()).filter(t => t && !t.startsWith('!')).length} terms
         </span>
       )}
       {/* Pivot Gap Display */}
