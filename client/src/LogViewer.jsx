@@ -261,14 +261,22 @@ const LogViewer = () => {
   // Compute number of search matches
   const searchMatchCount = useMemo(() => {
     if (!filters.searchQuery) return 0;
+    const unquote = (t) =>
+      t.startsWith('"') && t.endsWith('"') && t.length >= 2 ? t.slice(1, -1) : t;
     const terms = filters.searchQuery
       .split('||')
-      .flatMap(part => {
-        let inner = part.trim();
+      .flatMap((part, partIdx, allParts) => {
+        let inner = partIdx < allParts.length - 1 ? part.trimEnd() : part;
+        if (partIdx > 0) inner = inner.trimStart();
         if (inner.startsWith('(') && inner.endsWith(')')) inner = inner.slice(1, -1).trim();
-        return inner.split('&&').map(t => t.trim().toLowerCase());
+        return inner.split('&&').map((t, tIdx, allT) => {
+          if (allT.length === 1) return unquote(t);
+          if (tIdx < allT.length - 1) return unquote(t.trim());
+          return unquote(t.trimStart());
+        });
       })
-      .filter(Boolean);
+      .filter(t => t.trim())
+      .map(t => t.toLowerCase());
     if (!terms.length) return 0;
     return filteredLogs.reduce((cnt, log) => {
       const msg = (log.message || '').toLowerCase();

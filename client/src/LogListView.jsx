@@ -536,13 +536,24 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
 
       const terms = searchText
         .split('||')
-        .flatMap(part => {
-          // Strip outer parentheses, then split by &&
-          let inner = part.trim();
+        .flatMap((part, partIdx, allParts) => {
+          // Strip spaces adjacent to || operators (trailing on non-last parts, leading on non-first parts)
+          // but preserve spaces within a standalone term so " app" and "app " match correctly.
+          let inner = partIdx < allParts.length - 1 ? part.trimEnd() : part;
+          if (partIdx > 0) inner = inner.trimStart(); // strip leading space adjacent to preceding ||
           if (inner.startsWith('(') && inner.endsWith(')')) inner = inner.slice(1, -1).trim();
-          return inner.split('&&').map(t => t.trim());
+          // Same for &&: preserve spaces within standalone terms
+      // Strip outer double-quotes for exact phrase matching (same as filtering logic)
+          const unquote = (t) =>
+            t.startsWith('"') && t.endsWith('"') && t.length >= 2 ? t.slice(1, -1) : t;
+
+          return inner.split('&&').map((t, tIdx, allT) => {
+            if (allT.length === 1) return unquote(t); // No &&: preserve as-is, strip quotes
+            if (tIdx < allT.length - 1) return unquote(t.trim()); // Non-last: strip both sides
+            return unquote(t.trimStart()); // Last: strip leading, preserve trailing
+          });
         })
-        .filter(term => term.length > 0 && !GAP_PATTERN.test(term) && !term.startsWith('!')); // Exclude #gap=X and !exclude patterns
+        .filter(term => term.trim().length > 0 && !GAP_PATTERN.test(term) && !term.startsWith('!')); // Exclude #gap=X and !exclude patterns
 
       terms.forEach(term => {
         try {
@@ -1101,14 +1112,22 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
   const matchIndices = useMemo(() => {
     if (!filters.searchQuery || !flatLogs.length) return [];
 
+    const unquote = (t) =>
+      t.startsWith('"') && t.endsWith('"') && t.length >= 2 ? t.slice(1, -1) : t;
+
     const rawTerms = filters.searchQuery
       .split('||')
-      .flatMap(part => {
-        let inner = part.trim();
+      .flatMap((part, partIdx, allParts) => {
+        let inner = partIdx < allParts.length - 1 ? part.trimEnd() : part;
+        if (partIdx > 0) inner = inner.trimStart();
         if (inner.startsWith('(') && inner.endsWith(')')) inner = inner.slice(1, -1).trim();
-        return inner.split('&&').map(t => t.trim());
+        return inner.split('&&').map((t, tIdx, allT) => {
+          if (allT.length === 1) return unquote(t);
+          if (tIdx < allT.length - 1) return unquote(t.trim());
+          return unquote(t.trimStart());
+        });
       })
-      .filter(Boolean);
+      .filter(t => t.trim());
 
     if (!rawTerms.length) return [];
 

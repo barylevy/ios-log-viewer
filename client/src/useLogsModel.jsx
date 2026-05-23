@@ -594,6 +594,8 @@ const useLogsModel = () => {
 
     // Parse expression supporting || (OR) and && (AND) with parentheses.
     // Split by || respecting parentheses, then split each OR group by &&.
+    // Spaces adjacent to operators are stripped; trailing spaces within a term are preserved
+    // so that e.g. "app " (with space) matches "App success" but not "sendAppIsRegister".
     const splitByOr = (text) => {
       const groups = [];
       let depth = 0;
@@ -603,14 +605,18 @@ const useLogsModel = () => {
         if (ch === '(') { depth++; current += ch; }
         else if (ch === ')') { depth--; current += ch; }
         else if (ch === '|' && text[i + 1] === '|' && depth === 0) {
-          groups.push(current.trim());
+          groups.push(current.trimEnd()); // strip trailing space adjacent to ||
           current = '';
           i++; // skip second |
+          // skip leading spaces adjacent to ||
+          while (i + 1 < text.length && text[i + 1] === ' ') i++;
         } else {
           current += ch;
         }
       }
-      if (current.trim()) groups.push(current.trim());
+      // Preserve both leading and trailing spaces in the last segment (may be intentional search criteria),
+      // but skip if the segment is entirely whitespace
+      if (current.trim()) groups.push(current);
       return groups.filter(Boolean);
     };
 
@@ -627,6 +633,11 @@ const useLogsModel = () => {
       }
     };
 
+    // Strip outer double-quotes for exact phrase matching — preserves internal spaces.
+    // e.g. "app " || moshe  →  /app /i  OR  /moshe/i
+    const unquote = (t) =>
+      t.startsWith('"') && t.endsWith('"') && t.length >= 2 ? t.slice(1, -1) : t;
+
     const orSegments = splitByOr(searchText);
     const includeGroups = []; // each entry = { terms: [...], regexes: [...] }
     const excludeTerms = [];
@@ -639,9 +650,15 @@ const useLogsModel = () => {
         inner = inner.slice(1, -1).trim();
       }
       // Split by && within this OR group
-      const andTerms = inner.split('&&').map(t => t.trim()).filter(Boolean);
-      const inclTerms = andTerms.filter(t => !t.startsWith('!'));
-      const exclTerms = andTerms.filter(t => t.startsWith('!')).map(t => t.slice(1));
+      // Strip spaces adjacent to && operators, but preserve the spaces within a standalone term
+      const andTerms = inner.split('&&').map((t, idx, arr) => {
+        if (arr.length === 1) return t; // No &&: preserve term exactly as typed
+        if (idx < arr.length - 1) return t.trim(); // Non-last: strip both sides (adjacent to &&)
+        return t.trimStart(); // Last: strip leading (adjacent to &&), preserve trailing
+      }).filter(t => t.trim());
+      // Unquote after splitting so "app " keeps its internal space
+      const inclTerms = andTerms.filter(t => !t.trimStart().startsWith('!')).map(unquote);
+      const exclTerms = andTerms.filter(t => t.trimStart().startsWith('!')).map(t => unquote(t.trimStart().slice(1)));
 
       exclTerms.forEach(term => {
         excludeTerms.push(term);
