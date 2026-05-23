@@ -56,6 +56,8 @@ const useLogsModel = () => {
     // Initialize with localStorage values for modes
     const filterMode = localStorage.getItem('logViewer_filterMode') || 'text';
     const searchMode = localStorage.getItem('logViewer_searchMode') || 'text';
+    const filterCaseSensitive = localStorage.getItem('logViewer_filterCaseSensitive') === 'true';
+    const searchCaseSensitive = localStorage.getItem('logViewer_searchCaseSensitive') === 'true';
     
     return {
       searchText: '',
@@ -64,7 +66,9 @@ const useLogsModel = () => {
       selectedModule: 'all',
       contextLines: 0,
       filterMode, // 'text' or 'regex'
-      searchMode  // 'text' or 'regex'
+      searchMode,  // 'text' or 'regex'
+      filterCaseSensitive,
+      searchCaseSensitive
     };
   });
 
@@ -74,12 +78,16 @@ const useLogsModel = () => {
       // Merge with current modes from localStorage to ensure they're always present
       const filterMode = localStorage.getItem('logViewer_filterMode') || 'text';
       const searchMode = localStorage.getItem('logViewer_searchMode') || 'text';
+      const filterCaseSensitive = localStorage.getItem('logViewer_filterCaseSensitive') === 'true';
+      const searchCaseSensitive = localStorage.getItem('logViewer_searchCaseSensitive') === 'true';
       
       setFilters({
         selectedModule: 'all',
         ...allFileFilters[currentFileName],
         filterMode,
-        searchMode
+        searchMode,
+        filterCaseSensitive,
+        searchCaseSensitive
       });
     }
   }, [currentFileName, allFileFilters]);
@@ -622,10 +630,11 @@ const useLogsModel = () => {
 
     const buildRegex = (term) => {
       try {
+        const flags = filters.filterCaseSensitive ? '' : 'i';
         if (filters.filterMode === 'regex') {
-          return new RegExp(term, 'i');
+          return new RegExp(term, flags);
         } else {
-          return new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+          return new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
         }
       } catch (e) {
         console.error('Invalid regex pattern:', term, e);
@@ -687,7 +696,7 @@ const useLogsModel = () => {
       dateEnd,
       gapThreshold
     };
-  }, [filters.searchText, filters.filterMode]);
+  }, [filters.searchText, filters.filterMode, filters.filterCaseSensitive]);
 
   const filteredLogs = useMemo(() => {
     if (!logs.length) return [];
@@ -763,7 +772,8 @@ const useLogsModel = () => {
             // In regex mode, test against full searchable text
             return regex.test(searchableText);
           }
-          // In text mode, use lowercase comparison
+          // In text mode, case-sensitive or insensitive comparison
+          if (filters.filterCaseSensitive) return searchableText.includes(term);
           return lowerText.includes(term.toLowerCase());
         });
         if (isExcluded) return;
@@ -774,6 +784,7 @@ const useLogsModel = () => {
             group.terms.every((term, i) => {
               const regex = group.regexes[i];
               if (regex) return regex.test(searchableText);
+              if (filters.filterCaseSensitive) return searchableText.includes(term);
               return lowerText.includes(term.toLowerCase());
             })
           );

@@ -531,7 +531,7 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
     let messageHtml = cleanedMessage;
 
     // Helper function to process highlight terms
-    const processHighlights = (searchText, markClass, isRegex) => {
+    const processHighlights = (searchText, markClass, isRegex, isCaseSensitive) => {
       if (!searchText) return;
 
       const terms = searchText
@@ -560,11 +560,11 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
           let regex;
           if (isRegex) {
             // Use term as regex pattern directly
-            regex = new RegExp(`(${term})`, 'gi');
+            regex = new RegExp(`(${term})`, isCaseSensitive ? 'g' : 'gi');
           } else {
             // Escape special characters for text search
             const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            regex = new RegExp(`(${escaped})`, 'gi');
+            regex = new RegExp(`(${escaped})`, isCaseSensitive ? 'g' : 'gi');
           }
           messageHtml = messageHtml.replace(regex, `<mark class="${markClass}">$1</mark>`);
         } catch (e) {
@@ -575,13 +575,13 @@ const LogItemComponent = ({ log, onClick, isHighlighted, isSelected, filters, in
     };
 
     // Highlight filter terms (blue)
-    processHighlights(filters.searchText, 'bg-blue-200 dark:bg-blue-500', filters.filterMode === 'regex');
+    processHighlights(filters.searchText, 'bg-blue-200 dark:bg-blue-500', filters.filterMode === 'regex', filters.filterCaseSensitive);
 
     // Highlight search query terms (green)
-    processHighlights(filters.searchQuery, 'bg-green-200 dark:bg-green-600 font-bold', filters.searchMode === 'regex');
+    processHighlights(filters.searchQuery, 'bg-green-200 dark:bg-green-600 font-bold', filters.searchMode === 'regex', filters.searchCaseSensitive);
 
     return messageHtml;
-  }, [cleanedMessage, filters.searchQuery, filters.searchText, filters.filterMode, filters.searchMode]);
+  }, [cleanedMessage, filters.searchQuery, filters.searchText, filters.filterMode, filters.searchMode, filters.filterCaseSensitive, filters.searchCaseSensitive]);
 
   // Determine log level for styling - use the parsed level field, with fallback to pattern matching
   const logLevel = useMemo(() => {
@@ -1180,11 +1180,13 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
         textMatches = terms.some(term => {
           try {
             if (filters.searchMode === 'regex') {
-              const regex = new RegExp(term, 'i');
+              const regex = new RegExp(term, filters.searchCaseSensitive ? '' : 'i');
               return regex.test(searchableText);
             }
+            if (filters.searchCaseSensitive) return searchableText.includes(term);
             return searchableText.toLowerCase().includes(term.toLowerCase());
           } catch (e) {
+            if (filters.searchCaseSensitive) return searchableText.includes(term);
             return searchableText.toLowerCase().includes(term.toLowerCase());
           }
         });
@@ -1198,7 +1200,7 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
     }
 
     return indices;
-  }, [filters.searchQuery, filters.searchMode, flatLogs]);
+  }, [filters.searchQuery, filters.searchMode, filters.searchCaseSensitive, flatLogs]);
   // Reset on search query change (not on every matchIndices recalculation)
   useEffect(() => {
     setCurrentMatchIndex(matchIndices.length ? 0 : -1);

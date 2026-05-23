@@ -279,10 +279,13 @@ const LogViewer = () => {
       .map(t => t.toLowerCase());
     if (!terms.length) return 0;
     return filteredLogs.reduce((cnt, log) => {
-      const msg = (log.message || '').toLowerCase();
-      return terms.some(term => msg.includes(term)) ? cnt + 1 : cnt;
+      const msg = (log.message || '');
+      const compare = filters.searchCaseSensitive
+        ? (haystack, needle) => haystack.includes(needle)
+        : (haystack, needle) => haystack.toLowerCase().includes(needle.toLowerCase());
+      return terms.some(term => compare(msg, term)) ? cnt + 1 : cnt;
     }, 0);
-  }, [filters.searchQuery, filteredLogs]);
+  }, [filters.searchQuery, filters.searchCaseSensitive, filteredLogs]);
   
   // Multi-file support
   const [files, setFiles] = useState([]);

@@ -62,6 +62,12 @@ const LogViewerFilters = ({ filters, onFiltersChange, moduleOptions = [], logsCo
     const saved = localStorage.getItem('logViewer_searchMode');
     return saved || 'text';
   });
+  const [filterCaseSensitive, setFilterCaseSensitive] = useState(() => {
+    return localStorage.getItem('logViewer_filterCaseSensitive') === 'true';
+  });
+  const [searchCaseSensitive, setSearchCaseSensitive] = useState(() => {
+    return localStorage.getItem('logViewer_searchCaseSensitive') === 'true';
+  });
 
   const dropdownRef = useRef(null);
   const portalRef = useRef(null);
@@ -88,6 +94,17 @@ const LogViewerFilters = ({ filters, onFiltersChange, moduleOptions = [], logsCo
     localStorage.setItem('logViewer_searchMode', searchMode);
     onFiltersChange({ searchMode });
   }, [searchMode]);
+
+  // Save case-sensitive flags to localStorage and propagate to parent
+  useEffect(() => {
+    localStorage.setItem('logViewer_filterCaseSensitive', filterCaseSensitive);
+    onFiltersChange({ filterCaseSensitive });
+  }, [filterCaseSensitive]);
+
+  useEffect(() => {
+    localStorage.setItem('logViewer_searchCaseSensitive', searchCaseSensitive);
+    onFiltersChange({ searchCaseSensitive });
+  }, [searchCaseSensitive]);
 
   const handleFilterChange = (key, value) => {
     onFiltersChange({ [key]: value });
@@ -378,53 +395,69 @@ const LogViewerFilters = ({ filters, onFiltersChange, moduleOptions = [], logsCo
           onChange={(e) => handleFilterChange('searchQuery', e.target.value)}
           onBlur={handleSearchBlur}
           onKeyDown={handleSearchKeyDown}
-          className="w-full h-6 px-2 pr-28 border-none focus:outline-none bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
+          className="flex-1 min-w-0 h-6 px-2 border-none focus:outline-none bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
           title="Search in logs. Add #gap=5 to show visual separators between records with 5+ second gaps. Combine with search terms: 'error #gap=3' shows errors with gap indicators."
         />
-        {filters.searchQuery && (
+        {/* Right-side controls: prev/next match, Aa case-toggle, clear, history chevron */}
+        <div className="flex items-center flex-shrink-0">
+          {filters.searchQuery && (
+            <>
+              <button
+                onClick={() => window.dispatchEvent(new Event('prevSearchMatch'))}
+                title="Previous match"
+                className="h-6 px-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 border-none focus:outline-none bg-transparent"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <span className="text-xs text-gray-400 dark:text-gray-500 px-0.5">{searchMatchPos}/{searchMatchCount}</span>
+              <button
+                onClick={() => window.dispatchEvent(new Event('nextSearchMatch'))}
+                title="Next match"
+                className="h-6 px-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 border-none focus:outline-none bg-transparent"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+              <div className="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
+            </>
+          )}
           <button
-            onClick={() => handleFilterChange('searchQuery', '')}
-            className="absolute right-10 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 z-10"
+            onClick={() => setSearchCaseSensitive(v => !v)}
+            title={searchCaseSensitive ? 'Case sensitive — click to make case insensitive' : 'Case insensitive — click to make case sensitive'}
+            className={`h-6 px-1.5 text-xs font-bold border-none focus:outline-none rounded-sm ${
+              searchCaseSensitive
+                ? 'text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/40'
+                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 bg-transparent'
+            }`}
           >
-            ×
+            Aa
           </button>
-        )}
-        {filters.searchQuery && (
-          <div className="absolute right-8 top-0 bottom-0 w-px bg-gray-300 dark:bg-gray-600 z-10"></div>
-        )}
-        <button
-          ref={searchChevronRef}
-          onClick={() => setIsSearchHistoryOpen(!isSearchHistoryOpen)}
-          className="w-8 h-6 border-none rounded-r-md bg-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none flex items-center justify-center"
-          title="Search history"
-        >
-          <svg className={`w-3 h-3 transition-transform ${isSearchHistoryOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-        {filters.searchQuery && (
-          <div className="absolute right-12 top-1/2 transform -translate-y-1/2 flex items-center space-x-1">
-            <button
-              onClick={() => window.dispatchEvent(new Event('prevSearchMatch'))}
-              title="Previous match"
-              className="p-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <span className="text-xs text-gray-400 dark:text-gray-500">{searchMatchPos}/{searchMatchCount}</span>
-            <button
-              onClick={() => window.dispatchEvent(new Event('nextSearchMatch'))}
-              title="Next match"
-              className="p-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
-        )}
+          {filters.searchQuery && (
+            <>
+              <div className="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
+              <button
+                onClick={() => handleFilterChange('searchQuery', '')}
+                className="h-6 px-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 border-none focus:outline-none bg-transparent"
+              >
+                ×
+              </button>
+            </>
+          )}
+          <div className="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
+          <button
+            ref={searchChevronRef}
+            onClick={() => setIsSearchHistoryOpen(!isSearchHistoryOpen)}
+            className="w-8 h-6 border-none rounded-r-md bg-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none flex items-center justify-center"
+            title="Search history"
+          >
+            <svg className={`w-3 h-3 transition-transform ${isSearchHistoryOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Search History Dropdown */}
@@ -494,30 +527,45 @@ const LogViewerFilters = ({ filters, onFiltersChange, moduleOptions = [], logsCo
               onChange={(e) => handleFilterChange('searchText', e.target.value)}
               onBlur={handleFilterBlur}
               onKeyDown={handleFilterKeyDown}
-              className="w-full h-6 px-2 pr-28 border-none focus:outline-none bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
+              className="flex-1 min-w-0 h-6 px-2 border-none focus:outline-none bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
               title={FILTER_TOOLTIP}
             />
-            {filters.searchText && (
+            {/* Right-side controls: Aa case-toggle, clear, history chevron */}
+            <div className="flex items-center flex-shrink-0">
               <button
-                onClick={() => handleFilterChange('searchText', '')}
-                className="absolute right-10 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 z-10"
+                onClick={() => setFilterCaseSensitive(v => !v)}
+                title={filterCaseSensitive ? 'Case sensitive — click to make case insensitive' : 'Case insensitive — click to make case sensitive'}
+                className={`h-6 px-1.5 text-xs font-bold border-none focus:outline-none rounded-sm ${
+                  filterCaseSensitive
+                    ? 'text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/40'
+                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 bg-transparent'
+                }`}
               >
-                ×
+                Aa
               </button>
-            )}
-            {filters.searchText && (
-              <div className="absolute right-8 top-0 bottom-0 w-px bg-gray-300 dark:bg-gray-600 z-10"></div>
-            )}
-            <button
-              ref={filterChevronRef}
-              onClick={() => setIsFilterHistoryOpen(!isFilterHistoryOpen)}
-              className="w-8 h-6 border-none rounded-r-md bg-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none flex items-center justify-center"
-              title="Filter history"
-            >
-              <svg className={`w-3 h-3 transition-transform ${isFilterHistoryOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
+              {filters.searchText && (
+                <>
+                  <div className="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
+                  <button
+                    onClick={() => handleFilterChange('searchText', '')}
+                    className="h-6 px-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 border-none focus:outline-none bg-transparent"
+                  >
+                    ×
+                  </button>
+                </>
+              )}
+              <div className="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
+              <button
+                ref={filterChevronRef}
+                onClick={() => setIsFilterHistoryOpen(!isFilterHistoryOpen)}
+                className="w-8 h-6 border-none rounded-r-md bg-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none flex items-center justify-center"
+                title="Filter history"
+              >
+                <svg className={`w-3 h-3 transition-transform ${isFilterHistoryOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
 
