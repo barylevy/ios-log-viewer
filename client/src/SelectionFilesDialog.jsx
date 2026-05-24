@@ -16,7 +16,16 @@ const getRootFolder = (f) => {
   return relPath.split('/')[0];
 };
 
-const MergeTabsDialog = ({ isOpen, onClose, files, onConfirm }) => {
+const SelectionFilesDialog = ({
+  isOpen,
+  onClose,
+  files,
+  onConfirm,
+  title = 'Download Merged Logs',
+  description = 'Select which tabs to include in the merged output:',
+  confirmLabel = 'Merge',
+  getDefaultChecked = null,   // optional: (fileItem) => boolean
+}) => {
   const modalRef = useRef(null);
   const [selected, setSelected] = useState({});
 
@@ -26,12 +35,16 @@ const MergeTabsDialog = ({ isOpen, onClose, files, onConfirm }) => {
     const initial = {};
     files.forEach(f => {
       if (!hasFileObj(f)) { initial[f.id] = false; return; }
-      const fullName = (f.name || '').replace(/\s*\(\d+\)\s*$/, '').trim();
-      const lastSegment = fullName.split('/').pop().toLowerCase();
-      initial[f.id] = DEFAULT_CHECKED_PREFIXES.some(p => lastSegment === p || lastSegment.startsWith(p));
+      if (getDefaultChecked) {
+        initial[f.id] = getDefaultChecked(f);
+      } else {
+        const fullName = (f.name || '').replace(/\s*\(\d+\)\s*$/, '').trim();
+        const lastSegment = fullName.split('/').pop().toLowerCase();
+        initial[f.id] = DEFAULT_CHECKED_PREFIXES.some(p => lastSegment === p || lastSegment.startsWith(p));
+      }
     });
     setSelected(initial);
-  }, [isOpen, files]);
+  }, [isOpen, files, getDefaultChecked]);
 
   // Escape to close
   useEffect(() => {
@@ -100,11 +113,11 @@ const MergeTabsDialog = ({ isOpen, onClose, files, onConfirm }) => {
         </button>
 
         <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-1 shrink-0">
-          Download Merged Logs
+          {title}
         </h2>
         <div className="flex items-center justify-between mb-4 shrink-0">
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Select which tabs to include in the merged output:
+            {description}
           </p>
           <div className="flex gap-2 ml-4">
             <button
@@ -187,7 +200,7 @@ const MergeTabsDialog = ({ isOpen, onClose, files, onConfirm }) => {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4" />
             </svg>
-            Merge{selectedCount > 0 ? ` (${selectedCount})` : ''}
+            {confirmLabel}{selectedCount > 0 ? ` (${selectedCount})` : ''}
           </button>
         </div>
       </div>
@@ -195,5 +208,5 @@ const MergeTabsDialog = ({ isOpen, onClose, files, onConfirm }) => {
   );
 };
 
-export default MergeTabsDialog;
+export default SelectionFilesDialog;
 

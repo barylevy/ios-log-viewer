@@ -4,7 +4,7 @@ import LogModal from './LogModal';
 import LogViewerHeader from './LogViewerHeader';
 import LogViewerFilters from './LogViewerFilters';
 import LogTabs from './LogTabs';
-import MergeTabsDialog from './MergeTabsDialog';
+import SelectionFilesDialog from './SelectionFilesDialog';
 import useLogsModel from './useLogsModel';
 import { getFileIdentifier } from './utils/fileLoader';
 import { getFileDisplayName } from './utils/fileLoader';
@@ -1132,7 +1132,7 @@ const LogViewer = () => {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <MergeTabsDialog
+      <SelectionFilesDialog
         isOpen={isMergeDialogOpen}
         onClose={() => setIsMergeDialogOpen(false)}
         files={files}

@@ -1,10 +1,14 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import AboutModal from './AboutModal';
 import ColumnSettings, { AVAILABLE_COLUMNS } from './ColumnSettings';
+import SelectionFilesDialog from './SelectionFilesDialog';
 import { CATO_COLORS } from './constants';
 import { clearSession } from './utils/sessionStorage';
 import { groupFilesByPrefix, groupFilesByDirectory, groupFilesByDirectoryAndFormat, getGroupDisplayName, naturalSort } from './utils/fileGrouping';
 import { isArchiveFile, expandArchivesInList } from './utils/archiveExtractor';
+
+// localStorage key for persisting which group names the user selected last time
+const FOLDER_SELECTION_KEY = 'logViewer_folderGroupNames';
 
 const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs, visibleColumns, onColumnsChange, onResetColumnDefaults, rightColumnOrder, onRightColumnOrderChange, logDuration, folderName, onPrepareFilesStart, onPrepareFilesEnd, onDownloadMerged, isDownloadingMerged }) => {
   const fileInputRef = useRef(null);
@@ -13,6 +17,9 @@ const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs,
   const [showAbout, setShowAbout] = useState(false);
   const [showColumnSettings, setShowColumnSettings] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  // State for the folder-file-selection dialog
+  const [pendingFolderItems, setPendingFolderItems] = useState(null); // null | array of { id, name, fileObj }
+  const [pendingFolderGroupMap, setPendingFolderGroupMap] = useState(null); // null | Map<id, File[]>
   const [isDarkMode, setIsDarkMode] = useState(
     () => localStorage.getItem('theme') === 'dark' ||
       (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -96,6 +103,7 @@ const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs,
 
   const handleDirectorySelected = async (event) => {
     const allFiles = Array.from(event.target.files);
+    event.target.value = '';
 
     // Filter out files that should not be loaded
     const EXCLUDED_FILES = [
@@ -110,29 +118,65 @@ const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs,
     ];
 
     const files = allFiles.filter(file => !EXCLUDED_FILES.includes(file.name));
+    if (!files.length) return;
 
+    // Group files first, then show the selection dialog instead of loading everything
+    onPrepareFilesStart && onPrepareFilesStart();
+    let fileGroups;
+    try {
+      fileGroups = await groupFilesByDirectoryAndFormat(files);
+    } finally {
+      onPrepareFilesEnd && onPrepareFilesEnd();
+    }
+
+    if (!fileGroups.size) return;
+
+    // Build dialog items from the grouped map
+    const items = Array.from(fileGroups.entries()).map(([groupKey, groupFiles]) => ({
+      id: groupKey,
+      name: groupKey.split('/').pop().replace(/\s*\[.*?\]\s*$/, '').trim() || groupKey,
+      fileObj: groupFiles,
+    }));
+
+    setPendingFolderGroupMap(fileGroups);
+    setPendingFolderItems(items);
+  };
+
+  // Load saved folder group names from localStorage
+  const getSavedGroupNames = () => {
+    try {
+      const saved = localStorage.getItem(FOLDER_SELECTION_KEY);
+      return saved ? new Set(JSON.parse(saved)) : null;
+    } catch { return null; }
+  };
+
+  // Called when user confirms the folder-file-selection dialog
+  const handleFolderSelectionConfirm = useCallback((selectedIds) => {
+    if (!pendingFolderGroupMap) return;
+
+    // Persist chosen names (last segment of each selected groupKey, lowercase)
+    const chosenNames = selectedIds.map(id => id.split('/').pop().replace(/\s*\[.*?\]\s*$/, '').trim().toLowerCase());
+    try { localStorage.setItem(FOLDER_SELECTION_KEY, JSON.stringify(chosenNames)); } catch { /* ignore */ }
+
+    // Clear previous tabs, then load only selected groups
+    if (onClearTabs) onClearTabs();
     onPrepareFilesStart && onPrepareFilesStart();
     try {
-      // Clear previous files when loading new directory
-      if (onClearTabs) {
-        onClearTabs();
-      }
-
-      // Group by subdirectory + prefix, then split each multi-file group by
-      // detected log pattern so only files sharing a format share a tab.
-      const fileGroups = await groupFilesByDirectoryAndFormat(files);
-
-      // Load all groups (even single-file groups)
-      fileGroups.forEach((groupFiles, groupKey) => {
-        // Use the groupKey as-is (includes directory path if present)
-        // This ensures unique identification even if same prefix exists in different folders
-        onFileLoad(groupFiles, false, groupKey);
+      selectedIds.forEach(id => {
+        const groupFiles = pendingFolderGroupMap.get(id);
+        if (groupFiles) onFileLoad(groupFiles, false, id);
       });
     } finally {
       onPrepareFilesEnd && onPrepareFilesEnd();
     }
 
-    event.target.value = '';
+    setPendingFolderItems(null);
+    setPendingFolderGroupMap(null);
+  }, [pendingFolderGroupMap, onFileLoad, onClearTabs, onPrepareFilesStart, onPrepareFilesEnd]);
+
+  const handleFolderSelectionClose = () => {
+    setPendingFolderItems(null);
+    setPendingFolderGroupMap(null);
   };
 
   const handleLoadFilesClick = () => {
@@ -184,6 +228,25 @@ const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs,
 
   return (
     <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-600 p-2">
+      {/* Folder-file selection dialog — shown after the user picks a directory */}
+      {pendingFolderItems && (
+        <SelectionFilesDialog
+          isOpen={true}
+          onClose={handleFolderSelectionClose}
+          files={pendingFolderItems}
+          onConfirm={handleFolderSelectionConfirm}
+          title="Select Files to Load"
+          description="Choose which log groups from this folder to open:"
+          confirmLabel="Open"
+          getDefaultChecked={(f) => {
+            const savedNames = getSavedGroupNames();
+            const nameLower = (f.name || '').toLowerCase();
+            if (savedNames) return savedNames.has(nameLower);
+            const DEFAULT_PREFIXES = ['applogs', 'appextensionlogs'];
+            return DEFAULT_PREFIXES.some(p => nameLower === p || nameLower.startsWith(p));
+          }}
+        />
+      )}
       <div className="flex items-center justify-between flex-nowrap gap-4">
         <div className="flex items-center space-x-3 min-w-0 flex-1">
           <img src="/cato-logo.svg" alt="Cato Networks" className="h-8 w-auto flex-shrink-0" />
