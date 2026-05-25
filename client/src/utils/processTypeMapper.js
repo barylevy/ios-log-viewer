@@ -1,8 +1,11 @@
 /**
- * Maps module/class names to process types
+ * Maps module/class names to process types.
+ * Mappings are loaded from processTypeMappings.json — add new entries there.
  */
 
-// Process type constants
+import mappingsJson from './processTypeMappings.json';
+
+// Process type constants (kept for backwards-compat with any future callers)
 export const PROCESS_TYPES = {
   UI: 'UI',
   EXTENSION: 'Extn',
@@ -10,17 +13,8 @@ export const PROCESS_TYPES = {
   USER_AGENT: 'UsrAgnt'
 };
 
-// Mapping from module/class name to process type
-const MODULE_TO_PROCESS_TYPE = {
-  'MainView': PROCESS_TYPES.UI,
-  'CNSharedManager+macOS': PROCESS_TYPES.UI,
-  'CNSharedManager+iOS': PROCESS_TYPES.UI,
-  'PacketTunnelProvider': PROCESS_TYPES.EXTENSION,
-  'UsersMonitor': PROCESS_TYPES.USER_AGENT,
-  'NetworkInterfaceMonitor': PROCESS_TYPES.USER_AGENT,
-  'DaemonCommands': PROCESS_TYPES.DAEMON,
-  'DevicePostureCustomChecks': PROCESS_TYPES.DAEMON
-};
+// Mutable copy so addModuleMapping / runtime overrides still work
+const MODULE_TO_PROCESS_TYPE = { ...mappingsJson };
 
 /**
  * Get process type from module name

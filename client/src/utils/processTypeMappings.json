@@ -1,0 +1,11 @@
+{
+  "MainView": "UI",
+  "CNSharedManager+macOS": "UI",
+  "CNSharedManager+iOS": "UI",
+  "PacketTunnelProvider": "Extn",
+  "UsersMonitor": "UsrAgnt",
+  "NetworkInterfaceMonitor": "UsrAgnt",
+  "DaemonCommands": "Daemon",
+  "DevicePostureCustomChecks": "Daemon",
+  "DNSProxyProvider": "DNSRely"
+}
