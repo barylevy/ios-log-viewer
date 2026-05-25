@@ -35,7 +35,7 @@ const FILTER_TOOLTIP = `Advanced Filtering Guide:
 
 • Works with log level and context line filters`;
 
-const LogViewerFilters = ({ filters, onFiltersChange, moduleOptions = [], logsCount, filteredLogsCount, searchMatchCount, searchMatchPos, pivotGap, pivotLineNumber, stickyLogs, onRemoveStickyLog, onClearAllStickyLogs, onScrollToLog, onUpdateStickyLogTitle }) => {
+const LogViewerFilters = ({ filters, onFiltersChange, moduleOptions = [], logsCount, filteredLogsCount, searchMatchCount, searchMatchPos, pivotGap, pivotLineNumber, stickyLogs, onRemoveStickyLog, onClearAllStickyLogs, onScrollToLog, onUpdateStickyLogTitle, activeFileIndex = 0 }) => {
   const [isLevelDropdownOpen, setIsLevelDropdownOpen] = useState(false);
   const [isFilterHistoryOpen, setIsFilterHistoryOpen] = useState(false);
   const [isSearchHistoryOpen, setIsSearchHistoryOpen] = useState(false);
@@ -68,6 +68,22 @@ const LogViewerFilters = ({ filters, onFiltersChange, moduleOptions = [], logsCo
   const [searchCaseSensitive, setSearchCaseSensitive] = useState(() => {
     return localStorage.getItem('logViewer_searchCaseSensitive') === 'true';
   });
+
+  // === Saved filters ===
+  const SAVED_FILTERS_KEY = 'logViewer_savedFilters';
+  const [savedFilters, setSavedFilters] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(SAVED_FILTERS_KEY) || '[]'); } catch { return []; }
+  });
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+  const [isLoadDialogOpen, setIsLoadDialogOpen] = useState(false);
+  const [saveInputName, setSaveInputName] = useState('');
+  const [perTabPreset, setPerTabPreset] = useState({}); // { [tabIndex]: filterName | null }
+  const activeFilterName = perTabPreset[activeFileIndex] ?? null;
+  const setActiveFilterName = (name) => setPerTabPreset(prev => ({ ...prev, [activeFileIndex]: name ?? null }));
+  const [fileFilters, setFileFilters] = useState([]); // array of presets from the open .json file
+  const saveInputRef = useRef(null);
+  const fileHandleRef = useRef(null);
+  const loadFileInputRef = useRef(null);
 
   const dropdownRef = useRef(null);
   const portalRef = useRef(null);
@@ -698,21 +714,271 @@ const LogViewerFilters = ({ filters, onFiltersChange, moduleOptions = [], logsCo
     </div>
   );
 
-  const renderClearFiltersButton = () => (
-    <button
-      onClick={() => onFiltersChange({ searchText: '', searchQuery: '', logLevel: ['all'], selectedModule: 'all', contextLines: 0 })}
-      disabled={!filters.searchText && !filters.searchQuery && filters.logLevel.includes('all') && (filters.selectedModule || 'all') === 'all' && !filters.contextLines}
-      title="Clear all filters - Reset search text, search query, log level to 'All', module to 'All Modules', and context lines to 0"
-      className={`w-6 h-6 rounded-md transition-colors flex items-center justify-center ${!filters.searchText && !filters.searchQuery && filters.logLevel.includes('all') && (filters.selectedModule || 'all') === 'all' && !filters.contextLines
-        ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-        : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-        }`}
-    >
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-      </svg>
-    </button>
+  // === Saved filter helpers ===
+  const persistSavedFilters = (list) => {
+    try { localStorage.setItem(SAVED_FILTERS_KEY, JSON.stringify(list)); } catch {}
+  };
+
+  const getFilterSnapshot = () => ({
+    searchText: filters.searchText || '',
+    logLevel: filters.logLevel || ['all'],
+    contextLines: filters.contextLines || 0,
+    selectedModule: filters.selectedModule || 'all',
+    filterMode,
+    searchMode,
+    filterCaseSensitive,
+    searchCaseSensitive,
+  });
+
+  const saveFilterWithName = (name) => {
+    const entry = {
+      id: Date.now().toString(),
+      name,
+      timestamp: new Date().toISOString(),
+      data: getFilterSnapshot(),
+    };
+    const updated = [entry, ...savedFilters.filter(f => f.name !== name)];
+    setSavedFilters(updated);
+    persistSavedFilters(updated);
+    setActiveFilterName(name);
+  };
+
+  const applyFilterData = (filterData, name, handle) => {
+    onFiltersChange(filterData);
+    if (filterData.filterMode !== undefined) setFilterMode(filterData.filterMode);
+    if (filterData.searchMode !== undefined) setSearchMode(filterData.searchMode);
+    if (filterData.filterCaseSensitive !== undefined) setFilterCaseSensitive(filterData.filterCaseSensitive);
+    if (filterData.searchCaseSensitive !== undefined) setSearchCaseSensitive(filterData.searchCaseSensitive);
+    fileHandleRef.current = handle;
+    setActiveFilterName(name);
+  };
+
+  const buildFileJson = (filtersArray) => JSON.stringify(
+    { version: 2, filters: filtersArray },
+    null, 2
   );
+
+  const writeFiltersArray = async (handle, filtersArray) => {
+    const writable = await handle.createWritable();
+    await writable.write(buildFileJson(filtersArray));
+    await writable.close();
+  };
+
+  const downloadFiltersArray = (filtersArray) => {
+    const blob = new Blob([buildFileJson(filtersArray)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'filters.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const parseFileToArray = (parsed, fallbackName) => {
+    // v2: { version: 2, filters: [...] }
+    if (Array.isArray(parsed.filters)) return parsed.filters;
+    // v1: single filter { name, filters: {...} } or bare filter object
+    const data = parsed.filters && typeof parsed.filters === 'object' && !Array.isArray(parsed.filters)
+      ? parsed.filters : parsed;
+    return [{ id: Date.now().toString(), name: parsed.name || fallbackName || 'Imported', savedAt: parsed.savedAt || new Date().toISOString(), data }];
+  };
+
+  // Save — update active entry in the array and write file
+  const handleSave = async () => {
+    if (!activeFilterName) return;
+    const updatedEntry = {
+      id: fileFilters.find(f => f.name === activeFilterName)?.id || Date.now().toString(),
+      name: activeFilterName,
+      savedAt: new Date().toISOString(),
+      data: getFilterSnapshot(),
+    };
+    const newArray = fileFilters.some(f => f.name === activeFilterName)
+      ? fileFilters.map(f => f.name === activeFilterName ? updatedEntry : f)
+      : [...fileFilters, updatedEntry];
+    setFileFilters(newArray);
+    if (fileHandleRef.current) {
+      try { await writeFiltersArray(fileHandleRef.current, newArray); return; } catch {}
+    }
+    saveFilterWithName(activeFilterName);
+  };
+
+  // Save As — always shows name dialog; adds entry to existing file (or creates new)
+  const handleSaveAs = () => {
+    setSaveInputName('');
+    setIsSaveDialogOpen(true);
+  };
+
+  // Load — file picker; reads array from file
+  const handleLoad = async () => {
+    if (window.showOpenFilePicker) {
+      try {
+        const [handle] = await window.showOpenFilePicker({
+          types: [{ description: 'Filter JSON', accept: { 'application/json': ['.json'] } }],
+        });
+        const file = await handle.getFile();
+        const parsed = JSON.parse(await file.text());
+        const arr = parseFileToArray(parsed, handle.name.replace(/\.json$/i, ''));
+        fileHandleRef.current = handle;
+        setFileFilters(arr);
+        if (arr.length > 0) applyFilterData(arr[0].data, arr[0].name, handle);
+      } catch (e) { if (e.name !== 'AbortError') console.error(e); }
+    } else {
+      setIsLoadDialogOpen(true);
+    }
+  };
+
+  const handleLoadFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text());
+      const arr = parseFileToArray(parsed, file.name.replace(/\.json$/i, ''));
+      fileHandleRef.current = null;
+      setFileFilters(arr);
+      if (arr.length > 0) applyFilterData(arr[0].data, arr[0].name, null);
+    } catch {}
+    e.target.value = '';
+  };
+
+  // Dialog OK — add new entry to array; write to open file or open save picker
+  const handleSaveCurrentFilter = async () => {
+    const name = saveInputName.trim();
+    if (!name) return;
+    const newEntry = {
+      id: fileFilters.find(f => f.name === name)?.id || Date.now().toString(),
+      name,
+      savedAt: new Date().toISOString(),
+      data: getFilterSnapshot(),
+    };
+    const newArray = fileFilters.some(f => f.name === name)
+      ? fileFilters.map(f => f.name === name ? newEntry : f)
+      : [...fileFilters, newEntry];
+    setFileFilters(newArray);
+    setActiveFilterName(name);
+    saveFilterWithName(name);
+    if (fileHandleRef.current) {
+      try { await writeFiltersArray(fileHandleRef.current, newArray); }
+      catch { downloadFiltersArray(newArray); }
+    } else if (window.showSaveFilePicker) {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: 'filters.json',
+          types: [{ description: 'Filter JSON', accept: { 'application/json': ['.json'] } }],
+        });
+        await writeFiltersArray(handle, newArray);
+        fileHandleRef.current = handle;
+      } catch (e) { if (e.name !== 'AbortError') downloadFiltersArray(newArray); }
+    } else {
+      downloadFiltersArray(newArray);
+    }
+    setSaveInputName('');
+    setIsSaveDialogOpen(false);
+  };
+
+  const handleApplySavedFilter = (entry) => {
+    applyFilterData(entry.data, entry.name, null);
+    setIsLoadDialogOpen(false);
+  };
+
+  const handleDeleteSavedFilter = (id, e) => {
+    e.stopPropagation();
+    const updated = savedFilters.filter(f => f.id !== id);
+    setSavedFilters(updated);
+    persistSavedFilters(updated);
+  };
+
+  const formatSavedDate = (iso) => {
+    try {
+      return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch { return iso; }
+  };
+
+  const renderPresetRow = () => {
+    const canSave = !!(fileHandleRef.current || activeFilterName);
+    const tipCls = 'pointer-events-none absolute top-full right-0 mt-1.5 px-2 py-1 text-[10px] leading-none text-white bg-gray-800 dark:bg-gray-700 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-[60]';
+    return (
+      <div className="flex items-center mb-1.5">
+        <div className="flex items-center gap-0.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white/70 dark:bg-gray-800/70 px-1 py-0.5">
+        {/* Filter name dropdown — shows all entries in the open file */}
+        {fileFilters.length > 0 ? (
+          <select
+            value={activeFilterName || ''}
+            onChange={e => {
+              const val = e.target.value;
+              if (!val) {
+                onFiltersChange({ searchText: '', searchQuery: '', logLevel: ['all'], selectedModule: 'all', contextLines: 0 });
+                setActiveFilterName(null);
+                return;
+              }
+              const entry = fileFilters.find(f => f.name === val);
+              if (entry) applyFilterData(entry.data, entry.name, fileHandleRef.current);
+            }}
+            className="text-[10px] h-5 max-w-[120px] rounded bg-transparent text-blue-600 dark:text-blue-400 font-medium px-1 leading-none cursor-pointer focus:outline-none"
+          >
+            <option value="">— None —</option>
+            {fileFilters.map(f => (
+              <option key={f.id} value={f.name}>{f.name}</option>
+            ))}
+          </select>
+        ) : (
+          <span className="text-[10px] max-w-[110px] truncate leading-none mr-0.5 text-gray-400 dark:text-gray-500 italic">
+            unsaved
+          </span>
+        )}
+        {/* Save */}
+        <button
+          onClick={handleSave}
+          disabled={!canSave}
+          className={`relative group w-6 h-6 rounded-md transition-colors flex items-center justify-center ${
+            canSave
+              ? 'text-gray-400 hover:text-blue-600 dark:text-gray-500 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+              : 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+          }`}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+          </svg>
+          <span className={tipCls}>{canSave ? `Save "${activeFilterName}"` : 'No filter loaded'}</span>
+        </button>
+        {/* Save As */}
+        <button
+          onClick={handleSaveAs}
+          className="relative group w-6 h-6 rounded-md transition-colors flex items-center justify-center text-gray-400 hover:text-blue-600 dark:text-gray-500 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <span className={tipCls}>{fileFilters.length > 0 ? 'Add to file…' : 'Save As…'}</span>
+        </button>
+        {/* Load */}
+        <button
+          onClick={handleLoad}
+          className="relative group w-6 h-6 rounded-md transition-colors flex items-center justify-center text-gray-400 hover:text-blue-600 dark:text-gray-500 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+          </svg>
+          <span className={tipCls}>Load file</span>
+        </button>
+        {/* Clear */}
+        <button
+          onClick={() => {
+            onFiltersChange({ searchText: '', searchQuery: '', logLevel: ['all'], selectedModule: 'all', contextLines: 0 });
+            fileHandleRef.current = null;
+            setActiveFilterName(null);
+            setFileFilters([]);
+          }}
+          className="relative group w-6 h-6 rounded-md transition-colors flex items-center justify-center text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+          <span className={tipCls}>Clear filters</span>
+        </button>
+        </div>
+      </div>
+    );
+  };
 
   const renderStats = () => (
     <div className="text-[10px] text-gray-600 dark:text-gray-400 flex items-center gap-4">
@@ -825,15 +1091,15 @@ const LogViewerFilters = ({ filters, onFiltersChange, moduleOptions = [], logsCo
           </div>
 
           {/* Right side - auto width, aligned to right */}
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col items-end">
+            {/* Preset name + Save / Save As / Load / Clear */}
+            {renderPresetRow()}
             <div className="space-y-2 flex flex-col items-end">
               {/* Log Level Filter */}
               {renderLogLevelFilter()}
               {/* Module Filter */}
               {renderModuleFilter()}
             </div>
-            {/* Clear Filters Button */}
-            {renderClearFiltersButton()}
           </div>
         </div>
 
@@ -843,10 +1109,90 @@ const LogViewerFilters = ({ filters, onFiltersChange, moduleOptions = [], logsCo
             {renderStats()}
           </div>
           {renderContextLines()}
-          {/* Spacer matching the Clear Filters button width so Context aligns under Module */}
-          <div className="w-6" />
         </div>
       </div>
+
+      {/* Hidden file input — fallback for browsers without File System Access API */}
+      <input ref={loadFileInputRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleLoadFileChange} />
+
+      {/* Save As Fallback Dialog — shown when showSaveFilePicker is unavailable */}
+      {isSaveDialogOpen && (() => {
+        const isOverwrite = saveInputName.trim() && savedFilters.some(f => f.name === saveInputName.trim());
+        return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setIsSaveDialogOpen(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 p-4 w-80" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">Add Filter to File</h3>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-3">{fileFilters.length > 0 ? 'Enter a name for this filter. It will be added to the open file.' : 'Enter a name. You\'ll be asked where to save the file.'}</p>
+            <input
+              ref={saveInputRef}
+              autoFocus
+              type="text"
+              value={saveInputName}
+              onChange={e => setSaveInputName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleSaveCurrentFilter(); if (e.key === 'Escape') setIsSaveDialogOpen(false); }}
+              placeholder="Filter preset name…"
+              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {isOverwrite && (
+              <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1.5">This will overwrite the existing "{saveInputName.trim()}" preset.</p>
+            )}
+            <div className="flex justify-end gap-2 mt-3">
+              <button onClick={() => setIsSaveDialogOpen(false)} className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors">Cancel</button>
+              <button onClick={handleSaveCurrentFilter} disabled={!saveInputName.trim()} className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">{isOverwrite ? 'Update' : 'Save'}</button>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
+
+      {/* Load Filters Dialog */}
+      {isLoadDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setIsLoadDialogOpen(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 w-96 max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-600">
+              <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">Load Filters</h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setIsLoadDialogOpen(false); loadFileInputRef.current?.click(); }}
+                  className="px-2 py-1 text-[10px] rounded bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+                  title="Load from a .json file"
+                >
+                  Browse file…
+                </button>
+                <button onClick={() => setIsLoadDialogOpen(false)} className="w-6 h-6 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+            </div>
+            <div className="overflow-y-auto flex-1 py-1">
+              {savedFilters.length === 0 ? (
+                <p className="px-4 py-6 text-sm text-center text-gray-400 dark:text-gray-500">No saved filters yet</p>
+              ) : savedFilters.map(entry => (
+                <button
+                  key={entry.id}
+                  onClick={() => handleApplySavedFilter(entry)}
+                  className="w-full flex items-start gap-3 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left group"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{entry.name}</p>
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">{formatSavedDate(entry.timestamp)}</p>
+                    {entry.data.searchText && (
+                      <p className="text-[10px] text-blue-600 dark:text-blue-400 truncate mt-0.5 font-mono">"{entry.data.searchText}"</p>
+                    )}
+                  </div>
+                  <button
+                    onClick={(e) => handleDeleteSavedFilter(entry.id, e)}
+                    title="Delete this saved filter"
+                    className="opacity-0 group-hover:opacity-100 w-5 h-5 flex-shrink-0 mt-0.5 flex items-center justify-center rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

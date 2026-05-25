@@ -1152,6 +1152,7 @@ const LogViewer = () => {
         folderName={currentFolderName}
         onDownloadMerged={handleDownloadMerged}
         isDownloadingMerged={isDownloadingMerged}
+        onClearFilters={() => updateFilters({ searchText: '', searchQuery: '', logLevel: ['all'], selectedModule: 'all', contextLines: 0 })}
       />
 
       {/* Main content area */}
@@ -1191,6 +1192,7 @@ const LogViewer = () => {
                   onClearAllStickyLogs={clearAllStickyLogs}
                   onUpdateStickyLogTitle={updateStickyLogTitle}
                   onScrollToLog={scrollToLog}
+                  activeFileIndex={activeFileIndex}
                 />
                 <div className="flex-1 overflow-hidden">
                   {memoizedContent}
