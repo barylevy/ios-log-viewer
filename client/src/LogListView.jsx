@@ -1791,7 +1791,7 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
     <div ref={containerRef} className="h-full flex flex-col bg-white dark:bg-gray-900">
       {/* Fixed Date Header with Navigation - Outside of scroll container */}
       {currentStickyDate && (
-        <div className="flex-shrink-0 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-0.5">
+        <div className="flex-shrink-0 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-[5px]">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               {/* Previous Date Button */}
@@ -1809,10 +1809,24 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
                 </svg>
               </button>
 
-              {/* Current Date - Show targetNavigationDate if navigating, otherwise currentStickyDate */}
-              <span className="text-xs text-gray-700 dark:text-gray-300">
-                {dateToDisplay[targetNavigationDate || currentStickyDate] || targetNavigationDate || currentStickyDate}
-              </span>
+              {/* Current Date - Dropdown showing all available dates */}
+              <select
+                value={targetNavigationDate || currentStickyDate || ''}
+                onChange={e => {
+                  const date = e.target.value;
+                  if (date) {
+                    setTargetNavigationDate(date);
+                    scrollToDate(date);
+                  }
+                }}
+                className="text-xs text-gray-700 dark:text-gray-300 bg-transparent border border-gray-300 dark:border-gray-600 rounded px-1.5 py-0.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-400 dark:bg-gray-800"
+              >
+                {allDates.map(date => (
+                  <option key={date} value={date}>
+                    {dateToDisplay[date] || date}
+                  </option>
+                ))}
+              </select>
 
               {/* Next Date Button */}
               <button
