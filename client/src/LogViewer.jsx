@@ -1075,11 +1075,22 @@ const LogViewer = () => {
   const memoizedContent = useMemo(() => {
     if (!hasUserInteracted) {
       return (
-        <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
-          <div className="text-center">
-            <p className="text-xl mb-2">Cato Client Log Viewer</p>
-            <p>Drop log files here or click "Open Files" to get started</p>
-            <p className="text-sm mt-2">Supports multiple files and AI-powered analysis</p>
+        <div className="flex items-center justify-center h-full">
+          <div
+            style={{ width: '50vw', height: '50vh' }}
+            className={`flex flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-colors
+              ${isFileDropActive
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
+                : 'border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400'
+              }`}
+          >
+            {/* Cloud / upload icon */}
+            <svg className="w-16 h-16 mb-4 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            <p className="text-2xl font-semibold mb-2">Drop log files here</p>
+            <p className="text-sm mb-1">or click <span className="font-medium">"Open Files"</span> in the toolbar to get started</p>
+            <p className="text-xs mt-3 opacity-60">Supports .log, .txt, .ips — single files, folders, or archives</p>
           </div>
         </div>
       );
@@ -1121,7 +1132,7 @@ const LogViewer = () => {
         viewKey={showingCombinedView ? 'combined' : `file:${files[activeFileIndex]?.name || activeFileIndex}`}
       />
     );
-  }, [hasUserInteracted, files, activeFileIndex, showingCombinedView, filteredLogs, handleLogClick, highlightedLogId, filters, pivotLog, setPivotTime, clearPivotTime, stickyLogs, addStickyLog, highlightLog, setSearchPos, setSearchTotal, updateFilters, setHoveredLog, visibleColumns, columnVersion, rightColumnOrder, handleRightColumnOrderChange, columnResetKey]);
+  }, [hasUserInteracted, isFileDropActive, files, activeFileIndex, showingCombinedView, filteredLogs, handleLogClick, highlightedLogId, filters, pivotLog, setPivotTime, clearPivotTime, stickyLogs, addStickyLog, highlightLog, setSearchPos, setSearchTotal, updateFilters, setHoveredLog, visibleColumns, columnVersion, rightColumnOrder, handleRightColumnOrderChange, columnResetKey]);
 
   // Remove old currentFileHeaders logic - now using headerState
 
