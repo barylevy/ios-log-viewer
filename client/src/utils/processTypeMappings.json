@@ -7,5 +7,5 @@
   "NetworkInterfaceMonitor": "UsrAgnt",
   "DaemonCommands": "Daemon",
   "DevicePostureCustomChecks": "Daemon",
-  "DNSProxyProvider": "DNSRely"
+  "DNSProxyProvider": "DNSRelay"
 }
