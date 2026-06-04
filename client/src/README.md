@@ -13,13 +13,14 @@ A standalone single-page log viewer built with React, Tailwind CSS, and react-vi
 5. [Filtering & Searching](#filtering--searching)
 6. [Log Navigation & Interaction](#log-navigation--interaction)
 7. [Log Detail Modal](#log-detail-modal)
-8. [AI Chat](#ai-chat)
-9. [Dark Mode](#dark-mode)
-10. [Settings & Preferences](#settings--preferences)
-11. [Session Persistence](#session-persistence)
-12. [Keyboard Shortcuts](#keyboard-shortcuts)
-13. [File Structure](#file-structure)
-14. [Architecture Notes](#architecture-notes)
+8. [Live Logs](#live-logs)
+9. [AI Chat](#ai-chat)
+10. [Dark Mode](#dark-mode)
+11. [Settings & Preferences](#settings--preferences)
+12. [Session Persistence](#session-persistence)
+13. [Keyboard Shortcuts](#keyboard-shortcuts)
+14. [File Structure](#file-structure)
+15. [Architecture Notes](#architecture-notes)
 
 ---
 
@@ -330,7 +331,69 @@ Click any row to open the detail modal (`LogModal.jsx`).
 
 ---
 
-## AI Chat
+## Live Logs
+
+Stream logs from the local Cato client in real time directly into the viewer — no need to load files manually.
+
+### How It Works
+
+A lightweight local WebSocket server (`live-logs-server.js`) runs on the user's Mac, reads the Cato log directories, and pushes new content to the browser every second via WebSocket on port 4000.
+
+### Starting Live Logs
+
+Click the **"Live Logs"** button in the header. If the local server is not running, a dialog appears with a single copyable command that:
+
+1. Kills any existing process on port 4000
+2. Downloads `live-logs-server.js` to `~/`
+3. Installs the `ws` dependency
+4. Starts the server with `sudo`
+
+```bash
+sudo kill $(sudo lsof -ti:4000) 2>/dev/null; curl -o ~/live-logs-server.js <app-url>/live-logs-server.js && cd ~ && npm install ws && sudo node ~/live-logs-server.js
+```
+
+> `sudo` is required to read log directories under `/private/var/root/`.
+
+### Button States
+
+| State | Appearance | Action |
+|-------|-----------|--------|
+| Idle | Grey — **"Live Logs"** | Click to connect |
+| Checking | Blue spinner — **"Connecting…"** (disabled) | Waiting for server health check |
+| Connected | Green — **"Stop Live"** with pulsing dot | Click to disconnect |
+
+### Live Log Sources
+
+Each source becomes its own tab with **green text**:
+
+| Tab | Path |
+|-----|------|
+| AppLogs | `~/Library/Group Containers/CKGSB8CH43.group/AppLogs` |
+| Extension | `/private/var/root/Library/Group Containers/…/AppExtensionLogs` |
+| DNSRelay | `/private/var/root/Library/Group Containers/…/DNSExtensionLogs` |
+| UserAgent | `~/Library/Logs/CatoNetworksUserAgent` |
+| Daemon | `/private/var/root/Library/Logs/com.catonetworks.mac.CatoClient.helper` |
+| Install | `/var/tmp/catoinstallext.txt` |
+
+### Downloading Live Logs
+
+- **Per-tab download** — each live tab has a green ↓ download button beside its title. Clicking it exports that tab's logs to a file immediately (works on any tab, not just the active one).
+- **Download Merged** — while in live mode, the "Download Merged" button in the header merges all live tabs, sorts by timestamp, and exports as `live_logs_merged.log` with source-file tags (no file-picker dialog needed).
+
+### WebSocket Protocol
+
+| Message type | Meaning |
+|---|---|
+| `initial` | Full snapshot of a source on connect |
+| `append` | New bytes added since last send |
+| `reset` | File rotated — full resend |
+
+Hook: `utils/useLiveLogs.js`  
+Server: `scripts/live-logs-server.js` (also served as a static download from `/live-logs-server.js`)
+
+---
+
+## Log Detail Modal
 
 ### Integrated Side Panel (`AIChat.jsx`)
 
@@ -477,7 +540,12 @@ client/src/
     ├── aiDisplayUtils.js      AI message rendering helpers
     ├── logLevelColors.js      Level → color mapping, message cleaning
     ├── logParsingUtils.js     Shared parsing primitives: GAP_PATTERN, CLEAN_PATTERNS
-    └── processTypeMapper.js   Module name → process type (UI / Extn / Daemon / UsrAgnt)
+    ├── processTypeMapper.js   Module name → process type (UI / Extn / Daemon / UsrAgnt)
+    └── useLiveLogs.js         WebSocket hook for live log streaming
+
+scripts/
+└── live-logs-server.js        Local WebSocket server; also served as a static download
+                               from /live-logs-server.js for users who need to install it
 
 components/
 ├── AIChatDisplayDropdown.jsx  Dropdown: choose side-panel / new tab / new window
