@@ -1,0 +1,13 @@
+{
+  "name": "live-logs-server",
+  "version": "1.0.0",
+  "description": "WebSocket server that streams live Cato client logs to the viewer",
+  "main": "live-logs-server.js",
+  "scripts": {
+    "start": "node live-logs-server.js",
+    "start:sudo": "sudo node live-logs-server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

@@ -27,14 +27,17 @@ export const getFileIdentifier = (file) => {
 export const getFileDisplayName = (fileId) => {
   if (!fileId) return '';
 
+  // Strip live: prefix from live-log tab IDs
+  let id = fileId.startsWith('live:') ? fileId.slice(5) : fileId;
+
   // If it contains the size and timestamp pattern, extract just the filename
   const sizeTimestampPattern = /^(.+)_\d+_\d+$/;
-  const match = fileId.match(sizeTimestampPattern);
-  let name = fileId;
+  const match = id.match(sizeTimestampPattern);
+  let name = id;
   if (match) {
     name = match[1];
-  } else if (fileId.includes('/')) {
-    name = fileId.split('/').pop();
+  } else if (id.includes('/')) {
+    name = id.split('/').pop();
   }
 
   // Shorten to max 30 chars from the end (show suffix)

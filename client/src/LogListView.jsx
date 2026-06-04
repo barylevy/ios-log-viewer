@@ -792,7 +792,7 @@ const LogItem = memo(LogItemComponent);
 
 LogItem.displayName = 'LogItem';
 
-const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogId, filters, onFiltersChange, onSearchMatchUpdate, onHover, pivotLog, onSetPivot, onClearPivot, stickyLogs, onAddStickyLog, highlightLog, visibleColumns = {}, columnOrder = DEFAULT_COLUMN_ORDER, onColumnOrderChange, viewKey = 'default' }) => {
+const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogId, filters, onFiltersChange, onSearchMatchUpdate, onHover, pivotLog, onSetPivot, onClearPivot, stickyLogs, onAddStickyLog, highlightLog, visibleColumns = {}, columnOrder = DEFAULT_COLUMN_ORDER, onColumnOrderChange, viewKey = 'default', isLiveMode = false }) => {
   const virtuosoRef = useRef(null);
   // Refs for each item element to allow focus
   const itemRefs = useRef({});
@@ -1963,6 +1963,7 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
         <Virtuoso
           ref={virtuosoRef}
           data={flatLogs}
+          followOutput={isLiveMode ? (isAtBottom => isAtBottom ? 'smooth' : false) : false}
           itemContent={(index, log) => {
             const previousLog = index > 0 ? flatLogs[index - 1] : null;
             const showDateSeparator = previousLog && log.date && previousLog.date !== log.date;

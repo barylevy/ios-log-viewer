@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { getFileDisplayName, getFileFullName } from './useLogsModel';
 
-const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCombinedView, onCombinedViewSelect, allFileLogs = {}, isFileLoading, onCloseAll, onExportActive }) => {
+const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCombinedView, onCombinedViewSelect, allFileLogs = {}, isFileLoading, onCloseAll, onExportActive, onExportFile, isLiveMode = false, onFromNow }) => {
     const renderExportButton = (label) => (
         <button
             onClick={(e) => {
@@ -10,6 +10,21 @@ const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCom
             }}
             className="ml-1 text-gray-400 hover:text-blue-600 dark:text-gray-500 dark:hover:text-blue-400"
             title={`Export visible records of "${label}" to file`}
+        >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+            </svg>
+        </button>
+    );
+
+    const renderLiveDownloadButton = (fileId, label) => (
+        <button
+            onClick={(e) => {
+                e.stopPropagation();
+                onExportFile && onExportFile(fileId, label);
+            }}
+            className="ml-1 text-green-400 hover:text-green-600 dark:text-green-500 dark:hover:text-green-300"
+            title={`Download "${label}" logs`}
         >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
@@ -51,7 +66,7 @@ const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCom
                                 }}
                                 title={getFileFullName(file.id)}
                             >
-                                <span className="text-xs flex items-center">
+                                <span className={`text-xs flex items-center ${file.isLive ? 'text-green-500 dark:text-green-400 font-medium' : ''}`}>
                                     {tabLabel}
                                     {loading && (
                                         <svg className="ml-2 animate-spin h-4 w-4 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -60,7 +75,8 @@ const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCom
                                         </svg>
                                     )}
                                 </span>
-                                {isActive && !loading && renderExportButton(tabLabel)}
+                                {file.isLive && !loading && renderLiveDownloadButton(file.id, tabLabel)}
+                                {!file.isLive && isActive && !loading && renderExportButton(tabLabel)}
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -92,6 +108,19 @@ const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCom
                     )}
                 </div>
 
+                {/* From Now button — only in live mode */}
+                {isLiveMode && onFromNow && (
+                    <button
+                        onClick={onFromNow}
+                        className="flex-shrink-0 ml-1 inline-flex items-center gap-1 px-2 h-5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors border border-blue-200 dark:border-blue-700 text-xs font-medium"
+                        title="Filter all tabs to show only log records from now onwards"
+                    >
+                        <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        From Now
+                    </button>
+                )}
                 {/* Close All Button */}
                 {files.length > 0 && (
                     <button

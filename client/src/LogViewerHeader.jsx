@@ -10,7 +10,7 @@ import { isArchiveFile, expandArchivesInList } from './utils/archiveExtractor';
 // localStorage key for persisting which group names the user selected last time
 const FOLDER_SELECTION_KEY = 'logViewer_folderGroupNames';
 
-const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs, visibleColumns, onColumnsChange, onResetColumnDefaults, rightColumnOrder, onRightColumnOrderChange, logDuration, folderName, onPrepareFilesStart, onPrepareFilesEnd, onDownloadMerged, isDownloadingMerged, onClearFilters }) => {
+const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs, visibleColumns, onColumnsChange, onResetColumnDefaults, rightColumnOrder, onRightColumnOrderChange, logDuration, folderName, onPrepareFilesStart, onPrepareFilesEnd, onDownloadMerged, isDownloadingMerged, onClearFilters, isLiveMode = false, isLiveConnected = false, isLiveChecking = false, onLiveToggle }) => {
   const fileInputRef = useRef(null);
   const directoryInputRef = useRef(null);
   const [showFileDropdown, setShowFileDropdown] = useState(false);
@@ -315,6 +315,36 @@ const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs,
         </div>
 
         <div className="flex items-center gap-3">
+        {/* Online / Live button */}
+        {onLiveToggle && (
+          <button
+            onClick={onLiveToggle}
+            disabled={isLiveChecking}
+            title={isLiveConnected ? 'Disconnect live logs' : 'Connect to live logs'}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              isLiveConnected
+                ? 'bg-green-600 hover:bg-green-700 text-white'
+                : isLiveChecking
+                  ? 'bg-blue-500 text-white cursor-wait'
+                  : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300'
+            }`}
+          >
+            {isLiveChecking ? (
+              <>
+                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                  <path fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" className="opacity-75" />
+                </svg>
+                Connecting…
+              </>
+            ) : (
+              <>
+                <span className={`inline-block w-2 h-2 rounded-full ${isLiveConnected ? 'bg-white animate-pulse' : 'bg-gray-400 dark:bg-gray-500'}`} />
+                {isLiveConnected ? 'Stop Live' : 'Live Logs'}
+              </>
+            )}
+          </button>
+        )}
         {onDownloadMerged && (
           <button
             onClick={onDownloadMerged}
@@ -403,7 +433,7 @@ const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs,
 
             {/* Dropdown Menu */}
             {showDropdown && (
-              <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-600 z-50">
+              <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-600 z-50">
                 <div className="py-1">
                   <button
                     onClick={handleThemeToggle}

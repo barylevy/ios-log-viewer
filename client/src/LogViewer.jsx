@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import LogListView from './LogListView';
 import LogModal from './LogModal';
 import LogViewerHeader from './LogViewerHeader';
@@ -13,6 +13,7 @@ import { groupFilesByPrefix, groupFilesByDirectory, groupFilesByDirectoryAndForm
 import { isArchiveFile, expandArchivesInList } from './utils/archiveExtractor';
 import { exportLogsToFile } from './utils/exportLogs';
 import { AVAILABLE_COLUMNS } from './ColumnSettings';
+import useLiveLogs from './utils/useLiveLogs';
 
 // Turn a raw folder name like "2387341752-260422074919 (1)" into the short
 // label we want in the page title.
@@ -57,10 +58,12 @@ const LogViewer = () => {
     isAnyFileLoading,
     setSelectedLog,
     updateFilters,
+    updateFiltersForAllFiles,
     highlightLog,
     clearHighlight,
     getCurrentFileHeaders,
     setLogsForFile,
+    updateLogsBackground,
     setLogFileHeaders,
     switchToFile,
     removeLogsForFile,
@@ -393,6 +396,60 @@ const LogViewer = () => {
     setLogDuration(null); // Clear time range
   }, []);
 
+  // ── Live / Online mode ────────────────────────────────────────────────────
+  const [isLiveMode, setIsLiveMode] = useState(false);
+  const liveTabIdsRef = useRef(new Set());
+
+  const handleLiveSourceUpdate = useCallback(({ sourceKey, label, logs: parsedLogs, isInitial }) => {
+    const tabId = `live:${sourceKey}`;
+    if (isInitial) {
+      setFiles(prev => {
+        if (prev.find(f => f.id === tabId)) return prev;
+        const newFiles = [...prev, { name: label, id: tabId, isLive: true }];
+        if (!liveTabIdsRef.current.size) {
+          setActiveFileIndex(newFiles.length - 1);
+          setShowingCombinedView(false);
+        }
+        liveTabIdsRef.current.add(tabId);
+        return newFiles;
+      });
+      setLogsForFile(tabId, parsedLogs);
+    } else {
+      updateLogsBackground(tabId, parsedLogs);
+    }
+    setHasUserInteracted(true);
+  }, [setLogsForFile, updateLogsBackground]);
+
+  const [showServerDialog, setShowServerDialog] = useState(false);
+
+  const handleLiveConnected = useCallback(() => {
+    handleClearTabs();
+    liveTabIdsRef.current = new Set();
+    setIsLiveMode(true);
+  }, [handleClearTabs]);
+
+  const { isConnected: isLiveConnected, connect: liveConnect, disconnect: liveDisconnect } =
+    useLiveLogs({ onSourceUpdate: handleLiveSourceUpdate, onConnected: handleLiveConnected, onError: () => setShowServerDialog(true) });
+
+  const [isLiveChecking, setIsLiveChecking] = useState(false);
+
+  const handleLiveToggle = useCallback(async () => {
+    if (isLiveConnected) {
+      liveDisconnect();
+      setIsLiveMode(false);
+      return;
+    }
+    setIsLiveChecking(true);
+    try {
+      const res = await fetch('http://localhost:4000/health', { signal: AbortSignal.timeout(1500) });
+      if (!res.ok) throw new Error('not ok');
+      liveConnect();
+    } catch {
+      setShowServerDialog(true);
+    } finally {
+      setIsLiveChecking(false);
+    }
+  }, [isLiveConnected, liveConnect, liveDisconnect]);
 
   const handleFileLoad = useCallback((fileOrFiles, clearTabsFirst = false, groupPrefix = null) => {
     // Support both single file and array of files (for grouped Windows logs)
@@ -975,10 +1032,24 @@ const LogViewer = () => {
 
 
   // Open the tab-selection dialog
+  const handleExportFile = useCallback((fileId, label) => {
+    const logs = allFileLogs[fileId] || [];
+    exportLogsToFile(logs, label || fileId);
+  }, [allFileLogs]);
+
   const handleDownloadMerged = useCallback(() => {
     if (!files || files.length === 0) return;
+    if (isLiveMode) {
+      // For live logs: merge all live tabs in-memory sorted by timestamp
+      const liveLogs = files
+        .filter(f => f.isLive)
+        .flatMap(f => allFileLogs[f.id] || []);
+      liveLogs.sort((a, b) => (a.timestamp || '') < (b.timestamp || '') ? -1 : (a.timestamp || '') > (b.timestamp || '') ? 1 : 0);
+      exportLogsToFile(liveLogs, 'live_logs_merged', { tagSourceFile: true });
+      return;
+    }
     setIsMergeDialogOpen(true);
-  }, [files]);
+  }, [files, isLiveMode, allFileLogs]);
 
   // Run the JS port of mergeLogs.py against the selected tabs
   const handleConfirmMerge = useCallback(async (selectedIds) => {
@@ -1130,9 +1201,10 @@ const LogViewer = () => {
         columnOrder={rightColumnOrder}
         onColumnOrderChange={handleRightColumnOrderChange}
         viewKey={showingCombinedView ? 'combined' : `file:${files[activeFileIndex]?.name || activeFileIndex}`}
+        isLiveMode={isLiveMode}
       />
     );
-  }, [hasUserInteracted, isFileDropActive, files, activeFileIndex, showingCombinedView, filteredLogs, handleLogClick, highlightedLogId, filters, pivotLog, setPivotTime, clearPivotTime, stickyLogs, addStickyLog, highlightLog, setSearchPos, setSearchTotal, updateFilters, setHoveredLog, visibleColumns, columnVersion, rightColumnOrder, handleRightColumnOrderChange, columnResetKey]);
+  }, [hasUserInteracted, files, activeFileIndex, showingCombinedView, filteredLogs, handleLogClick, highlightedLogId, filters, pivotLog, setPivotTime, clearPivotTime, stickyLogs, addStickyLog, highlightLog, setSearchPos, setSearchTotal, updateFilters, setHoveredLog, visibleColumns, columnVersion, rightColumnOrder, handleRightColumnOrderChange, columnResetKey, isLiveMode]);
 
   // Remove old currentFileHeaders logic - now using headerState
 
@@ -1164,6 +1236,10 @@ const LogViewer = () => {
         onDownloadMerged={handleDownloadMerged}
         isDownloadingMerged={isDownloadingMerged}
         onClearFilters={() => updateFilters({ searchText: '', searchQuery: '', logLevel: ['all'], selectedModule: 'all', contextLines: 0 })}
+        isLiveMode={isLiveMode}
+        isLiveConnected={isLiveConnected}
+        isLiveChecking={isLiveChecking}
+        onLiveToggle={handleLiveToggle}
       />
 
       {/* Main content area */}
@@ -1182,6 +1258,22 @@ const LogViewer = () => {
                 isFileLoading={isFileLoading}
                 onCloseAll={handleCloseAll}
                 onExportActive={handleExportActive}
+                onExportFile={handleExportFile}
+                isLiveMode={isLiveMode}
+                onFromNow={() => {
+                  const now = new Date();
+                  const pad = (n, len = 2) => String(n).padStart(len, '0');
+                  const yy = String(now.getUTCFullYear()).slice(-2);
+                  const mm = pad(now.getUTCMonth() + 1);
+                  const dd = pad(now.getUTCDate());
+                  const HH = pad(now.getUTCHours());
+                  const MM = pad(now.getUTCMinutes());
+                  const SS = pad(now.getUTCSeconds());
+                  const ms = pad(now.getUTCMilliseconds(), 3);
+                  const dateStr = `${mm}/${dd}/${yy} ${HH}:${MM}:${SS}.${ms}`;
+                  const clause = `#${dateStr} ::`;
+                  updateFiltersForAllFiles({ searchText: clause });
+                }}
               />
             )}
 
@@ -1278,6 +1370,64 @@ const LogViewer = () => {
         <div className="fixed inset-0 bg-blue-500 bg-opacity-20 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-lg">
             <p className="text-xl text-blue-600 dark:text-blue-400">Drop your log files here</p>
+          </div>
+        </div>
+      )}
+
+      {/* Live server not running dialog */}
+      {showServerDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70" onClick={() => setShowServerDialog(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 max-w-lg w-full mx-4 border border-gray-200 dark:border-gray-700" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start gap-3 mb-4">
+              <div className="flex-shrink-0 w-9 h-9 rounded-full bg-yellow-100 dark:bg-yellow-900 flex items-center justify-center">
+                <svg className="w-5 h-5 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Live Logs Server Not Running</h3>
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                  A small local server must run on your Mac to stream logs. Paste this into a terminal:
+                </p>
+              </div>
+            </div>
+
+            {/* Single combined command */}
+            {(() => {
+              const cmd = `sudo kill $(sudo lsof -ti:4000) 2>/dev/null; curl -o ~/live-logs-server.js ${window.location.origin}/live-logs-server.js && cd ~ && npm install ws && sudo node ~/live-logs-server.js`;
+              return (
+                <div className="bg-gray-900 dark:bg-gray-950 rounded-lg px-4 py-3 mb-5">
+                  <div className="font-mono text-sm text-green-400 break-all mb-3 select-all leading-relaxed">
+                    {cmd}
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => navigator.clipboard.writeText(cmd)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors font-medium"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                      Copy command
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-5">
+              Downloads the script, installs the <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">ws</code> dependency, and starts the server.{' '}
+              <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">sudo</code> is required to read protected log directories.
+            </p>
+
+            <div className="flex justify-end">
+              <button
+                onClick={() => setShowServerDialog(false)}
+                className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
+              >
+                Got it
+              </button>
+            </div>
           </div>
         </div>
       )}

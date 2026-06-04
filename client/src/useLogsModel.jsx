@@ -973,6 +973,43 @@ const useLogsModel = () => {
     });
   }, [currentFileName]);
 
+  const updateFiltersForAllFiles = useCallback((newFilters) => {
+    // newFilters may contain a 'searchText' to append to each tab's existing searchText.
+    // All other keys are merged directly.
+    const mergeForFile = (existing) => {
+      const merged = { ...existing, ...newFilters };
+      if (newFilters.searchText !== undefined) {
+        const cur = (existing.searchText || '').trim();
+        merged.searchText = cur ? `${cur} && ${newFilters.searchText}` : newFilters.searchText;
+      }
+      return merged;
+    };
+
+    // Update the current active filter state
+    setFilters(prev => {
+      const updatedFilters = mergeForFile(prev);
+
+      // Update allFileFilters for every loaded file
+      setAllFileFilters(prevFileFilters => {
+        const updated = { ...prevFileFilters };
+        const allKeys = new Set([
+          ...Object.keys(prevFileFilters),
+          ...Object.keys(allFileLogs)
+        ]);
+        allKeys.forEach(fileId => {
+          updated[fileId] = mergeForFile(prevFileFilters[fileId] || {});
+        });
+        // Also ensure the active tab's entry reflects the merged filters
+        if (currentFileName) {
+          updated[currentFileName] = updatedFilters;
+        }
+        return updated;
+      });
+
+      return updatedFilters;
+    });
+  }, [allFileLogs, currentFileName]);
+
   const highlightLog = useCallback((logId) => {
     setHighlightedLogId(logId);
     // Highlight persists until manually cleared or another log is highlighted
@@ -1046,6 +1083,15 @@ const useLogsModel = () => {
       console.error('❌ Error in setLogsForFile:', error);
     }
   }, [allFileFilters, currentFileName]);
+
+  // Update logs for a file without switching the active tab (used for live background updates)
+  const updateLogsBackground = useCallback((fileName, fileLogs) => {
+    setAllFileLogs(prev => ({ ...prev, [fileName]: fileLogs }));
+    // If this file happens to be the one currently on screen, refresh the visible list too
+    if (currentFileNameRef.current === fileName) {
+      setLogs(fileLogs);
+    }
+  }, []);
 
   // Switch to show logs for a specific file
   const switchToFile = useCallback((fileName) => {
@@ -1127,10 +1173,12 @@ const useLogsModel = () => {
     isAnyFileLoading,
     setSelectedLog,
     updateFilters,
+    updateFiltersForAllFiles,
     highlightLog,
     clearHighlight,
     getCurrentFileHeaders,
     setLogsForFile,
+    updateLogsBackground,
     setLogFileHeaders,
     switchToFile,
     removeLogsForFile,
