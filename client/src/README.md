@@ -349,11 +349,13 @@ Click the **"Live Logs"** button in the header. If the local server is not runni
 sudo kill $(sudo lsof -ti:4000) 2>/dev/null; curl -o ~/live-logs-server.js <app-url>/live-logs-server.js && cd ~ && npm install ws && sudo node ~/live-logs-server.js
 ```
 
-**Windows** (PowerShell) — no elevation needed, the build output folder lives under your own profile:
+**Windows** (PowerShell) — installs Node.js first if it's missing, then runs the server. Running it needs no elevation, since the build output folder lives under your own profile:
 
 ```powershell
-irm <app-url>/live-logs-server.js -OutFile $HOME\live-logs-server.js; cd $HOME; npm install ws; node $HOME\live-logs-server.js
+if (-not (Get-Command node -ErrorAction SilentlyContinue)) { winget install -e --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements; $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User') }; irm <app-url>/live-logs-server.js -OutFile $HOME\live-logs-server.js; cd $HOME; npm install ws; node $HOME\live-logs-server.js --root="C:\Users\you\ws"
 ```
+
+> The `$env:Path` refresh matters: the Node installer only updates the *stored* environment, so without it the `npm` later in the same line still fails with `CommandNotFoundException`. The winget step itself may raise a UAC prompt, and needs winget (Windows 10 1809+ / Windows 11) — otherwise install Node from [nodejs.org](https://nodejs.org) and rerun.
 
 `scripts/install.sh` (macOS) and `scripts/install.ps1` (Windows) do the same for a checked-out repo.
 

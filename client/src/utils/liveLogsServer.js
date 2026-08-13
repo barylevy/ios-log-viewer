@@ -102,9 +102,17 @@ export async function applySavedRoot() {
  */
 export function buildSetupCommand(origin, windows, root = '') {
   if (windows) {
-    // No elevation: the build output folder lives under the user's own profile.
+    // Install Node first if it's missing, then refresh PATH in this session —
+    // the installer only updates the stored environment, so without this the
+    // very next `npm` in the same window still fails with CommandNotFound.
+    const ensureNode =
+      `if (-not (Get-Command node -ErrorAction SilentlyContinue)) { ` +
+      `winget install -e --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements; ` +
+      `$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User') }`;
+
+    // No elevation to run: the build output folder lives under the user's own profile.
     const rootArg = root ? ` --root="${root}"` : '';
-    return `irm ${origin}/live-logs-server.js -OutFile $HOME\\live-logs-server.js; cd $HOME; npm install ws; node $HOME\\live-logs-server.js${rootArg}`;
+    return `${ensureNode}; irm ${origin}/live-logs-server.js -OutFile $HOME\\live-logs-server.js; cd $HOME; npm install ws; node $HOME\\live-logs-server.js${rootArg}`;
   }
   return `sudo kill $(sudo lsof -ti:${LIVE_SERVER_PORT}) 2>/dev/null; curl -o ~/live-logs-server.js ${origin}/live-logs-server.js && cd ~ && npm install ws && sudo node ~/live-logs-server.js`;
 }

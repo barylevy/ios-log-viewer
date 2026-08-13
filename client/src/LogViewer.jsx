@@ -1458,7 +1458,8 @@ const LogViewer = () => {
               Downloads the script, installs the <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">ws</code> dependency, and starts the server.{' '}
               {setupOnWindows ? (
                 <>
-                  No administrator rights needed. On first run, set your build folder from{' '}
+                  Installs Node.js first if it's missing (via winget — accept the UAC prompt), then starts the
+                  server. Running it needs no administrator rights. On first run, set your build folder from{' '}
                   <span className="font-medium">Settings ▸ Live Logs Settings</span>.
                 </>
               ) : (
