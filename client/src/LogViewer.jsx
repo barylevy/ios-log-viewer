@@ -15,7 +15,7 @@ import { exportLogsToFile } from './utils/exportLogs';
 import { AVAILABLE_COLUMNS } from './ColumnSettings';
 import useLiveLogs from './utils/useLiveLogs';
 import LiveLogsSettings from './components/LiveLogsSettings';
-import { checkLiveHealth, fetchLiveConfig, applySavedRoot, buildSetupCommand, getSavedRoot, isWindows } from './utils/liveLogsServer';
+import { checkLiveHealth, fetchLiveConfig, applySavedLogDir, buildSetupCommand, getSavedLogDir, isWindows } from './utils/liveLogsServer';
 
 // Turn a raw folder name like "2387341752-260422074919 (1)" into the short
 // label we want in the page title.
@@ -456,7 +456,7 @@ const LogViewer = () => {
       let config = await fetchLiveConfig();
       // A folder configured before the server existed gets applied here.
       if (config?.needsConfig) {
-        config = (await applySavedRoot()) || config;
+        config = (await applySavedLogDir()) || config;
       }
       if (config?.configurable && (config.needsConfig || config.matchCount === 0)) {
         setShowLiveSettings(true);
@@ -1433,7 +1433,7 @@ const LogViewer = () => {
 
             {/* Single combined command */}
             {(() => {
-              const cmd = buildSetupCommand(window.location.origin, setupOnWindows, getSavedRoot());
+              const cmd = buildSetupCommand(window.location.origin, setupOnWindows, getSavedLogDir());
               return (
                 <div className="bg-gray-900 dark:bg-gray-950 rounded-lg px-4 py-3 mb-5">
                   <div className="font-mono text-sm text-green-400 break-all mb-3 select-all leading-relaxed">

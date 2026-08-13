@@ -8,11 +8,10 @@
  *         /private/var/root require root access:
  *           sudo node scripts/live-logs-server.js
  *
- * Windows — tails the most recently modified cato_vpn_*.log inside a build
- *         output folder. Only the root varies per developer; the rest of the
- *         path is fixed (see WIN_LOG_SUBPATH). Configure it with any of:
- *           node live-logs-server.js --root="C:\\Users\\you\\ws"
- *           set CATO_LOG_ROOT=C:\\Users\\you\\ws
+ * Windows — tails the most recently modified cato_vpn_*.log inside the log
+ *         directory. Give the full path; nothing is appended to it:
+ *           node live-logs-server.js --dir="C:\\Users\\you\\ws\\...\\Debug\\x64"
+ *           set CATO_LOG_DIR=C:\\Users\\you\\ws\\...\\Debug\\x64
  *           the viewer's Settings ▸ Live Logs Settings dialog (persisted)
  *
  * The client connects to ws://localhost:4000
@@ -85,37 +84,25 @@ const MAC_SOURCES = [
 ];
 
 // ─── Windows paths ────────────────────────────────────────────────────────────
-// Example folder: C:\Users\LiorZats\ws\endpoint\endpoint\sdp\win\Product\Debug\x64
-// Everything after the root ("C:\Users\LiorZats\ws") is identical for everyone.
-const WIN_LOG_SUBPATH = path.join('endpoint', 'endpoint', 'sdp', 'win', 'Product', 'Debug', 'x64');
+// The user gives the full directory holding the logs, e.g.
+//   C:\Users\LiorZats\ws\endpoint\endpoint\sdp\win\Product\Debug\x64
 const WIN_LOG_PATTERN = /^cato_vpn_.*\.log$/i;
 
 // Placeholder for the standard installed-client log directory, once confirmed.
-// Used only as a fallback — an explicitly configured root always wins.
+// Used only as a fallback — an explicitly configured directory always wins.
 const INSTALLED_CLIENT_DIRS = [];
 
 const CONFIG_FILE = path.join(HOME, '.cato-live-logs.json');
 
-/** Compare paths ignoring separator style, case and trailing slashes. */
-function normalizePath(p) {
-  return String(p).replace(/[\\/]+/g, '\\').replace(/\\+$/, '').toLowerCase();
-}
-
 /**
- * Turn a user-supplied root into the directory that actually holds the logs.
- * Tolerates the user pasting the full folder rather than just the root.
- * @returns {string|null} resolved directory, or null when root is empty
+ * Clean up a user-supplied log directory: trim whitespace and any trailing
+ * separators. The path is used exactly as given — nothing is appended.
+ * @returns {string|null} the directory, or null when the input is empty
  */
-function resolveWinLogDir(root) {
-  if (!root) return null;
-  const trimmed = String(root).trim().replace(/[\\/]+$/, '');
-  if (!trimmed) return null;
-
-  const sub = normalizePath(WIN_LOG_SUBPATH);
-  const norm = normalizePath(trimmed);
-  if (norm === sub || norm.endsWith('\\' + sub)) return trimmed;
-
-  return path.join(trimmed, WIN_LOG_SUBPATH);
+function normalizeLogDir(dir) {
+  if (!dir) return null;
+  const trimmed = String(dir).trim().replace(/[\\/]+$/, '');
+  return trimmed || null;
 }
 
 /** All regular files in `dir` matching `pattern`, with stat info. */
@@ -159,12 +146,18 @@ function writeStoredConfig(cfg) {
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2), 'utf8');
 }
 
-/** Read --root=<path> or --root <path> from argv. */
-function rootFromArgv(argv) {
+/**
+ * Read --dir=<path> or --dir <path> from argv.
+ * `--root` is accepted as a legacy spelling — it used to mean a parent folder
+ * that a fixed sub-path was appended to, and now means the directory itself.
+ */
+function dirFromArgv(argv) {
   const args = argv.slice(2);
   for (let i = 0; i < args.length; i++) {
-    if (args[i].startsWith('--root=')) return args[i].slice('--root='.length);
-    if (args[i] === '--root' && args[i + 1]) return args[i + 1];
+    for (const flag of ['--dir', '--root']) {
+      if (args[i].startsWith(`${flag}=`)) return args[i].slice(flag.length + 1);
+      if (args[i] === flag && args[i + 1]) return args[i + 1];
+    }
   }
   return null;
 }
@@ -177,10 +170,14 @@ function findInstalledClientDir() {
   return null;
 }
 
-let winRoot = rootFromArgv(process.argv) || process.env.CATO_LOG_ROOT || readStoredConfig().winRoot || null;
+let winLogDir = dirFromArgv(process.argv)
+  || process.env.CATO_LOG_DIR
+  || process.env.CATO_LOG_ROOT
+  || readStoredConfig().logDir
+  || null;
 
 function buildWindowsSources() {
-  const dir = resolveWinLogDir(winRoot) || findInstalledClientDir();
+  const dir = normalizeLogDir(winLogDir) || findInstalledClientDir();
   if (!dir) return [];
   return [{ key: 'vpn', label: 'CatoVPN', type: 'latest', path: dir, pattern: WIN_LOG_PATTERN }];
 }
@@ -195,8 +192,7 @@ function configInfo() {
       // Nothing to configure: the macOS sources are fixed system paths.
       configurable: false,
       needsConfig: false,
-      root: null,
-      subPath: null,
+      logDir: null,
       resolvedDir: null,
       dirExists: true,
       currentFile: null,
@@ -205,7 +201,7 @@ function configInfo() {
     };
   }
 
-  const resolvedDir = resolveWinLogDir(winRoot) || findInstalledClientDir();
+  const resolvedDir = normalizeLogDir(winLogDir) || findInstalledClientDir();
   let dirExists = false;
   try { dirExists = !!resolvedDir && fs.statSync(resolvedDir).isDirectory(); } catch { dirExists = false; }
 
@@ -216,8 +212,7 @@ function configInfo() {
     platform: process.platform,
     configurable: true,
     needsConfig: !dirExists,
-    root: winRoot,
-    subPath: WIN_LOG_SUBPATH,
+    logDir: resolvedDir,
     resolvedDir,
     dirExists,
     currentFile: latest ? latest.name : null,
@@ -336,9 +331,9 @@ function init() {
   if (IS_WIN && SOURCES.length === 0) {
     const info = configInfo();
     console.log(`  ✗ No log folder configured.`);
-    console.log(`    Set one with --root="C:\\Users\\you\\ws", the CATO_LOG_ROOT env var,`);
+    console.log(`    Set one with --dir="<full path to the log folder>", the CATO_LOG_DIR env var,`);
     console.log(`    or the viewer's Settings ▸ Live Logs Settings dialog.`);
-    if (info.root) console.log(`    Current root "${info.root}" resolves to "${info.resolvedDir}" (missing).`);
+    if (info.logDir) console.log(`    Configured folder "${info.logDir}" does not exist.`);
     return;
   }
 
@@ -413,17 +408,20 @@ function handleRequest(req, res) {
     return readJsonBody(req, (err, body) => {
       if (err) return sendJson(res, 400, { error: err.message });
 
-      const root = typeof body.root === 'string' ? body.root.trim() : '';
-      if (!root) return sendJson(res, 400, { error: 'Please enter a root folder.' });
+      // `root` is the legacy field name; both carry the full directory now.
+      const raw = typeof body.logDir === 'string' ? body.logDir
+        : typeof body.root === 'string' ? body.root
+        : '';
+      const dir = normalizeLogDir(raw);
+      if (!dir) return sendJson(res, 400, { error: 'Please enter the log folder path.' });
 
-      const dir = resolveWinLogDir(root);
       let exists = false;
       try { exists = fs.statSync(dir).isDirectory(); } catch { exists = false; }
       if (!exists) {
         return sendJson(res, 400, { error: `Folder not found: ${dir}` });
       }
 
-      applyWinRoot(root);
+      applyWinLogDir(dir);
       return sendJson(res, 200, configInfo());
     });
   }
@@ -438,10 +436,10 @@ let server = null;
 let wss = null;
 
 /** Point every connected client at the newly configured folder. */
-function applyWinRoot(root) {
-  winRoot = root;
+function applyWinLogDir(dir) {
+  winLogDir = dir;
   try {
-    writeStoredConfig({ ...readStoredConfig(), winRoot: root });
+    writeStoredConfig({ ...readStoredConfig(), logDir: dir });
   } catch (e) {
     console.error('[live-logs] Could not persist config:', e.message);
   }
@@ -450,7 +448,7 @@ function applyWinRoot(root) {
   for (const key of Object.keys(tails)) delete tails[key];
 
   SOURCES = buildWindowsSources();
-  console.log(`\n[live-logs] Log folder changed to: ${resolveWinLogDir(root)}`);
+  console.log(`\n[live-logs] Log folder changed to: ${dir}`);
   init();
 
   // Clear each client's tab and stream from the new file's end onwards, which
@@ -594,10 +592,9 @@ function printPortConflict() {
 if (require.main === module) start();
 
 module.exports = {
-  WIN_LOG_SUBPATH,
   WIN_LOG_PATTERN,
-  resolveWinLogDir,
+  normalizeLogDir,
   listMatchingFiles,
   pickLatestFile,
-  rootFromArgv,
+  dirFromArgv,
 };

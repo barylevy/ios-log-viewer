@@ -9,8 +9,8 @@ export const LIVE_SERVER_PORT = 4000;
 export const LIVE_SERVER_HTTP = `http://localhost:${LIVE_SERVER_PORT}`;
 export const LIVE_SERVER_WS = `ws://localhost:${LIVE_SERVER_PORT}`;
 
-/** localStorage key mirroring the last saved Windows root, for input pre-fill. */
-export const WIN_ROOT_KEY = 'liveLogs_winRoot';
+/** localStorage key mirroring the last saved Windows log folder, for input pre-fill. */
+export const LOG_DIR_KEY = 'liveLogs_logDir';
 
 /** True when the viewer is running on Windows. */
 export function isWindows() {
@@ -43,27 +43,27 @@ export async function fetchLiveConfig(timeoutMs = 1500) {
   }
 }
 
-/** The root last saved from this browser, or '' if none. */
-export function getSavedRoot() {
-  try { return localStorage.getItem(WIN_ROOT_KEY) || ''; } catch { return ''; }
+/** The log folder last saved from this browser, or '' if none. */
+export function getSavedLogDir() {
+  try { return localStorage.getItem(LOG_DIR_KEY) || ''; } catch { return ''; }
 }
 
-/** Remember a root locally, without needing the server to be running. */
-export function setSavedRoot(root) {
-  try { localStorage.setItem(WIN_ROOT_KEY, root); } catch { /* ignore */ }
+/** Remember a log folder locally, without needing the server to be running. */
+export function setSavedLogDir(dir) {
+  try { localStorage.setItem(LOG_DIR_KEY, dir); } catch { /* ignore */ }
 }
 
 /**
- * Point the server at a new Windows root folder.
+ * Point the server at a new Windows log folder (the full directory path).
  * @returns {Promise<{ok: true, config: object} | {ok: false, error: string}>}
  */
-export async function saveLiveRoot(root) {
+export async function saveLogDir(logDir) {
   let res;
   try {
     res = await fetch(`${LIVE_SERVER_HTTP}/config`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ root }),
+      body: JSON.stringify({ logDir }),
       signal: AbortSignal.timeout(5000),
     });
   } catch {
@@ -77,20 +77,20 @@ export async function saveLiveRoot(root) {
     return { ok: false, error: body?.error || `Server returned ${res.status}.` };
   }
 
-  setSavedRoot(root);
+  setSavedLogDir(logDir);
   return { ok: true, config: body };
 }
 
 /**
- * Push a locally-saved root to a server that has just come up without one.
+ * Push a locally-saved folder to a server that has just come up without one.
  * Lets the user configure the folder before ever starting the server.
  * @returns {Promise<object|null>} the resulting config, or null if it didn't apply
  */
-export async function applySavedRoot() {
-  const root = getSavedRoot();
-  if (!root) return null;
+export async function applySavedLogDir() {
+  const dir = getSavedLogDir();
+  if (!dir) return null;
 
-  const result = await saveLiveRoot(root);
+  const result = await saveLogDir(dir);
   return result.ok ? result.config : null;
 }
 
@@ -98,9 +98,9 @@ export async function applySavedRoot() {
  * The copy-paste command that downloads and starts the server.
  * @param {string} origin - window.location.origin
  * @param {boolean} windows - build the PowerShell variant instead of bash
- * @param {string} [root] - Windows only: bake this folder into the command
+ * @param {string} [logDir] - Windows only: bake this folder into the command
  */
-export function buildSetupCommand(origin, windows, root = '') {
+export function buildSetupCommand(origin, windows, logDir = '') {
   if (windows) {
     // Install Node first if it's missing, then refresh PATH in this session —
     // the installer only updates the stored environment, so without this the
@@ -111,8 +111,8 @@ export function buildSetupCommand(origin, windows, root = '') {
       `$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User') }`;
 
     // No elevation to run: the build output folder lives under the user's own profile.
-    const rootArg = root ? ` --root="${root}"` : '';
-    return `${ensureNode}; irm ${origin}/live-logs-server.js -OutFile $HOME\\live-logs-server.js; cd $HOME; npm install ws; node $HOME\\live-logs-server.js${rootArg}`;
+    const dirArg = logDir ? ` --dir="${logDir}"` : '';
+    return `${ensureNode}; irm ${origin}/live-logs-server.js -OutFile $HOME\\live-logs-server.js; cd $HOME; npm install ws; node $HOME\\live-logs-server.js${dirArg}`;
   }
   return `sudo kill $(sudo lsof -ti:${LIVE_SERVER_PORT}) 2>/dev/null; curl -o ~/live-logs-server.js ${origin}/live-logs-server.js && cd ~ && npm install ws && sudo node ~/live-logs-server.js`;
 }

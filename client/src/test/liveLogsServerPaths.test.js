@@ -13,40 +13,38 @@ import path from 'path';
 
 const require = createRequire(import.meta.url);
 const {
-  WIN_LOG_SUBPATH,
   WIN_LOG_PATTERN,
-  resolveWinLogDir,
+  normalizeLogDir,
   listMatchingFiles,
   pickLatestFile,
-  rootFromArgv,
+  dirFromArgv,
 } = require('../../../scripts/live-logs-server.js');
 
-describe('resolveWinLogDir', () => {
-  it('appends the fixed sub-path to a plain root', () => {
-    expect(resolveWinLogDir('C:\\Users\\LiorZats\\ws'))
-      .toBe(path.join('C:\\Users\\LiorZats\\ws', WIN_LOG_SUBPATH));
+const FULL_DIR = 'C:\\Users\\LiorZats\\ws\\endpoint\\endpoint\\sdp\\win\\Product\\Debug\\x64';
+
+describe('normalizeLogDir', () => {
+  it('uses the given directory exactly, appending nothing', () => {
+    expect(normalizeLogDir(FULL_DIR)).toBe(FULL_DIR);
   });
 
-  it('returns a full folder unchanged when it already ends with the sub-path', () => {
-    const full = 'C:\\Users\\LiorZats\\ws\\endpoint\\endpoint\\sdp\\win\\Product\\Debug\\x64';
-    expect(resolveWinLogDir(full)).toBe(full);
+  it('leaves a short path alone rather than assuming a sub-path', () => {
+    expect(normalizeLogDir('C:\\logs')).toBe('C:\\logs');
   });
 
-  it('recognises the sub-path regardless of separator style or case', () => {
-    const forward = 'C:/Users/LiorZats/ws/endpoint/endpoint/sdp/WIN/Product/debug/X64';
-    expect(resolveWinLogDir(forward)).toBe(forward);
+  it('preserves forward slashes as typed', () => {
+    expect(normalizeLogDir('C:/Users/LiorZats/logs')).toBe('C:/Users/LiorZats/logs');
   });
 
-  it('strips trailing separators before resolving', () => {
-    expect(resolveWinLogDir('C:\\Users\\LiorZats\\ws\\'))
-      .toBe(path.join('C:\\Users\\LiorZats\\ws', WIN_LOG_SUBPATH));
+  it('strips surrounding whitespace and trailing separators', () => {
+    expect(normalizeLogDir(`  ${FULL_DIR}\\  `)).toBe(FULL_DIR);
+    expect(normalizeLogDir('C:/logs//')).toBe('C:/logs');
   });
 
-  it('returns null for an empty or whitespace root', () => {
-    expect(resolveWinLogDir('')).toBeNull();
-    expect(resolveWinLogDir('   ')).toBeNull();
-    expect(resolveWinLogDir(null)).toBeNull();
-    expect(resolveWinLogDir(undefined)).toBeNull();
+  it('returns null for an empty or whitespace path', () => {
+    expect(normalizeLogDir('')).toBeNull();
+    expect(normalizeLogDir('   ')).toBeNull();
+    expect(normalizeLogDir(null)).toBeNull();
+    expect(normalizeLogDir(undefined)).toBeNull();
   });
 });
 
@@ -110,17 +108,22 @@ describe('pickLatestFile / listMatchingFiles', () => {
   });
 });
 
-describe('rootFromArgv', () => {
-  it('reads --root=<path>', () => {
-    expect(rootFromArgv(['node', 'srv.js', '--root=C:\\Users\\you\\ws'])).toBe('C:\\Users\\you\\ws');
+describe('dirFromArgv', () => {
+  it('reads --dir=<path>', () => {
+    expect(dirFromArgv(['node', 'srv.js', `--dir=${FULL_DIR}`])).toBe(FULL_DIR);
   });
 
-  it('reads --root <path>', () => {
-    expect(rootFromArgv(['node', 'srv.js', '--root', 'C:\\Users\\you\\ws'])).toBe('C:\\Users\\you\\ws');
+  it('reads --dir <path>', () => {
+    expect(dirFromArgv(['node', 'srv.js', '--dir', FULL_DIR])).toBe(FULL_DIR);
+  });
+
+  it('still accepts the legacy --root spelling', () => {
+    expect(dirFromArgv(['node', 'srv.js', `--root=${FULL_DIR}`])).toBe(FULL_DIR);
+    expect(dirFromArgv(['node', 'srv.js', '--root', FULL_DIR])).toBe(FULL_DIR);
   });
 
   it('returns null when absent', () => {
-    expect(rootFromArgv(['node', 'srv.js'])).toBeNull();
-    expect(rootFromArgv(['node', 'srv.js', '--root'])).toBeNull();
+    expect(dirFromArgv(['node', 'srv.js'])).toBeNull();
+    expect(dirFromArgv(['node', 'srv.js', '--dir'])).toBeNull();
   });
 });

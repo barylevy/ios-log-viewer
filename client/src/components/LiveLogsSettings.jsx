@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { fetchLiveConfig, saveLiveRoot, getSavedRoot, setSavedRoot, buildSetupCommand } from '../utils/liveLogsServer';
+import { fetchLiveConfig, saveLogDir, getSavedLogDir, setSavedLogDir, buildSetupCommand } from '../utils/liveLogsServer';
 
 /**
  * Live Logs Settings — lets the user point the local live-logs server at the
  * folder its build writes cato_vpn_*.log into.
  *
- * Only the root varies between developers; the server appends the fixed
- * sub-path (endpoint\endpoint\sdp\win\Product\Debug\x64) itself. The saved root
- * is persisted server-side, so this dialog is normally used once per machine.
+ * The full directory path is used exactly as entered — nothing is appended. The
+ * saved folder is persisted server-side, so this dialog is normally used once
+ * per machine.
  */
 const LiveLogsSettings = ({ isOpen, onClose }) => {
   const [config, setConfig] = useState(null);
-  const [root, setRoot] = useState('');
+  const [logDir, setLogDir] = useState('');
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
   // Starts true: the first render happens before the config fetch resolves.
@@ -30,7 +30,7 @@ const LiveLogsSettings = ({ isOpen, onClose }) => {
 
     // Prefer what the server is actually using; otherwise fall back to whatever
     // was configured from this browser, so the folder can be set up-front.
-    setRoot(cfg?.root || getSavedRoot());
+    setLogDir(cfg?.logDir || getSavedLogDir());
     setIsLoading(false);
   }, []);
 
@@ -41,7 +41,7 @@ const LiveLogsSettings = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   const handleSave = async () => {
-    const trimmed = root.trim();
+    const trimmed = logDir.trim();
     setError('');
     setSaved(false);
 
@@ -49,16 +49,16 @@ const LiveLogsSettings = ({ isOpen, onClose }) => {
     // moment a server that needs configuring comes up, and it's baked into the
     // start command below.
     if (serverDown) {
-      setSavedRoot(trimmed);
+      setSavedLogDir(trimmed);
       setSaved(true);
       return;
     }
 
     setIsSaving(true);
-    const result = await saveLiveRoot(trimmed);
+    const result = await saveLogDir(trimmed);
     if (result.ok) {
       setConfig(result.config);
-      setRoot(result.config.root || '');
+      setLogDir(result.config.logDir || '');
       setSaved(true);
     } else {
       setError(result.error);
@@ -70,7 +70,7 @@ const LiveLogsSettings = ({ isOpen, onClose }) => {
   // fixed system paths, so there is nothing to configure. With no server
   // running we can't know the platform, so we always allow configuring.
   const showFolderConfig = serverDown || !!config?.configurable;
-  const startCommand = buildSetupCommand(window.location.origin, true, root.trim());
+  const startCommand = buildSetupCommand(window.location.origin, true, logDir.trim());
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -114,29 +114,26 @@ const LiveLogsSettings = ({ isOpen, onClose }) => {
             <>
               <div>
                 <label
-                  htmlFor="live-logs-root"
+                  htmlFor="live-logs-dir"
                   className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
                 >
-                  Root folder
+                  Log folder
                 </label>
                 <input
-                  id="live-logs-root"
+                  id="live-logs-dir"
                   type="text"
-                  value={root}
-                  onChange={(e) => { setRoot(e.target.value); setSaved(false); setError(''); }}
+                  value={logDir}
+                  onChange={(e) => { setLogDir(e.target.value); setSaved(false); setError(''); }}
                   onKeyDown={(e) => { if (e.key === 'Enter' && !isSaving) handleSave(); }}
-                  placeholder="C:\Users\you\ws"
+                  placeholder="C:\Users\you\ws\endpoint\endpoint\sdp\win\Product\Debug\x64"
                   spellCheck={false}
                   className="w-full px-3 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-gray-100 font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
                 <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                  The server appends{' '}
-                  <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded font-mono">
-                    {config?.subPath || 'endpoint\\endpoint\\sdp\\win\\Product\\Debug\\x64'}
-                  </code>{' '}
-                  and tails the most recently modified{' '}
+                  The full path to the directory holding the logs — used exactly as entered. The server
+                  tails the most recently modified{' '}
                   <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded font-mono">cato_vpn_*.log</code>{' '}
-                  inside it. Pasting the full folder works too.
+                  inside it.
                 </p>
               </div>
 
@@ -212,7 +209,7 @@ const LiveLogsSettings = ({ isOpen, onClose }) => {
           {showFolderConfig && (
             <button
               onClick={handleSave}
-              disabled={isSaving || !root.trim()}
+              disabled={isSaving || !logDir.trim()}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed rounded-md transition-colors"
             >
               {isSaving ? 'Saving…' : 'Save'}

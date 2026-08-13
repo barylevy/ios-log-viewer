@@ -352,7 +352,7 @@ sudo kill $(sudo lsof -ti:4000) 2>/dev/null; curl -o ~/live-logs-server.js <app-
 **Windows** (PowerShell) — installs Node.js first if it's missing, then runs the server. Running it needs no elevation, since the build output folder lives under your own profile:
 
 ```powershell
-if (-not (Get-Command node -ErrorAction SilentlyContinue)) { winget install -e --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements; $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User') }; irm <app-url>/live-logs-server.js -OutFile $HOME\live-logs-server.js; cd $HOME; npm install ws; node $HOME\live-logs-server.js --root="C:\Users\you\ws"
+if (-not (Get-Command node -ErrorAction SilentlyContinue)) { winget install -e --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements; $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User') }; irm <app-url>/live-logs-server.js -OutFile $HOME\live-logs-server.js; cd $HOME; npm install ws; node $HOME\live-logs-server.js --dir="C:\Users\you\ws\endpoint\endpoint\sdp\win\Product\Debug\x64"
 ```
 
 > The `$env:Path` refresh matters: the Node installer only updates the *stored* environment, so without it the `npm` later in the same line still fails with `CommandNotFoundException`. The winget step itself may raise a UAC prompt, and needs winget (Windows 10 1809+ / Windows 11) — otherwise install Node from [nodejs.org](https://nodejs.org) and rerun.
@@ -384,23 +384,25 @@ Each source becomes its own tab with **green text**:
 
 ### Live Log Sources — Windows
 
-One tab (`vpn`), tailing the **most recently modified** `cato_vpn_*.log` in the build output folder. When a newer matching file appears, the server switches to it and resets the tab.
+One tab (`vpn`), tailing the **most recently modified** `cato_vpn_*.log` in the configured folder. When a newer matching file appears, the server switches to it and resets the tab.
 
-Only the root of that path varies between developers, so the server is configured with a root and appends the fixed sub-path itself:
+Give the **full path to the directory** holding the logs — it's used exactly as entered, nothing is appended:
 
 ```
-<root>\endpoint\endpoint\sdp\win\Product\Debug\x64
+C:\Users\you\ws\endpoint\endpoint\sdp\win\Product\Debug\x64
 ```
 
-Set the root in any of these ways (highest precedence first) — pasting the full folder instead of the root also works:
+Set it in any of these ways (highest precedence first):
 
-1. `node live-logs-server.js --root="C:\Users\you\ws"`
-2. `set CATO_LOG_ROOT=C:\Users\you\ws`
+1. `node live-logs-server.js --dir="C:\Users\you\ws\...\Debug\x64"`
+2. `set CATO_LOG_DIR=C:\Users\you\ws\...\Debug\x64`
 3. **Settings ▸ Live Logs Settings** in the viewer
 
-The dialog shows the resolved folder, the file currently being tailed, and how many match. Saving persists the root to `~/.cato-live-logs.json`, so later runs need no argument, and pushes connected clients onto the new folder immediately.
+The dialog shows the folder, the file currently being tailed, and how many match. Saving persists it as `logDir` in `~/.cato-live-logs.json`, so later runs need no argument, and pushes connected clients onto the new folder immediately.
 
-**The folder can be configured before the server ever runs.** With no server reachable, the dialog still accepts a root and stores it in `localStorage` (`liveLogs_winRoot`), and shows a start command with `--root="…"` already filled in. Whenever a server later reports `needsConfig`, the viewer POSTs that saved root automatically — so **Live Logs** connects straight through instead of stopping to ask again.
+`--root` and `CATO_LOG_ROOT` are still accepted as legacy spellings. They used to name a *parent* folder that the fixed sub-path above was appended to; they now mean the log directory itself, so any previously saved value needs re-entering once.
+
+**The folder can be configured before the server ever runs.** With no server reachable, the dialog still accepts a path and stores it in `localStorage` (`liveLogs_logDir`), and shows a start command with `--dir="…"` already filled in. Whenever a server later reports `needsConfig`, the viewer POSTs that saved folder automatically — so **Live Logs** connects straight through instead of stopping to ask again.
 
 Unlike the macOS directory sources (which re-read every file each tick), the Windows source reads only the bytes appended since the last poll — dev build logs grow quickly.
 
@@ -410,8 +412,8 @@ Unlike the macOS directory sources (which re-read every file each tick), the Win
 |---|---|
 | `GET /health` | Liveness probe used before connecting |
 | `GET /sources` | Tab keys and labels |
-| `GET /config` | Platform, resolved folder, current file, whether configuration is needed |
-| `POST /config` | `{ root }` — validate, persist and switch the watched folder (Windows only) |
+| `GET /config` | Platform, log folder, current file, whether configuration is needed |
+| `POST /config` | `{ logDir }` — validate, persist and switch the watched folder (Windows only) |
 
 ### Downloading Live Logs
 
