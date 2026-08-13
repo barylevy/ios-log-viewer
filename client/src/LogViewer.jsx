@@ -14,6 +14,8 @@ import { isArchiveFile, expandArchivesInList } from './utils/archiveExtractor';
 import { exportLogsToFile } from './utils/exportLogs';
 import { AVAILABLE_COLUMNS } from './ColumnSettings';
 import useLiveLogs from './utils/useLiveLogs';
+import LiveLogsSettings from './components/LiveLogsSettings';
+import { checkLiveHealth, fetchLiveConfig, applySavedRoot, buildSetupCommand, getSavedRoot, isWindows } from './utils/liveLogsServer';
 
 // Turn a raw folder name like "2387341752-260422074919 (1)" into the short
 // label we want in the page title.
@@ -421,6 +423,9 @@ const LogViewer = () => {
   }, [setLogsForFile, updateLogsBackground]);
 
   const [showServerDialog, setShowServerDialog] = useState(false);
+  // Which platform's setup command the "server not running" dialog shows.
+  const [setupPlatform, setSetupPlatform] = useState(() => (isWindows() ? 'win' : 'mac'));
+  const setupOnWindows = setupPlatform === 'win';
 
   const handleLiveConnected = useCallback(() => {
     handleClearTabs();
@@ -432,6 +437,7 @@ const LogViewer = () => {
     useLiveLogs({ onSourceUpdate: handleLiveSourceUpdate, onConnected: handleLiveConnected, onError: () => setShowServerDialog(true) });
 
   const [isLiveChecking, setIsLiveChecking] = useState(false);
+  const [showLiveSettings, setShowLiveSettings] = useState(false);
 
   const handleLiveToggle = useCallback(async () => {
     if (isLiveConnected) {
@@ -441,11 +447,22 @@ const LogViewer = () => {
     }
     setIsLiveChecking(true);
     try {
-      const res = await fetch('http://localhost:4000/health', { signal: AbortSignal.timeout(1500) });
-      if (!res.ok) throw new Error('not ok');
+      if (!(await checkLiveHealth())) {
+        setShowServerDialog(true);
+        return;
+      }
+      // A Windows server with no (or an empty) log folder would connect and
+      // then show nothing — send the user to the folder picker instead.
+      let config = await fetchLiveConfig();
+      // A folder configured before the server existed gets applied here.
+      if (config?.needsConfig) {
+        config = (await applySavedRoot()) || config;
+      }
+      if (config?.configurable && (config.needsConfig || config.matchCount === 0)) {
+        setShowLiveSettings(true);
+        return;
+      }
       liveConnect();
-    } catch {
-      setShowServerDialog(true);
     } finally {
       setIsLiveChecking(false);
     }
@@ -1240,6 +1257,7 @@ const LogViewer = () => {
         isLiveConnected={isLiveConnected}
         isLiveChecking={isLiveChecking}
         onLiveToggle={handleLiveToggle}
+        onOpenLiveSettings={() => setShowLiveSettings(true)}
       />
 
       {/* Main content area */}
@@ -1374,6 +1392,9 @@ const LogViewer = () => {
         </div>
       )}
 
+      {/* Live logs folder configuration */}
+      <LiveLogsSettings isOpen={showLiveSettings} onClose={() => setShowLiveSettings(false)} />
+
       {/* Live server not running dialog */}
       {showServerDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70" onClick={() => setShowServerDialog(false)}>
@@ -1387,14 +1408,32 @@ const LogViewer = () => {
               <div>
                 <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Live Logs Server Not Running</h3>
                 <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                  A small local server must run on your Mac to stream logs. Paste this into a terminal:
+                  A small local server must run on your machine to stream logs. Paste this into{' '}
+                  {setupOnWindows ? 'PowerShell' : 'a terminal'}:
                 </p>
               </div>
             </div>
 
+            {/* Platform switch — defaults to the OS the viewer is running on */}
+            <div className="flex gap-1 mb-3">
+              {[{ id: 'mac', label: 'macOS' }, { id: 'win', label: 'Windows' }].map(opt => (
+                <button
+                  key={opt.id}
+                  onClick={() => setSetupPlatform(opt.id)}
+                  className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                    (opt.id === 'win') === setupOnWindows
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
             {/* Single combined command */}
             {(() => {
-              const cmd = `sudo kill $(sudo lsof -ti:4000) 2>/dev/null; curl -o ~/live-logs-server.js ${window.location.origin}/live-logs-server.js && cd ~ && npm install ws && sudo node ~/live-logs-server.js`;
+              const cmd = buildSetupCommand(window.location.origin, setupOnWindows, getSavedRoot());
               return (
                 <div className="bg-gray-900 dark:bg-gray-950 rounded-lg px-4 py-3 mb-5">
                   <div className="font-mono text-sm text-green-400 break-all mb-3 select-all leading-relaxed">
@@ -1417,7 +1456,16 @@ const LogViewer = () => {
 
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-5">
               Downloads the script, installs the <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">ws</code> dependency, and starts the server.{' '}
-              <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">sudo</code> is required to read protected log directories.
+              {setupOnWindows ? (
+                <>
+                  No administrator rights needed. On first run, set your build folder from{' '}
+                  <span className="font-medium">Settings ▸ Live Logs Settings</span>.
+                </>
+              ) : (
+                <>
+                  <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">sudo</code> is required to read protected log directories.
+                </>
+              )}
             </p>
 
             <div className="flex justify-end">

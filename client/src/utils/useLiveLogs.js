@@ -5,15 +5,14 @@
  * delivers parsed log entries to the viewer as they arrive.
  *
  * Protocol (server → client):
- *   { type:'initial', sourceKey, label, content }  — full snapshot on connect
+ *   { type:'initial', sourceKey, label, content }  — empty, just creates the tab
  *   { type:'append',  sourceKey, label, content }  — new bytes since last send
  *   { type:'reset',   sourceKey, label, content }  — full resend after rotation
  */
 
 import { useState, useRef, useCallback } from 'react';
 import { parseLogContent } from '../LogParser';
-
-const WS_URL = 'ws://localhost:4000';
+import { LIVE_SERVER_WS } from './liveLogsServer';
 
 /**
  * @param {object} opts
@@ -38,7 +37,7 @@ export default function useLiveLogs({ onSourceUpdate, onConnected, onDisconnecte
     if (wsRef.current) return; // Already open
     accRef.current = {};
 
-    const ws = new WebSocket(WS_URL);
+    const ws = new WebSocket(LIVE_SERVER_WS);
     wsRef.current = ws;
     let didOpen = false;
 

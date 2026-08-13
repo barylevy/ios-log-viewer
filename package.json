@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "iOS Log Viewer with AI Chat",
   "scripts": {
-    "dev": "cd client && npm run dev",
-    "build": "cd client && npm run build"
+    "dev": "npm --prefix client run dev",
+    "build": "npm --prefix client run build"
   }
 }

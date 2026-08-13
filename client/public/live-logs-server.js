@@ -1,30 +1,46 @@
 #!/usr/bin/env node
 /**
  * Live Logs Server
- * Reads current Cato client log directories, sends initial content to browser
- * clients via WebSocket, then polls for new content every second.
+ * Reads current Cato client log locations, then polls for new content every
+ * second and streams it to browser clients over WebSocket.
  *
- * NOTE: Some paths under /private/var/root require root access.
- * Run with:  sudo node scripts/live-logs-server.js
+ * macOS — reads the fixed Cato log directories. Some paths under
+ *         /private/var/root require root access:
+ *           sudo node scripts/live-logs-server.js
  *
- * The client connects to ws://localhost:3001
+ * Windows — tails the most recently modified cato_vpn_*.log inside a build
+ *         output folder. Only the root varies per developer; the rest of the
+ *         path is fixed (see WIN_LOG_SUBPATH). Configure it with any of:
+ *           node live-logs-server.js --root="C:\\Users\\you\\ws"
+ *           set CATO_LOG_ROOT=C:\\Users\\you\\ws
+ *           the viewer's Settings ▸ Live Logs Settings dialog (persisted)
+ *
+ * The client connects to ws://localhost:4000
+ *
+ * NOTE: this file is downloaded standalone by the in-app setup command, so it
+ * must stay dependency-free apart from `ws`. It is also mirrored to
+ * client/public/live-logs-server.js by scripts/sync-public.js — run that after
+ * editing (client `predev`/`prebuild` do it automatically).
  */
 
 const http = require('http');
-const WebSocket = require('ws');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { StringDecoder } = require('string_decoder');
 
 const PORT = 4000;
 const POLL_MS = 1000; // how often to check for new bytes
 
+const IS_WIN = process.platform === 'win32';
+
 // ─── Source definitions ───────────────────────────────────────────────────────
 // Each entry becomes one tab in the viewer.
-// type 'dir'  → read all matching files in the directory, sorted naturally.
-// type 'file' → read that single file.
+// type 'dir'    → read all matching files in the directory, sorted naturally.
+// type 'file'   → read that single file.
+// type 'latest' → tail the most recently modified matching file in a directory.
 const HOME = os.homedir();
-const SOURCES = [
+const MAC_SOURCES = [
   {
     key: 'app',
     label: 'AppLogs',
@@ -68,6 +84,148 @@ const SOURCES = [
   },
 ];
 
+// ─── Windows paths ────────────────────────────────────────────────────────────
+// Example folder: C:\Users\LiorZats\ws\endpoint\endpoint\sdp\win\Product\Debug\x64
+// Everything after the root ("C:\Users\LiorZats\ws") is identical for everyone.
+const WIN_LOG_SUBPATH = path.join('endpoint', 'endpoint', 'sdp', 'win', 'Product', 'Debug', 'x64');
+const WIN_LOG_PATTERN = /^cato_vpn_.*\.log$/i;
+
+// Placeholder for the standard installed-client log directory, once confirmed.
+// Used only as a fallback — an explicitly configured root always wins.
+const INSTALLED_CLIENT_DIRS = [];
+
+const CONFIG_FILE = path.join(HOME, '.cato-live-logs.json');
+
+/** Compare paths ignoring separator style, case and trailing slashes. */
+function normalizePath(p) {
+  return String(p).replace(/[\\/]+/g, '\\').replace(/\\+$/, '').toLowerCase();
+}
+
+/**
+ * Turn a user-supplied root into the directory that actually holds the logs.
+ * Tolerates the user pasting the full folder rather than just the root.
+ * @returns {string|null} resolved directory, or null when root is empty
+ */
+function resolveWinLogDir(root) {
+  if (!root) return null;
+  const trimmed = String(root).trim().replace(/[\\/]+$/, '');
+  if (!trimmed) return null;
+
+  const sub = normalizePath(WIN_LOG_SUBPATH);
+  const norm = normalizePath(trimmed);
+  if (norm === sub || norm.endsWith('\\' + sub)) return trimmed;
+
+  return path.join(trimmed, WIN_LOG_SUBPATH);
+}
+
+/** All regular files in `dir` matching `pattern`, with stat info. */
+function listMatchingFiles(dir, pattern) {
+  if (!dir) return [];
+  let names;
+  try { names = fs.readdirSync(dir); } catch { return []; }
+
+  const out = [];
+  for (const name of names) {
+    if (pattern && !pattern.test(name)) continue;
+    const full = path.join(dir, name);
+    try {
+      const stat = fs.statSync(full);
+      if (!stat.isFile()) continue;
+      out.push({ name, path: full, mtimeMs: stat.mtimeMs, size: stat.size });
+    } catch { /* skip unreadable files */ }
+  }
+  return out;
+}
+
+/** The most recently modified matching file, or null. */
+function pickLatestFile(dir, pattern) {
+  let best = null;
+  for (const f of listMatchingFiles(dir, pattern)) {
+    if (!best || f.mtimeMs > best.mtimeMs) best = f;
+  }
+  return best;
+}
+
+// ─── Windows configuration ────────────────────────────────────────────────────
+
+function readStoredConfig() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch { return {}; }
+}
+
+function writeStoredConfig(cfg) {
+  fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2), 'utf8');
+}
+
+/** Read --root=<path> or --root <path> from argv. */
+function rootFromArgv(argv) {
+  const args = argv.slice(2);
+  for (let i = 0; i < args.length; i++) {
+    if (args[i].startsWith('--root=')) return args[i].slice('--root='.length);
+    if (args[i] === '--root' && args[i + 1]) return args[i + 1];
+  }
+  return null;
+}
+
+/** First existing directory from INSTALLED_CLIENT_DIRS, if any. */
+function findInstalledClientDir() {
+  for (const dir of INSTALLED_CLIENT_DIRS) {
+    try { if (fs.statSync(dir).isDirectory()) return dir; } catch { /* keep looking */ }
+  }
+  return null;
+}
+
+let winRoot = rootFromArgv(process.argv) || process.env.CATO_LOG_ROOT || readStoredConfig().winRoot || null;
+
+function buildWindowsSources() {
+  const dir = resolveWinLogDir(winRoot) || findInstalledClientDir();
+  if (!dir) return [];
+  return [{ key: 'vpn', label: 'CatoVPN', type: 'latest', path: dir, pattern: WIN_LOG_PATTERN }];
+}
+
+let SOURCES = IS_WIN ? buildWindowsSources() : MAC_SOURCES;
+
+/** Snapshot of the current configuration, served at GET /config. */
+function configInfo() {
+  if (!IS_WIN) {
+    return {
+      platform: process.platform,
+      // Nothing to configure: the macOS sources are fixed system paths.
+      configurable: false,
+      needsConfig: false,
+      root: null,
+      subPath: null,
+      resolvedDir: null,
+      dirExists: true,
+      currentFile: null,
+      matchCount: 0,
+      port: PORT,
+    };
+  }
+
+  const resolvedDir = resolveWinLogDir(winRoot) || findInstalledClientDir();
+  let dirExists = false;
+  try { dirExists = !!resolvedDir && fs.statSync(resolvedDir).isDirectory(); } catch { dirExists = false; }
+
+  const matches = dirExists ? listMatchingFiles(resolvedDir, WIN_LOG_PATTERN) : [];
+  const latest = matches.reduce((best, f) => (!best || f.mtimeMs > best.mtimeMs ? f : best), null);
+
+  return {
+    platform: process.platform,
+    configurable: true,
+    needsConfig: !dirExists,
+    root: winRoot,
+    subPath: WIN_LOG_SUBPATH,
+    resolvedDir,
+    dirExists,
+    currentFile: latest ? latest.name : null,
+    matchCount: matches.length,
+    port: PORT,
+  };
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Natural sort so log.1 < log.2 < log.10 */
@@ -104,10 +262,70 @@ function readFile(filePath) {
   try { return fs.readFileSync(filePath, 'utf8'); } catch { return ''; }
 }
 
+/** Read `length` bytes from `filePath` starting at byte offset `start`. */
+function readRange(filePath, start, length) {
+  const fd = fs.openSync(filePath, 'r');
+  try {
+    const buf = Buffer.allocUnsafe(length);
+    let read = 0;
+    while (read < length) {
+      const n = fs.readSync(fd, buf, read, length - read, start + read);
+      if (n <= 0) break;
+      read += n;
+    }
+    return buf.subarray(0, read);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+// Per-'latest'-source tail bookkeeping: which file we're on and how many bytes
+// of it we've consumed. Lets us read only the new bytes instead of re-reading a
+// growing dev log every second.
+const tails = {};    // { [key]: { filePath, size } | null }
+const decoders = {}; // { [key]: StringDecoder } — keeps multi-byte chars intact across reads
+
+/**
+ * Tail the most recently modified matching file.
+ * `forceReset` is true when we switched files or the file was truncated, which
+ * makes the polling loop resend everything instead of diffing.
+ */
+function readLatest(src) {
+  const key = src.key;
+  const latest = pickLatestFile(src.path, src.pattern);
+  const prev = tails[key];
+
+  if (!latest) {
+    tails[key] = null;
+    decoders[key] = null;
+    return { content: '', forceReset: !!prev };
+  }
+
+  const sameFile = prev && prev.filePath === latest.path;
+
+  if (sameFile && latest.size === prev.size) {
+    return { content: state[key] || '', forceReset: false };
+  }
+
+  if (sameFile && latest.size > prev.size) {
+    const buf = readRange(latest.path, prev.size, latest.size - prev.size);
+    tails[key] = { filePath: latest.path, size: prev.size + buf.length };
+    return { content: (state[key] || '') + decoders[key].write(buf), forceReset: false };
+  }
+
+  // New file, or the current one was truncated/rotated in place — start over.
+  let buf;
+  try { buf = fs.readFileSync(latest.path); } catch { return { content: state[key] || '', forceReset: false }; }
+  decoders[key] = new StringDecoder('utf8');
+  tails[key] = { filePath: latest.path, size: buf.length };
+  return { content: decoders[key].write(buf), forceReset: true };
+}
+
+/** @returns {{content: string, forceReset: boolean}} */
 function readSource(src) {
-  return src.type === 'dir'
-    ? readDir(src.path, src.pattern)
-    : readFile(src.path);
+  if (src.type === 'latest') return readLatest(src);
+  if (src.type === 'dir') return { content: readDir(src.path, src.pattern), forceReset: false };
+  return { content: readFile(src.path), forceReset: false };
 }
 
 // ─── State ────────────────────────────────────────────────────────────────────
@@ -115,9 +333,27 @@ function readSource(src) {
 const state = {}; // { [key]: string } — always the full current content
 
 function init() {
+  if (IS_WIN && SOURCES.length === 0) {
+    const info = configInfo();
+    console.log(`  ✗ No log folder configured.`);
+    console.log(`    Set one with --root="C:\\Users\\you\\ws", the CATO_LOG_ROOT env var,`);
+    console.log(`    or the viewer's Settings ▸ Live Logs Settings dialog.`);
+    if (info.root) console.log(`    Current root "${info.root}" resolves to "${info.resolvedDir}" (missing).`);
+    return;
+  }
+
   for (const src of SOURCES) {
-    state[src.key] = readSource(src);
-    if (state[src.key].length > 0) {
+    state[src.key] = readSource(src).content;
+
+    if (src.type === 'latest') {
+      const tail = tails[src.key];
+      if (tail) {
+        console.log(`  ✓ ${src.label}: ${path.basename(tail.filePath)} (${state[src.key].length} bytes)`);
+        console.log(`    watching ${src.path}`);
+      } else {
+        console.log(`  ✗ ${src.label}: no ${src.pattern} file found in ${src.path}`);
+      }
+    } else if (state[src.key].length > 0) {
       console.log(`  ✓ ${src.label}: ${state[src.key].length} bytes`);
     } else {
       console.log(`  ✗ ${src.label}: not found or empty (${src.path})`);
@@ -126,31 +362,111 @@ function init() {
 }
 
 // ─── HTTP + WebSocket server ───────────────────────────────────────────────────
-const server = http.createServer((req, res) => {
+function sendJson(res, status, body) {
+  res.writeHead(status, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(body));
+}
+
+/** Collect a JSON request body (capped, so a stray large POST can't blow up). */
+function readJsonBody(req, cb) {
+  let body = '';
+  let tooLarge = false;
+  req.on('data', chunk => {
+    if (tooLarge) return;
+    body += chunk;
+    if (body.length > 64 * 1024) { tooLarge = true; }
+  });
+  req.on('end', () => {
+    if (tooLarge) return cb(new Error('Request body too large'));
+    try { cb(null, body ? JSON.parse(body) : {}); } catch { cb(new Error('Invalid JSON body')); }
+  });
+  req.on('error', err => cb(err));
+}
+
+function handleRequest(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
-  if (req.url === '/sources') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(SOURCES.map(s => ({ key: s.key, label: s.label }))));
-    return;
+  const route = (req.url || '').split('?')[0];
+
+  if (route === '/sources') {
+    return sendJson(res, 200, SOURCES.map(s => ({ key: s.key, label: s.label })));
   }
 
-  if (req.url === '/health') {
+  if (route === '/health') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('ok');
     return;
   }
 
+  if (route === '/config' && req.method === 'GET') {
+    return sendJson(res, 200, configInfo());
+  }
+
+  if (route === '/config' && req.method === 'POST') {
+    if (!IS_WIN) {
+      return sendJson(res, 400, { error: 'Folder configuration only applies to Windows.' });
+    }
+    return readJsonBody(req, (err, body) => {
+      if (err) return sendJson(res, 400, { error: err.message });
+
+      const root = typeof body.root === 'string' ? body.root.trim() : '';
+      if (!root) return sendJson(res, 400, { error: 'Please enter a root folder.' });
+
+      const dir = resolveWinLogDir(root);
+      let exists = false;
+      try { exists = fs.statSync(dir).isDirectory(); } catch { exists = false; }
+      if (!exists) {
+        return sendJson(res, 400, { error: `Folder not found: ${dir}` });
+      }
+
+      applyWinRoot(root);
+      return sendJson(res, 200, configInfo());
+    });
+  }
+
   res.writeHead(404); res.end('Not found');
-});
+}
 
-const wss = new WebSocket.Server({ server });
+// Assigned in start(). Requiring this file (tests) leaves them null so no
+// listener is opened and no polling timer is scheduled.
+let WebSocket = null;
+let server = null;
+let wss = null;
 
-wss.on('connection', (ws) => {
+/** Point every connected client at the newly configured folder. */
+function applyWinRoot(root) {
+  winRoot = root;
+  try {
+    writeStoredConfig({ ...readStoredConfig(), winRoot: root });
+  } catch (e) {
+    console.error('[live-logs] Could not persist config:', e.message);
+  }
+
+  for (const key of Object.keys(state)) delete state[key];
+  for (const key of Object.keys(tails)) delete tails[key];
+
+  SOURCES = buildWindowsSources();
+  console.log(`\n[live-logs] Log folder changed to: ${resolveWinLogDir(root)}`);
+  init();
+
+  // Clear each client's tab and stream from the new file's end onwards, which
+  // matches what happens on a fresh connection.
+  if (!wss) return;
+  for (const src of SOURCES) {
+    const msg = JSON.stringify({ type: 'reset', sourceKey: src.key, label: src.label, content: '' });
+    wss.clients.forEach(client => {
+      if (client.readyState !== WebSocket.OPEN) return;
+      client.clientOffsets[src.key] = state[src.key].length;
+      client.send(msg);
+    });
+  }
+}
+
+function handleConnection(ws) {
   console.log('[live-logs] Client connected');
 
   // Record where each source stands RIGHT NOW for this client.
@@ -172,19 +488,21 @@ wss.on('connection', (ws) => {
 
   ws.on('error', err => console.error('[live-logs] WS error:', err.message));
   ws.on('close', () => console.log('[live-logs] Client disconnected'));
-});
+}
 
 // ─── Polling loop ─────────────────────────────────────────────────────────────
-setInterval(() => {
+function poll() {
   if (wss.clients.size === 0) return; // No clients — skip work
 
   for (const src of SOURCES) {
     const prev = state[src.key];
-    const curr = readSource(src);
+    const { content: curr, forceReset } = readSource(src);
 
-    if (curr === prev) continue; // Nothing changed
+    if (curr === prev && !forceReset) continue; // Nothing changed
 
-    const isAppend = curr.length > prev.length && curr.startsWith(prev);
+    // forceReset means we switched to a different file — never treat that as an
+    // append, even if the new content happens to start with the old.
+    const isAppend = !forceReset && curr.length > prev.length && curr.startsWith(prev);
     state[src.key] = curr;
 
     wss.clients.forEach(client => {
@@ -207,43 +525,79 @@ setInterval(() => {
       if (msg) client.send(msg);
     });
   }
-}, POLL_MS);
+}
 
 // ─── Start ────────────────────────────────────────────────────────────────────
-console.log('[live-logs] Initialising sources...');
-init();
+function start() {
+  WebSocket = require('ws');
 
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(`\n[live-logs] Server ready at ws://localhost:${PORT}`);
-  console.log('[live-logs] Press Ctrl-C to stop.\n');
-});
+  console.log('[live-logs] Initialising sources...');
+  init();
 
-server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    // Check if it's our own server already running on that port
-    http.get(`http://127.0.0.1:${PORT}/health`, (res) => {
-      let body = '';
-      res.on('data', chunk => { body += chunk; });
-      res.on('end', () => {
-        if (body.trim() === 'ok') {
-          console.log(`\n[live-logs] Server is already running on port ${PORT} — nothing to do.`);
-          console.log('[live-logs] Connect the viewer and click Online.\n');
-        } else {
-          printPortConflict();
-        }
-        process.exit(0);
-      });
-    }).on('error', printPortConflict);
-  } else {
-    console.error('[live-logs] Server error:', err.message);
-    process.exit(1);
-  }
-});
+  server = http.createServer(handleRequest);
+  wss = new WebSocket.Server({ server });
+  wss.on('connection', handleConnection);
+  setInterval(poll, POLL_MS);
+
+  // ws forwards the HTTP server's 'error' to the WebSocketServer too, so both
+  // need a listener — otherwise a listen failure throws before we can print
+  // anything useful.
+  let handledError = false;
+  const onServerError = (err) => {
+    if (handledError) return;
+    handledError = true;
+
+    if (err.code === 'EADDRINUSE') {
+      // Check if it's our own server already running on that port
+      http.get(`http://127.0.0.1:${PORT}/health`, (res) => {
+        let body = '';
+        res.on('data', chunk => { body += chunk; });
+        res.on('end', () => {
+          if (body.trim() === 'ok') {
+            console.log(`\n[live-logs] Server is already running on port ${PORT} — nothing to do.`);
+            console.log('[live-logs] Connect the viewer and click Online.\n');
+          } else {
+            printPortConflict();
+          }
+          process.exit(0);
+        });
+      }).on('error', printPortConflict);
+    } else {
+      console.error('[live-logs] Server error:', err.message);
+      process.exit(1);
+    }
+  };
+  server.on('error', onServerError);
+  wss.on('error', onServerError);
+
+  server.listen(PORT, '127.0.0.1', () => {
+    console.log(`\n[live-logs] Server ready at ws://localhost:${PORT}`);
+    console.log('[live-logs] Press Ctrl-C to stop.\n');
+  });
+}
 
 function printPortConflict() {
   console.error(`\n[live-logs] ERROR: Port ${PORT} is already in use by another process.`);
   console.error(`\nTo free it, run:`);
-  console.error(`  lsof -ti:${PORT} | xargs kill\n`);
+  if (IS_WIN) {
+    console.error(`  netstat -ano | findstr :${PORT}`);
+    console.error(`  taskkill /PID <pid> /F\n`);
+  } else {
+    console.error(`  lsof -ti:${PORT} | xargs kill\n`);
+  }
   console.error(`Then start the server again.\n`);
   process.exit(1);
 }
+
+// Only start listening when run directly — `require`ing this file (tests) just
+// exposes the pure path helpers below.
+if (require.main === module) start();
+
+module.exports = {
+  WIN_LOG_SUBPATH,
+  WIN_LOG_PATTERN,
+  resolveWinLogDir,
+  listMatchingFiles,
+  pickLatestFile,
+  rootFromArgv,
+};

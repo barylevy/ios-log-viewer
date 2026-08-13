@@ -10,7 +10,7 @@ import { isArchiveFile, expandArchivesInList } from './utils/archiveExtractor';
 // localStorage key for persisting which group names the user selected last time
 const FOLDER_SELECTION_KEY = 'logViewer_folderGroupNames';
 
-const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs, visibleColumns, onColumnsChange, onResetColumnDefaults, rightColumnOrder, onRightColumnOrderChange, logDuration, folderName, onPrepareFilesStart, onPrepareFilesEnd, onDownloadMerged, isDownloadingMerged, onClearFilters, isLiveMode = false, isLiveConnected = false, isLiveChecking = false, onLiveToggle }) => {
+const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs, visibleColumns, onColumnsChange, onResetColumnDefaults, rightColumnOrder, onRightColumnOrderChange, logDuration, folderName, onPrepareFilesStart, onPrepareFilesEnd, onDownloadMerged, isDownloadingMerged, onClearFilters, isLiveMode = false, isLiveConnected = false, isLiveChecking = false, onLiveToggle, onOpenLiveSettings }) => {
   const fileInputRef = useRef(null);
   const directoryInputRef = useRef(null);
   const [showFileDropdown, setShowFileDropdown] = useState(false);
@@ -450,6 +450,17 @@ const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs,
                     </svg>
                     Column Settings
                   </button>
+                  {onOpenLiveSettings && (
+                    <button
+                      onClick={() => { onOpenLiveSettings(); setShowDropdown(false); }}
+                      className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                      </svg>
+                      Live Logs Settings
+                    </button>
+                  )}
                   {onClearFilters && (
                     <button
                       onClick={() => { onClearFilters(); setShowDropdown(false); }}

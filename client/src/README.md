@@ -337,22 +337,25 @@ Stream logs from the local Cato client in real time directly into the viewer —
 
 ### How It Works
 
-A lightweight local WebSocket server (`live-logs-server.js`) runs on the user's Mac, reads the Cato log directories, and pushes new content to the browser every second via WebSocket on port 4000.
+A lightweight local WebSocket server (`live-logs-server.js`) runs on the user's machine, reads the Cato log locations for that platform, and pushes new content to the browser every second via WebSocket on port 4000. It supports both macOS and Windows.
 
 ### Starting Live Logs
 
-Click the **"Live Logs"** button in the header. If the local server is not running, a dialog appears with a single copyable command that:
+Click the **"Live Logs"** button in the header. If the local server is not running, a dialog appears with a copyable command for your platform (with a macOS / Windows toggle) that downloads `live-logs-server.js`, installs the `ws` dependency, and starts it.
 
-1. Kills any existing process on port 4000
-2. Downloads `live-logs-server.js` to `~/`
-3. Installs the `ws` dependency
-4. Starts the server with `sudo`
+**macOS** — `sudo` is required to read log directories under `/private/var/root/`:
 
 ```bash
 sudo kill $(sudo lsof -ti:4000) 2>/dev/null; curl -o ~/live-logs-server.js <app-url>/live-logs-server.js && cd ~ && npm install ws && sudo node ~/live-logs-server.js
 ```
 
-> `sudo` is required to read log directories under `/private/var/root/`.
+**Windows** (PowerShell) — no elevation needed, the build output folder lives under your own profile:
+
+```powershell
+irm <app-url>/live-logs-server.js -OutFile $HOME\live-logs-server.js; cd $HOME; npm install ws; node $HOME\live-logs-server.js
+```
+
+`scripts/install.sh` (macOS) and `scripts/install.ps1` (Windows) do the same for a checked-out repo.
 
 ### Button States
 
@@ -362,7 +365,9 @@ sudo kill $(sudo lsof -ti:4000) 2>/dev/null; curl -o ~/live-logs-server.js <app-
 | Checking | Blue spinner — **"Connecting…"** (disabled) | Waiting for server health check |
 | Connected | Green — **"Stop Live"** with pulsing dot | Click to disconnect |
 
-### Live Log Sources
+On Windows, if no log folder is configured yet (or it contains no matching files), clicking **Live Logs** opens **Live Logs Settings** instead of connecting to an empty tab.
+
+### Live Log Sources — macOS
 
 Each source becomes its own tab with **green text**:
 
@@ -375,6 +380,37 @@ Each source becomes its own tab with **green text**:
 | Daemon | `/private/var/root/Library/Logs/com.catonetworks.mac.CatoClient.helper` |
 | Install | `/var/tmp/catoinstallext.txt` |
 
+### Live Log Sources — Windows
+
+One tab (`vpn`), tailing the **most recently modified** `cato_vpn_*.log` in the build output folder. When a newer matching file appears, the server switches to it and resets the tab.
+
+Only the root of that path varies between developers, so the server is configured with a root and appends the fixed sub-path itself:
+
+```
+<root>\endpoint\endpoint\sdp\win\Product\Debug\x64
+```
+
+Set the root in any of these ways (highest precedence first) — pasting the full folder instead of the root also works:
+
+1. `node live-logs-server.js --root="C:\Users\you\ws"`
+2. `set CATO_LOG_ROOT=C:\Users\you\ws`
+3. **Settings ▸ Live Logs Settings** in the viewer
+
+The dialog shows the resolved folder, the file currently being tailed, and how many match. Saving persists the root to `~/.cato-live-logs.json`, so later runs need no argument, and pushes connected clients onto the new folder immediately.
+
+**The folder can be configured before the server ever runs.** With no server reachable, the dialog still accepts a root and stores it in `localStorage` (`liveLogs_winRoot`), and shows a start command with `--root="…"` already filled in. Whenever a server later reports `needsConfig`, the viewer POSTs that saved root automatically — so **Live Logs** connects straight through instead of stopping to ask again.
+
+Unlike the macOS directory sources (which re-read every file each tick), the Windows source reads only the bytes appended since the last poll — dev build logs grow quickly.
+
+### HTTP Endpoints
+
+| Route | Purpose |
+|---|---|
+| `GET /health` | Liveness probe used before connecting |
+| `GET /sources` | Tab keys and labels |
+| `GET /config` | Platform, resolved folder, current file, whether configuration is needed |
+| `POST /config` | `{ root }` — validate, persist and switch the watched folder (Windows only) |
+
 ### Downloading Live Logs
 
 - **Per-tab download** — each live tab has a green ↓ download button beside its title. Clicking it exports that tab's logs to a file immediately (works on any tab, not just the active one).
@@ -384,12 +420,14 @@ Each source becomes its own tab with **green text**:
 
 | Message type | Meaning |
 |---|---|
-| `initial` | Full snapshot of a source on connect |
+| `initial` | Empty — tells the viewer to create the tab. Streaming starts from the connection moment, not from history |
 | `append` | New bytes added since last send |
-| `reset` | File rotated — full resend |
+| `reset` | File rotated, truncated, or folder reconfigured — resend from scratch |
 
 Hook: `utils/useLiveLogs.js`  
-Server: `scripts/live-logs-server.js` (also served as a static download from `/live-logs-server.js`)
+Shared client (port, endpoints, setup command): `utils/liveLogsServer.js`  
+Settings dialog: `components/LiveLogsSettings.jsx`  
+Server: `scripts/live-logs-server.js` — also served as a static download from `/live-logs-server.js`. The copy in `client/public/` is generated by `scripts/sync-public.js`, which the client's `predev`/`prebuild` scripts run automatically; edit only the one in `scripts/`.
 
 ---
 
