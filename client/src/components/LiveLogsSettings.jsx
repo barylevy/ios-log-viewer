@@ -125,7 +125,7 @@ const LiveLogsSettings = ({ isOpen, onClose }) => {
                   value={logDir}
                   onChange={(e) => { setLogDir(e.target.value); setSaved(false); setError(''); }}
                   onKeyDown={(e) => { if (e.key === 'Enter' && !isSaving) handleSave(); }}
-                  placeholder="C:\Users\you\ws\endpoint\endpoint\sdp\win\Product\Debug\x64"
+                  placeholder="C:\Program Files (x86)\Cato Networks\Cato Client"
                   spellCheck={false}
                   className="w-full px-3 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-gray-100 font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />

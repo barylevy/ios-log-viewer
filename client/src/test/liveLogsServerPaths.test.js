@@ -20,11 +20,19 @@ const {
   dirFromArgv,
 } = require('../../../scripts/live-logs-server.js');
 
-const FULL_DIR = 'C:\\Users\\LiorZats\\ws\\endpoint\\endpoint\\sdp\\win\\Product\\Debug\\x64';
+// The installed client's log folder — note the spaces and parentheses.
+const FULL_DIR = 'C:\\Program Files (x86)\\Cato Networks\\Cato Client';
+const DEV_DIR = 'C:\\Users\\LiorZats\\ws\\endpoint\\endpoint\\sdp\\win\\Product\\Debug\\x64';
 
 describe('normalizeLogDir', () => {
   it('uses the given directory exactly, appending nothing', () => {
     expect(normalizeLogDir(FULL_DIR)).toBe(FULL_DIR);
+    expect(normalizeLogDir(DEV_DIR)).toBe(DEV_DIR);
+  });
+
+  it('keeps spaces and parentheses intact', () => {
+    expect(normalizeLogDir(FULL_DIR)).toContain(' (x86)');
+    expect(normalizeLogDir(FULL_DIR)).toContain('Cato Client');
   });
 
   it('leaves a short path alone rather than assuming a sub-path', () => {
@@ -114,6 +122,12 @@ describe('dirFromArgv', () => {
   });
 
   it('reads --dir <path>', () => {
+    expect(dirFromArgv(['node', 'srv.js', '--dir', FULL_DIR])).toBe(FULL_DIR);
+  });
+
+  it('keeps a path with spaces and parentheses in one piece', () => {
+    // How PowerShell hands `--dir="C:\Program Files (x86)\..."` to argv.
+    expect(dirFromArgv(['node', 'srv.js', `--dir=${FULL_DIR}`])).toBe(FULL_DIR);
     expect(dirFromArgv(['node', 'srv.js', '--dir', FULL_DIR])).toBe(FULL_DIR);
   });
 

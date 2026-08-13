@@ -2,7 +2,7 @@
 #
 # Usage:
 #   .\install.ps1
-#   .\install.ps1 -Dir "C:\Users\you\ws\endpoint\endpoint\sdp\win\Product\Debug\x64"
+#   .\install.ps1 -Dir "C:\Program Files (x86)\Cato Networks\Cato Client"
 #
 # -Dir is the full path to the folder holding the cato_vpn_*.log files; it is
 # used exactly as given. Once set it is remembered in ~\.cato-live-logs.json, so

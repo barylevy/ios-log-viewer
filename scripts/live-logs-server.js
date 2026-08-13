@@ -10,8 +10,8 @@
  *
  * Windows — tails the most recently modified cato_vpn_*.log inside the log
  *         directory. Give the full path; nothing is appended to it:
- *           node live-logs-server.js --dir="C:\\Users\\you\\ws\\...\\Debug\\x64"
- *           set CATO_LOG_DIR=C:\\Users\\you\\ws\\...\\Debug\\x64
+ *           node live-logs-server.js --dir="C:\\Program Files (x86)\\Cato Networks\\Cato Client"
+ *           set CATO_LOG_DIR=C:\\Program Files (x86)\\Cato Networks\\Cato Client
  *           the viewer's Settings ▸ Live Logs Settings dialog (persisted)
  *
  * The client connects to ws://localhost:4000
@@ -84,8 +84,10 @@ const MAC_SOURCES = [
 ];
 
 // ─── Windows paths ────────────────────────────────────────────────────────────
-// The user gives the full directory holding the logs, e.g.
-//   C:\Users\LiorZats\ws\endpoint\endpoint\sdp\win\Product\Debug\x64
+// The user gives the full directory holding the logs — the installed client's
+//   C:\Program Files (x86)\Cato Networks\Cato Client
+// or a dev build output folder such as
+//   C:\Users\you\ws\endpoint\endpoint\sdp\win\Product\Debug\x64
 const WIN_LOG_PATTERN = /^cato_vpn_.*\.log$/i;
 
 // Placeholder for the standard installed-client log directory, once confirmed.
