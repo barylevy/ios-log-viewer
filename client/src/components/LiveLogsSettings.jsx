@@ -117,10 +117,42 @@ const LiveLogsSettings = ({ isOpen, onClose }) => {
           )}
 
           {!isLoading && config && !showFolderConfig && (
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              The server is running on <span className="font-medium">{config.platform}</span> and reads the
-              standard Cato log directories, which are fixed. There's nothing to configure here.
-            </p>
+            <>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                The server is running on <span className="font-medium">{config.platform}</span> and reads the
+                standard Cato log directories, which are fixed. There's nothing to configure here.
+              </p>
+
+              {config.antiTamper && (
+                <dl className="rounded-md bg-gray-50 dark:bg-gray-900 p-3 space-y-2 text-xs">
+                  <div>
+                    <dt className="text-gray-500 dark:text-gray-400">
+                      AntiTamper folder{config.antiTamper.exists ? '' : ' — not found'}
+                    </dt>
+                    <dd className="font-mono text-gray-800 dark:text-gray-200 break-all">
+                      {config.antiTamper.dir || '—'}
+                    </dd>
+                  </div>
+                  {config.antiTamper.exists && (
+                    <div>
+                      <dt className="text-gray-500 dark:text-gray-400">
+                        Files ({config.antiTamper.matchCount})
+                      </dt>
+                      <dd className="font-mono text-gray-800 dark:text-gray-200 break-all">
+                        {config.antiTamper.currentFile || 'none'}
+                      </dd>
+                    </div>
+                  )}
+                  {!config.antiTamper.exists && (
+                    <p className="text-gray-500 dark:text-gray-400">
+                      Run the server with <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">sudo</code> —
+                      this folder sits under <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">/private/var/root</code>{' '}
+                      and is unreadable otherwise.
+                    </p>
+                  )}
+                </dl>
+              )}
+            </>
           )}
 
           {!isLoading && showFolderConfig && (

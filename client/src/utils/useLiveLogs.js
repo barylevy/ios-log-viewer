@@ -15,8 +15,17 @@ import { useState, useRef, useCallback } from 'react';
 import { parseLogContent } from '../LogParser';
 import { LIVE_SERVER_WS } from './liveLogsServer';
 
+/** Quiet sources keep at least this many records, even if older than today. */
+export const MIN_LIVE_RECORDS = 200;
+
 /**
- * Cut a raw log buffer down to records at or after `cutoff`.
+ * Cut a raw log buffer down to what live mode should show: records from today,
+ * but never fewer than `minRecords`.
+ *
+ * The floor matters for sources that are written rarely — AntiTamper may log a
+ * handful of lines a week, and a strict day filter would leave its tab blank.
+ * Busy sources are unaffected: when today already has more than the floor, the
+ * day boundary is what applies.
  *
  * Returns the trimmed text, or null to leave the buffer untouched — which is
  * what happens when nothing can be dated. A source whose format we can't parse
@@ -25,19 +34,24 @@ import { LIVE_SERVER_WS } from './liveLogsServer';
  * @param {string} raw    accumulated text
  * @param {any[]} logs    that text already parsed
  * @param {number} cutoff epoch ms for the start of today
+ * @param {number} [minRecords]
  */
-export function trimToToday(raw, logs, cutoff) {
+export function trimLiveBuffer(raw, logs, cutoff, minRecords = MIN_LIVE_RECORDS) {
   if (!raw || !logs.length) return null;
 
   // Nothing datable — can't tell old from new, so keep everything.
   if (!logs.some(l => l.timestampMs != null)) return null;
 
-  const firstToday = logs.findIndex(l => l.timestampMs != null && l.timestampMs >= cutoff);
+  let firstToday = logs.findIndex(l => l.timestampMs != null && l.timestampMs >= cutoff);
+  if (firstToday === -1) firstToday = logs.length; // nothing from today at all
 
-  if (firstToday === -1) return '';   // every record predates today
-  if (firstToday === 0) return null;  // already starts today, nothing to do
+  // Whichever keeps more: today's records, or the last `minRecords`.
+  const floorIndex = Math.max(0, logs.length - minRecords);
+  const startIndex = Math.min(firstToday, floorIndex);
 
-  const startLine = logs[firstToday].lineNumber; // 1-based
+  if (startIndex <= 0) return null; // already starts where we want it to
+
+  const startLine = logs[startIndex].lineNumber; // 1-based
   return raw.split('\n').slice(startLine - 1).join('\n');
 }
 
@@ -97,11 +111,11 @@ export default function useLiveLogs({ onSourceUpdate, onConnected, onDisconnecte
         let logs = parseLogContent(accRef.current[sourceKey]);
 
         // 'initial'/'reset' carry a full snapshot, which for a rotated or
-        // re-read file is the entire history. Drop anything before today and
-        // trim the raw buffer to match, so later appends re-parse only the
-        // remaining text instead of the whole file every second.
+        // re-read file is the entire history. Cut it back to what live mode
+        // shows and trim the raw buffer to match, so later appends re-parse
+        // only the remaining text instead of the whole file every second.
         if (type !== 'append') {
-          const trimmed = trimToToday(accRef.current[sourceKey], logs, cutoffRef.current);
+          const trimmed = trimLiveBuffer(accRef.current[sourceKey], logs, cutoffRef.current);
           if (trimmed !== null) {
             accRef.current[sourceKey] = trimmed;
             logs = parseLogContent(trimmed);

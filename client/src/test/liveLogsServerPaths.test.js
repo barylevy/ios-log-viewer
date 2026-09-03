@@ -16,6 +16,9 @@ const {
   WIN_LOG_PATTERN,
   WIN_ANTITAMPER_SUBDIRS,
   WIN_ANTITAMPER_PATTERN,
+  firstExistingDir,
+  firstDirWithMatch,
+  MAC_ANTITAMPER_PATTERN,
   resolveAntiTamperDir,
   winSourcesFor,
   normalizeLogDir,
@@ -156,7 +159,7 @@ describe('winSourcesFor', () => {
     expect(vpn.type).toBe('latest');
 
     expect(antiTamper.key).toBe('antitamper');
-    expect(antiTamper.path).toBe(path.join(FULL_DIR, 'AntiTamper'));
+    expect(antiTamper.path).toBe(path.join(FULL_DIR, 'AntiTamperLogs'));
     expect(antiTamper.type).toBe('latest');
   });
 
@@ -190,18 +193,19 @@ describe('resolveAntiTamperDir', () => {
     fs.rmSync(base, { recursive: true, force: true });
   });
 
-  it('falls back to the preferred name when nothing exists, so /config can report it', () => {
-    expect(resolveAntiTamperDir(base)).toBe(path.join(base, 'AntiTamper'));
+  it('falls back to the confirmed name when nothing exists, so /config can report it', () => {
+    expect(resolveAntiTamperDir(base)).toBe(path.join(base, 'AntiTamperLogs'));
   });
 
-  it('picks the AntiTamperLogs spelling when that is the folder on disk', () => {
-    const legacy = path.join(base, 'AntiTamperLogs');
-    fs.mkdirSync(legacy);
-    expect(resolveAntiTamperDir(base)).toBe(legacy);
+  it('picks the bare AntiTamper spelling when that is the folder on disk', () => {
+    const fallback = path.join(base, 'AntiTamper');
+    fs.mkdirSync(fallback);
+    expect(resolveAntiTamperDir(base)).toBe(fallback);
   });
 
-  it('prefers AntiTamper when both spellings exist', () => {
-    const preferred = path.join(base, 'AntiTamper');
+  it('prefers AntiTamperLogs when both spellings exist', () => {
+    // A support bundle confirmed this is the real folder name.
+    const preferred = path.join(base, 'AntiTamperLogs');
     fs.mkdirSync(preferred);
     expect(resolveAntiTamperDir(base)).toBe(preferred);
   });
@@ -209,8 +213,10 @@ describe('resolveAntiTamperDir', () => {
   it('ignores a plain file with the folder name', () => {
     const other = fs.mkdtempSync(path.join(os.tmpdir(), 'cato-at2-'));
     try {
-      fs.writeFileSync(path.join(other, 'AntiTamper'), 'not a directory');
-      expect(resolveAntiTamperDir(other)).toBe(path.join(other, 'AntiTamper'));
+      fs.writeFileSync(path.join(other, 'AntiTamperLogs'), 'not a directory');
+      const real = path.join(other, 'AntiTamper');
+      fs.mkdirSync(real);
+      expect(resolveAntiTamperDir(other)).toBe(real);
     } finally {
       fs.rmSync(other, { recursive: true, force: true });
     }
@@ -222,7 +228,101 @@ describe('resolveAntiTamperDir', () => {
   });
 
   it('lists both accepted spellings, preferred first', () => {
-    expect(WIN_ANTITAMPER_SUBDIRS[0]).toBe('AntiTamper');
-    expect(WIN_ANTITAMPER_SUBDIRS).toContain('AntiTamperLogs');
+    expect(WIN_ANTITAMPER_SUBDIRS[0]).toBe('AntiTamperLogs');
+    expect(WIN_ANTITAMPER_SUBDIRS).toContain('AntiTamper');
+  });
+});
+
+
+describe('firstExistingDir', () => {
+  let base;
+
+  beforeAll(() => { base = fs.mkdtempSync(path.join(os.tmpdir(), 'cato-fed-')); });
+  afterAll(() => { fs.rmSync(base, { recursive: true, force: true }); });
+
+  it('falls back to the first candidate when none exist, so it stays reportable', () => {
+    const a = path.join(base, 'AntiTamperLogs');
+    const b = path.join(base, 'AntiTamper');
+    expect(firstExistingDir([a, b])).toBe(a);
+  });
+
+  it('skips missing candidates and returns the one that exists', () => {
+    const real = path.join(base, 'AntiTamper');
+    fs.mkdirSync(real);
+    expect(firstExistingDir([path.join(base, 'AntiTamperLogs'), real])).toBe(real);
+  });
+
+  it('prefers the earlier candidate when several exist', () => {
+    const preferred = path.join(base, 'AntiTamperLogs');
+    fs.mkdirSync(preferred);
+    expect(firstExistingDir([preferred, path.join(base, 'AntiTamper')])).toBe(preferred);
+  });
+
+  it('ignores a plain file sharing the name', () => {
+    const other = fs.mkdtempSync(path.join(os.tmpdir(), 'cato-fed2-'));
+    try {
+      fs.writeFileSync(path.join(other, 'AntiTamperLogs'), 'not a directory');
+      const dir = path.join(other, 'AntiTamper');
+      fs.mkdirSync(dir);
+      expect(firstExistingDir([path.join(other, 'AntiTamperLogs'), dir])).toBe(dir);
+    } finally {
+      fs.rmSync(other, { recursive: true, force: true });
+    }
+  });
+});
+
+
+describe('macOS AntiTamper selection', () => {
+  let base;
+
+  beforeAll(() => {
+    base = fs.mkdtempSync(path.join(os.tmpdir(), 'cato-mac-at-'));
+    fs.mkdirSync(path.join(base, 'AppLogs'));
+    fs.mkdirSync(path.join(base, 'Empty'));
+    // The real layout: anti-tamper logs sit among ordinary app logs.
+    fs.writeFileSync(path.join(base, 'AppLogs', 'AntiTamperLogs.log'), 'tamper\n');
+    fs.writeFileSync(path.join(base, 'AppLogs', 'AntiTamperLogs.1.log'), 'rotated\n');
+    fs.writeFileSync(path.join(base, 'AppLogs', 'com.catonetworks.mac.CatoClient 2026-09-03.log'), 'app\n');
+  });
+
+  afterAll(() => fs.rmSync(base, { recursive: true, force: true }));
+
+  it('matches anti-tamper files, including rotated ones', () => {
+    expect(MAC_ANTITAMPER_PATTERN.test('AntiTamperLogs.log')).toBe(true);
+    expect(MAC_ANTITAMPER_PATTERN.test('AntiTamperLogs.1.log')).toBe(true);
+    expect(MAC_ANTITAMPER_PATTERN.test('AntiTamperLogs.txt')).toBe(true);
+  });
+
+  it('does not match the app logs sharing that folder', () => {
+    // Without this the AntiTamper tab would duplicate AppLogs.
+    expect(MAC_ANTITAMPER_PATTERN.test('com.catonetworks.mac.CatoClient 2026-09-03.log')).toBe(false);
+    expect(MAC_ANTITAMPER_PATTERN.test('daemon_log.txt')).toBe(false);
+  });
+
+  it('selects only the anti-tamper files from a shared folder', () => {
+    const names = listMatchingFiles(path.join(base, 'AppLogs'), MAC_ANTITAMPER_PATTERN)
+      .map(f => f.name).sort();
+    expect(names).toEqual(['AntiTamperLogs.1.log', 'AntiTamperLogs.log']);
+  });
+
+  it('skips a candidate that exists but holds no anti-tamper file', () => {
+    const chosen = firstDirWithMatch(
+      [path.join(base, 'Empty'), path.join(base, 'AppLogs')],
+      MAC_ANTITAMPER_PATTERN,
+    );
+    expect(chosen).toBe(path.join(base, 'AppLogs'));
+  });
+
+  it('falls back to the first existing candidate when none hold a match', () => {
+    const chosen = firstDirWithMatch(
+      [path.join(base, 'Nope'), path.join(base, 'Empty')],
+      MAC_ANTITAMPER_PATTERN,
+    );
+    expect(chosen).toBe(path.join(base, 'Empty'));
+  });
+
+  it('falls back to the first candidate when none exist at all', () => {
+    const first = path.join(base, 'Nope');
+    expect(firstDirWithMatch([first, path.join(base, 'AlsoNope')], MAC_ANTITAMPER_PATTERN)).toBe(first);
   });
 });

@@ -1455,33 +1455,43 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
   // Restore scroll position after page load or when switching to a different view
   useEffect(() => {
     if (virtuosoRef.current && flatLogs.length > 0 && !scrollRestoredRef.current) {
-      const savedScrollData = localStorage.getItem(scrollStorageKey);
       let targetIndex = 0;
+      let align = 'start';
 
-      if (savedScrollData) {
-        try {
-          const { startIndex, timestamp } = JSON.parse(savedScrollData);
-          const twentyFourHours = 24 * 60 * 60 * 1000;
-          if (Date.now() - timestamp < twentyFourHours && startIndex < flatLogs.length) {
-            targetIndex = startIndex;
+      if (isLiveMode) {
+        // A live tab opens pinned to the newest record — that's the point of
+        // watching a stream. A scroll offset saved from an earlier session
+        // doesn't refer to the same rows, so it isn't restored here.
+        targetIndex = flatLogs.length - 1;
+        align = 'end';
+      } else {
+        const savedScrollData = localStorage.getItem(scrollStorageKey);
+        if (savedScrollData) {
+          try {
+            const { startIndex, timestamp } = JSON.parse(savedScrollData);
+            const twentyFourHours = 24 * 60 * 60 * 1000;
+            if (Date.now() - timestamp < twentyFourHours && startIndex < flatLogs.length) {
+              targetIndex = startIndex;
+            }
+          } catch (error) {
+            console.error('Failed to restore scroll position:', error);
           }
-        } catch (error) {
-          console.error('Failed to restore scroll position:', error);
         }
       }
 
       // Always reposition (even to 0) on view change so Virtuoso doesn't
       // retain a pixel offset from the previously displayed tab.
+      // behavior 'auto' jumps outright — no animation to sit through.
       setTimeout(() => {
         virtuosoRef.current?.scrollToIndex({
           index: targetIndex,
-          align: 'start',
+          align,
           behavior: 'auto'
         });
         scrollRestoredRef.current = true;
       }, 100);
     }
-  }, [flatLogs, scrollStorageKey]);
+  }, [flatLogs, scrollStorageKey, isLiveMode]);
 
   // ===== STICKY LOG SCROLL LISTENER =====
   useEffect(() => {
@@ -1963,7 +1973,7 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
         <Virtuoso
           ref={virtuosoRef}
           data={flatLogs}
-          followOutput={isLiveMode ? (isAtBottom => isAtBottom ? 'smooth' : false) : false}
+          followOutput={isLiveMode ? (isAtBottom => (isAtBottom ? 'auto' : false)) : false}
           itemContent={(index, log) => {
             const previousLog = index > 0 ? flatLogs[index - 1] : null;
             const showDateSeparator = previousLog && log.date && previousLog.date !== log.date;

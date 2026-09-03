@@ -440,7 +440,7 @@ Unlike the macOS directory sources (which re-read every file each tick), the Win
 | `append` | New bytes added since last send |
 | `reset` | File rotated, truncated, or folder reconfigured — resend from scratch |
 
-Live mode shows **today's records only**. The client trims each full snapshot to the current day and trims its raw buffer to match, so later appends don't re-parse history. A source whose format yields no parseable timestamps is left untouched rather than silently emptied. The day boundary is fixed when the connection opens, so a session running past midnight keeps its records.
+Live mode shows **today's records, but never fewer than the last 200** per source (`MIN_LIVE_RECORDS`). The floor keeps rarely-written sources such as AntiTamper usable — a strict day filter left them blank — while busy sources are unaffected, since today already exceeds it. The client trims its raw buffer to match, so later appends don't re-parse history. A source whose format yields no parseable timestamps is left untouched rather than silently emptied. The day boundary is fixed when the connection opens, so a session running past midnight keeps its records.
 
 Hook: `utils/useLiveLogs.js`  
 Shared client (port, endpoints, setup command): `utils/liveLogsServer.js`  

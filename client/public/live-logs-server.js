@@ -40,6 +40,51 @@ const IS_WIN = process.platform === 'win32';
 // type 'file'   → read that single file.
 // type 'latest' → tail the most recently modified matching file in a directory.
 const HOME = os.homedir();
+
+/**
+ * The first candidate directory that exists, else candidates[0] so callers
+ * still have a path to report. Used where a folder's exact name isn't certain.
+ */
+function firstExistingDir(candidates) {
+  for (const dir of candidates) {
+    try { if (fs.statSync(dir).isDirectory()) return dir; } catch { /* try next */ }
+  }
+  return candidates[0];
+}
+
+// Anti-tamper isn't a directory of its own: it's AntiTamperLogs.log sitting
+// inside the ROOT container's AppLogs folder. Note that's a different folder
+// from the `app` source above, which reads the USER container's AppLogs.
+// The pattern keeps this tab to anti-tamper files and tolerates rotation
+// (AntiTamperLogs.1.log and friends).
+const MAC_ANTITAMPER_PATTERN = /^AntiTamperLogs.*\.(log|txt)$/i;
+const MAC_ANTITAMPER_DIRS = [
+  '/private/var/root/Library/Group Containers/CKGSB8CH43.group/AppLogs',        // confirmed
+  '/private/var/root/Library/Group Containers/CKGSB8CH43.group/AntiTamperLogs',
+  path.join(HOME, 'Library/Group Containers/CKGSB8CH43.group/AppLogs'),
+];
+
+/**
+ * The first candidate that actually holds a matching file — so a container that
+ * exists but has no anti-tamper log doesn't shadow one that does. Falls back to
+ * the first existing directory, then to candidates[0] so /config can still say
+ * where we looked.
+ */
+function firstDirWithMatch(candidates, pattern) {
+  let firstExisting = null;
+
+  for (const dir of candidates) {
+    try {
+      if (!fs.statSync(dir).isDirectory()) continue;
+    } catch { continue; }
+
+    if (!firstExisting) firstExisting = dir;
+    if (listMatchingFiles(dir, pattern).length) return dir;
+  }
+
+  return firstExisting || candidates[0];
+}
+
 const MAC_SOURCES = [
   {
     key: 'app',
@@ -66,8 +111,8 @@ const MAC_SOURCES = [
     key: 'antitamper',
     label: 'AntiTamper',
     type: 'dir',
-    path: '/private/var/root/Library/Group Containers/CKGSB8CH43.group/AntiTamper',
-    pattern: /\.(log|txt)$/i,
+    path: firstDirWithMatch(MAC_ANTITAMPER_DIRS, MAC_ANTITAMPER_PATTERN),
+    pattern: MAC_ANTITAMPER_PATTERN,
   },
   {
     key: 'agent',
@@ -99,10 +144,10 @@ const MAC_SOURCES = [
 const WIN_LOG_PATTERN = /^cato_vpn_.*\.log$/i;
 
 // Anti-tamper logs live in their own subfolder of the configured directory.
-// macOS calls it "AntiTamper"; the Windows spelling isn't confirmed, so accept
-// either and use whichever exists. Filenames aren't assumed — we tail the
-// newest log/txt in there.
-const WIN_ANTITAMPER_SUBDIRS = ['AntiTamper', 'AntiTamperLogs'];
+// A support bundle confirms the folder is "AntiTamperLogs"; the bare
+// "AntiTamper" spelling is accepted as a fallback. Filenames aren't assumed —
+// we tail the newest log/txt in there.
+const WIN_ANTITAMPER_SUBDIRS = ['AntiTamperLogs', 'AntiTamper'];
 const WIN_ANTITAMPER_PATTERN = /\.(log|txt)$/i;
 
 /**
@@ -111,11 +156,7 @@ const WIN_ANTITAMPER_PATTERN = /\.(log|txt)$/i;
  */
 function resolveAntiTamperDir(dir) {
   if (!dir) return null;
-  for (const name of WIN_ANTITAMPER_SUBDIRS) {
-    const candidate = path.join(dir, name);
-    try { if (fs.statSync(candidate).isDirectory()) return candidate; } catch { /* try next */ }
-  }
-  return path.join(dir, WIN_ANTITAMPER_SUBDIRS[0]);
+  return firstExistingDir(WIN_ANTITAMPER_SUBDIRS.map(name => path.join(dir, name)));
 }
 
 // Placeholder for the standard installed-client log directory, once confirmed.
@@ -227,6 +268,26 @@ function buildWindowsSources() {
 
 let SOURCES = IS_WIN ? buildWindowsSources() : MAC_SOURCES;
 
+/**
+ * Report a directory source for /config: where we're looking, whether it's
+ * there, and what's inside. Makes "is it watching the right folder?" answerable
+ * without reading the server's stdout.
+ */
+function describeDir(dir, pattern) {
+  let exists = false;
+  try { exists = !!dir && fs.statSync(dir).isDirectory(); } catch { exists = false; }
+
+  const matches = exists ? listMatchingFiles(dir, pattern) : [];
+  const latest = matches.reduce((best, f) => (!best || f.mtimeMs > best.mtimeMs ? f : best), null);
+
+  return {
+    dir,
+    exists,
+    currentFile: latest ? latest.name : null,
+    matchCount: matches.length,
+  };
+}
+
 /** Snapshot of the current configuration, served at GET /config. */
 function configInfo() {
   if (!IS_WIN) {
@@ -240,7 +301,12 @@ function configInfo() {
       dirExists: true,
       currentFile: null,
       matchCount: 0,
-      antiTamper: null,
+      // Reported on macOS too: this folder's name has been ambiguous and it
+      // lives under /private/var/root, so it's worth surfacing what resolved.
+      antiTamper: describeDir(
+        MAC_SOURCES.find(s => s.key === 'antitamper')?.path || null,
+        MAC_ANTITAMPER_PATTERN,
+      ),
       port: PORT,
     };
   }
@@ -253,8 +319,7 @@ function configInfo() {
   const latest = matches.reduce((best, f) => (!best || f.mtimeMs > best.mtimeMs ? f : best), null);
 
   // The anti-tamper subfolder is optional — its absence is reported, not an error.
-  const atDir = resolveAntiTamperDir(resolvedDir);
-  const atLatest = pickLatestFile(atDir, WIN_ANTITAMPER_PATTERN);
+  const antiTamper = describeDir(resolveAntiTamperDir(resolvedDir), WIN_ANTITAMPER_PATTERN);
 
   return {
     platform: process.platform,
@@ -265,11 +330,7 @@ function configInfo() {
     dirExists,
     currentFile: latest ? latest.name : null,
     matchCount: matches.length,
-    antiTamper: {
-      dir: atDir,
-      currentFile: atLatest ? atLatest.name : null,
-      matchCount: listMatchingFiles(atDir, WIN_ANTITAMPER_PATTERN).length,
-    },
+    antiTamper,
     port: PORT,
   };
 }
@@ -676,6 +737,9 @@ module.exports = {
   WIN_LOG_PATTERN,
   WIN_ANTITAMPER_SUBDIRS,
   WIN_ANTITAMPER_PATTERN,
+  firstExistingDir,
+  firstDirWithMatch,
+  MAC_ANTITAMPER_PATTERN,
   resolveAntiTamperDir,
   winSourcesFor,
   normalizeLogDir,
