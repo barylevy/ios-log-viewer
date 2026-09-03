@@ -323,7 +323,7 @@ const LogViewerHeader = ({ onFileLoad, hasLogs, currentFileHeaders, onClearTabs,
             title={isLiveConnected ? 'Disconnect live logs' : 'Connect to live logs'}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
               isLiveConnected
-                ? 'bg-green-600 hover:bg-green-700 text-white'
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                 : isLiveChecking
                   ? 'bg-blue-500 text-white cursor-wait'
                   : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300'

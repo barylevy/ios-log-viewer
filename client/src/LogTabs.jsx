@@ -23,7 +23,7 @@ const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCom
                 e.stopPropagation();
                 onExportFile && onExportFile(fileId, label);
             }}
-            className="ml-1 text-green-400 hover:text-green-600 dark:text-green-500 dark:hover:text-green-300"
+            className="ml-1 text-emerald-500 hover:text-emerald-700 dark:text-emerald-500 dark:hover:text-emerald-300"
             title={`Download "${label}" logs`}
         >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -40,7 +40,10 @@ const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCom
             .map((file, originalIndex) => ({
                 file,
                 originalIndex,
-                label: getFileDisplayName(file.id),
+                // Live tabs carry the server's own source label (AppLogs,
+                // DNSRelay, AntiTamper…), which is already properly cased.
+                // Deriving from the id would give the bare lowercase key.
+                label: (file.isLive && file.name) ? file.name : getFileDisplayName(file.id),
             }))
             .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base', numeric: true }));
     }, [files]);
@@ -66,7 +69,7 @@ const LogTabs = ({ files, activeFileIndex, onFileSelect, onFileClose, showingCom
                                 }}
                                 title={getFileFullName(file.id)}
                             >
-                                <span className={`text-xs flex items-center ${file.isLive ? 'text-green-500 dark:text-green-400 font-medium' : ''}`}>
+                                <span className={`text-xs flex items-center ${file.isLive ? 'text-emerald-600 dark:text-emerald-400 font-medium' : ''}`}>
                                     {tabLabel}
                                     {loading && (
                                         <svg className="ml-2 animate-spin h-4 w-4 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
