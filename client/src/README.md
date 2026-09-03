@@ -379,12 +379,20 @@ Each source becomes its own tab with **green text**:
 | Extension | `/private/var/root/Library/Group Containers/…/AppExtensionLogs` |
 | DNSRelay | `/private/var/root/Library/Group Containers/…/DNSExtensionLogs` |
 | UserAgent | `~/Library/Logs/CatoNetworksUserAgent` |
+| AntiTamper | `/private/var/root/Library/Group Containers/…/AntiTamper` |
 | Daemon | `/private/var/root/Library/Logs/com.catonetworks.mac.CatoClient.helper` |
 | Install | `/var/tmp/catoinstallext.txt` |
 
 ### Live Log Sources — Windows
 
-One tab (`vpn`), tailing the **most recently modified** `cato_vpn_*.log` in the configured folder. When a newer matching file appears, the server switches to it and resets the tab.
+Two tabs, each tailing the **most recently modified** matching file in its folder. When a newer file appears, the server switches to it and resets that tab.
+
+| Tab | Folder | Matches |
+|-----|--------|---------|
+| `vpn` | the configured folder | `cato_vpn_*.log` |
+| `antitamper` | `<configured folder>\AntiTamper` (or `\AntiTamperLogs`) | any `.log` / `.txt` |
+
+The anti-tamper subfolder is optional — if it's missing the tab simply stays empty, and the settings dialog says so. Whichever of the two spellings exists on disk is used, preferring `AntiTamper`.
 
 Give the **full path to the directory** holding the logs — it's used exactly as entered, nothing is appended. For the installed client that's:
 

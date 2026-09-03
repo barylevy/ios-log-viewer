@@ -62,6 +62,13 @@ const MAC_SOURCES = [
     pattern: /\.(log|txt)$/i,
   },
   {
+    key: 'antitamper',
+    label: 'AntiTamper',
+    type: 'dir',
+    path: '/private/var/root/Library/Group Containers/CKGSB8CH43.group/AntiTamper',
+    pattern: /\.(log|txt)$/i,
+  },
+  {
     key: 'agent',
     label: 'UserAgent',
     type: 'dir',
@@ -89,6 +96,26 @@ const MAC_SOURCES = [
 // or a dev build output folder such as
 //   C:\Users\you\ws\endpoint\endpoint\sdp\win\Product\Debug\x64
 const WIN_LOG_PATTERN = /^cato_vpn_.*\.log$/i;
+
+// Anti-tamper logs live in their own subfolder of the configured directory.
+// macOS calls it "AntiTamper"; the Windows spelling isn't confirmed, so accept
+// either and use whichever exists. Filenames aren't assumed — we tail the
+// newest log/txt in there.
+const WIN_ANTITAMPER_SUBDIRS = ['AntiTamper', 'AntiTamperLogs'];
+const WIN_ANTITAMPER_PATTERN = /\.(log|txt)$/i;
+
+/**
+ * The anti-tamper folder under `dir`: the first candidate that exists, else the
+ * preferred name so /config can report where we looked.
+ */
+function resolveAntiTamperDir(dir) {
+  if (!dir) return null;
+  for (const name of WIN_ANTITAMPER_SUBDIRS) {
+    const candidate = path.join(dir, name);
+    try { if (fs.statSync(candidate).isDirectory()) return candidate; } catch { /* try next */ }
+  }
+  return path.join(dir, WIN_ANTITAMPER_SUBDIRS[0]);
+}
 
 // Placeholder for the standard installed-client log directory, once confirmed.
 // Used only as a fallback — an explicitly configured directory always wins.
@@ -178,10 +205,23 @@ let winLogDir = dirFromArgv(process.argv)
   || readStoredConfig().logDir
   || null;
 
-function buildWindowsSources() {
-  const dir = normalizeLogDir(winLogDir) || findInstalledClientDir();
+/** The Windows sources for a given log directory. */
+function winSourcesFor(dir) {
   if (!dir) return [];
-  return [{ key: 'vpn', label: 'CatoVPN', type: 'latest', path: dir, pattern: WIN_LOG_PATTERN }];
+  return [
+    { key: 'vpn', label: 'CatoVPN', type: 'latest', path: dir, pattern: WIN_LOG_PATTERN },
+    {
+      key: 'antitamper',
+      label: 'AntiTamper',
+      type: 'latest',
+      path: resolveAntiTamperDir(dir),
+      pattern: WIN_ANTITAMPER_PATTERN,
+    },
+  ];
+}
+
+function buildWindowsSources() {
+  return winSourcesFor(normalizeLogDir(winLogDir) || findInstalledClientDir());
 }
 
 let SOURCES = IS_WIN ? buildWindowsSources() : MAC_SOURCES;
@@ -199,6 +239,7 @@ function configInfo() {
       dirExists: true,
       currentFile: null,
       matchCount: 0,
+      antiTamper: null,
       port: PORT,
     };
   }
@@ -210,6 +251,10 @@ function configInfo() {
   const matches = dirExists ? listMatchingFiles(resolvedDir, WIN_LOG_PATTERN) : [];
   const latest = matches.reduce((best, f) => (!best || f.mtimeMs > best.mtimeMs ? f : best), null);
 
+  // The anti-tamper subfolder is optional — its absence is reported, not an error.
+  const atDir = resolveAntiTamperDir(resolvedDir);
+  const atLatest = pickLatestFile(atDir, WIN_ANTITAMPER_PATTERN);
+
   return {
     platform: process.platform,
     configurable: true,
@@ -219,6 +264,11 @@ function configInfo() {
     dirExists,
     currentFile: latest ? latest.name : null,
     matchCount: matches.length,
+    antiTamper: {
+      dir: atDir,
+      currentFile: atLatest ? atLatest.name : null,
+      matchCount: listMatchingFiles(atDir, WIN_ANTITAMPER_PATTERN).length,
+    },
     port: PORT,
   };
 }
@@ -595,6 +645,10 @@ if (require.main === module) start();
 
 module.exports = {
   WIN_LOG_PATTERN,
+  WIN_ANTITAMPER_SUBDIRS,
+  WIN_ANTITAMPER_PATTERN,
+  resolveAntiTamperDir,
+  winSourcesFor,
   normalizeLogDir,
   listMatchingFiles,
   pickLatestFile,

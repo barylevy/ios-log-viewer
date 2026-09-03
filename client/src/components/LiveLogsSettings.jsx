@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { fetchLiveConfig, saveLogDir, getSavedLogDir, setSavedLogDir, buildSetupCommand } from '../utils/liveLogsServer';
+import { fetchLiveConfig, checkLiveHealth, saveLogDir, getSavedLogDir, setSavedLogDir, buildSetupCommand, isWindows } from '../utils/liveLogsServer';
 
 /**
  * Live Logs Settings — lets the user point the local live-logs server at the
@@ -18,15 +18,18 @@ const LiveLogsSettings = ({ isOpen, onClose }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [serverDown, setServerDown] = useState(false);
+  const [serverOutdated, setServerOutdated] = useState(false);
 
   const load = useCallback(async () => {
     setIsLoading(true);
     setError('');
     setSaved(false);
 
-    const cfg = await fetchLiveConfig();
+    const [cfg, healthy] = await Promise.all([fetchLiveConfig(), checkLiveHealth()]);
     setConfig(cfg);
-    setServerDown(!cfg);
+    setServerDown(!healthy);
+    // Answers /health but not /config — an older build of the sidecar.
+    setServerOutdated(healthy && !cfg);
 
     // Prefer what the server is actually using; otherwise fall back to whatever
     // was configured from this browser, so the folder can be set up-front.
@@ -45,10 +48,10 @@ const LiveLogsSettings = ({ isOpen, onClose }) => {
     setError('');
     setSaved(false);
 
-    // No server yet: remember it locally. It gets applied automatically the
-    // moment a server that needs configuring comes up, and it's baked into the
-    // start command below.
-    if (serverDown) {
+    // No server to ask (down, or too old to have /config): remember it locally.
+    // It gets applied automatically once a server that needs configuring comes
+    // up, and it's baked into the start command below.
+    if (!config) {
       setSavedLogDir(trimmed);
       setSaved(true);
       return;
@@ -66,10 +69,10 @@ const LiveLogsSettings = ({ isOpen, onClose }) => {
     setIsSaving(false);
   };
 
-  // The folder field only applies to the Windows server. A macOS server reads
-  // fixed system paths, so there is nothing to configure. With no server
-  // running we can't know the platform, so we always allow configuring.
-  const showFolderConfig = serverDown || !!config?.configurable;
+  // Only the Windows server has a configurable folder — macOS reads fixed
+  // system paths. When the server can't tell us (down, or too old for /config),
+  // fall back to the platform this viewer is running on.
+  const showFolderConfig = config ? !!config.configurable : isWindows();
   const startCommand = buildSetupCommand(window.location.origin, true, logDir.trim());
 
   return (
@@ -97,16 +100,26 @@ const LiveLogsSettings = ({ isOpen, onClose }) => {
           {!isLoading && serverDown && (
             <div className="rounded-md bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-3">
               <p className="text-sm text-yellow-800 dark:text-yellow-300">
-                The live-logs server isn't running — you can still set the folder now. It's applied
-                automatically once the server starts.
+                {showFolderConfig
+                  ? "The live-logs server isn't running — you can still set the folder now. It's applied automatically once the server starts."
+                  : "The live-logs server isn't running. Click Live Logs in the header for the command to start it."}
               </p>
             </div>
           )}
 
-          {!isLoading && !serverDown && config && !showFolderConfig && (
+          {!isLoading && serverOutdated && (
+            <div className="rounded-md bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-3">
+              <p className="text-sm text-yellow-800 dark:text-yellow-300">
+                The live-logs server is running an older build that can't report its configuration.
+                Restart it to pick up the current one.
+              </p>
+            </div>
+          )}
+
+          {!isLoading && config && !showFolderConfig && (
             <p className="text-sm text-gray-600 dark:text-gray-400">
               The server is running on <span className="font-medium">{config.platform}</span> and reads the
-              standard Cato log directories. There's nothing to configure here.
+              standard Cato log directories, which are fixed. There's nothing to configure here.
             </p>
           )}
 
@@ -133,7 +146,9 @@ const LiveLogsSettings = ({ isOpen, onClose }) => {
                   The full path to the directory holding the logs — used exactly as entered. The server
                   tails the most recently modified{' '}
                   <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded font-mono">cato_vpn_*.log</code>{' '}
-                  inside it.
+                  inside it, plus the newest log in its{' '}
+                  <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded font-mono">AntiTamper</code>{' '}
+                  subfolder.
                 </p>
               </div>
 
@@ -146,14 +161,14 @@ const LiveLogsSettings = ({ isOpen, onClose }) => {
               {saved && (
                 <div className="rounded-md bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-3">
                   <p className="text-sm text-green-700 dark:text-green-300">
-                    {serverDown
-                      ? 'Saved. It will be applied when the server starts.'
-                      : 'Saved. Live tabs now follow the new folder.'}
+                    {config
+                      ? 'Saved. Live tabs now follow the new folder.'
+                      : 'Saved. It will be applied when the server starts.'}
                   </p>
                 </div>
               )}
 
-              {serverDown && (
+              {!config && (
                 <div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-1.5">
                     Start the server with this folder (PowerShell):
@@ -192,6 +207,16 @@ const LiveLogsSettings = ({ isOpen, onClose }) => {
                     <dt className="text-gray-500 dark:text-gray-400">Matching files</dt>
                     <dd className="font-mono text-gray-800 dark:text-gray-200">{config.matchCount}</dd>
                   </div>
+                  {config.antiTamper && (
+                    <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                      <dt className="text-gray-500 dark:text-gray-400">
+                        AntiTamper ({config.antiTamper.matchCount} file{config.antiTamper.matchCount === 1 ? '' : 's'})
+                      </dt>
+                      <dd className="font-mono text-gray-800 dark:text-gray-200 break-all">
+                        {config.antiTamper.currentFile || 'subfolder not found \u2014 tab will stay empty'}
+                      </dd>
+                    </div>
+                  )}
                 </dl>
               )}
             </>

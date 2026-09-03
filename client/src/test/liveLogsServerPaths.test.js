@@ -14,6 +14,10 @@ import path from 'path';
 const require = createRequire(import.meta.url);
 const {
   WIN_LOG_PATTERN,
+  WIN_ANTITAMPER_SUBDIRS,
+  WIN_ANTITAMPER_PATTERN,
+  resolveAntiTamperDir,
+  winSourcesFor,
   normalizeLogDir,
   listMatchingFiles,
   pickLatestFile,
@@ -139,5 +143,86 @@ describe('dirFromArgv', () => {
   it('returns null when absent', () => {
     expect(dirFromArgv(['node', 'srv.js'])).toBeNull();
     expect(dirFromArgv(['node', 'srv.js', '--dir'])).toBeNull();
+  });
+});
+
+
+describe('winSourcesFor', () => {
+  it('builds a vpn source at the given folder and an antitamper source below it', () => {
+    const [vpn, antiTamper] = winSourcesFor(FULL_DIR);
+
+    expect(vpn.key).toBe('vpn');
+    expect(vpn.path).toBe(FULL_DIR);
+    expect(vpn.type).toBe('latest');
+
+    expect(antiTamper.key).toBe('antitamper');
+    expect(antiTamper.path).toBe(path.join(FULL_DIR, 'AntiTamper'));
+    expect(antiTamper.type).toBe('latest');
+  });
+
+  it('keeps the two sources on distinct tab keys', () => {
+    const keys = winSourcesFor(FULL_DIR).map(s => s.key);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it('returns nothing when no folder is configured', () => {
+    expect(winSourcesFor(null)).toEqual([]);
+    expect(winSourcesFor('')).toEqual([]);
+  });
+
+  it('matches any log/txt for antitamper, without assuming a filename', () => {
+    expect(WIN_ANTITAMPER_PATTERN.test('cato_anti_tamper_6.13.0.0_20260901.log')).toBe(true);
+    expect(WIN_ANTITAMPER_PATTERN.test('AntiTamper.txt')).toBe(true);
+    expect(WIN_ANTITAMPER_PATTERN.test('whatever.LOG')).toBe(true);
+    expect(WIN_ANTITAMPER_PATTERN.test('notes.json')).toBe(false);
+  });
+});
+
+
+describe('resolveAntiTamperDir', () => {
+  let base;
+
+  beforeAll(() => {
+    base = fs.mkdtempSync(path.join(os.tmpdir(), 'cato-at-'));
+  });
+
+  afterAll(() => {
+    fs.rmSync(base, { recursive: true, force: true });
+  });
+
+  it('falls back to the preferred name when nothing exists, so /config can report it', () => {
+    expect(resolveAntiTamperDir(base)).toBe(path.join(base, 'AntiTamper'));
+  });
+
+  it('picks the AntiTamperLogs spelling when that is the folder on disk', () => {
+    const legacy = path.join(base, 'AntiTamperLogs');
+    fs.mkdirSync(legacy);
+    expect(resolveAntiTamperDir(base)).toBe(legacy);
+  });
+
+  it('prefers AntiTamper when both spellings exist', () => {
+    const preferred = path.join(base, 'AntiTamper');
+    fs.mkdirSync(preferred);
+    expect(resolveAntiTamperDir(base)).toBe(preferred);
+  });
+
+  it('ignores a plain file with the folder name', () => {
+    const other = fs.mkdtempSync(path.join(os.tmpdir(), 'cato-at2-'));
+    try {
+      fs.writeFileSync(path.join(other, 'AntiTamper'), 'not a directory');
+      expect(resolveAntiTamperDir(other)).toBe(path.join(other, 'AntiTamper'));
+    } finally {
+      fs.rmSync(other, { recursive: true, force: true });
+    }
+  });
+
+  it('returns null with no directory', () => {
+    expect(resolveAntiTamperDir(null)).toBeNull();
+    expect(resolveAntiTamperDir('')).toBeNull();
+  });
+
+  it('lists both accepted spellings, preferred first', () => {
+    expect(WIN_ANTITAMPER_SUBDIRS[0]).toBe('AntiTamper');
+    expect(WIN_ANTITAMPER_SUBDIRS).toContain('AntiTamperLogs');
   });
 });
