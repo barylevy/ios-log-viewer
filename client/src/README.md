@@ -436,9 +436,11 @@ Unlike the macOS directory sources (which re-read every file each tick), the Win
 
 | Message type | Meaning |
 |---|---|
-| `initial` | Empty — tells the viewer to create the tab. Streaming starts from the connection moment, not from history |
+| `initial` | The recent tail (up to 5,000 lines) so the tab isn't blank on connect. The client drops anything before today |
 | `append` | New bytes added since last send |
 | `reset` | File rotated, truncated, or folder reconfigured — resend from scratch |
+
+Live mode shows **today's records only**. The client trims each full snapshot to the current day and trims its raw buffer to match, so later appends don't re-parse history. A source whose format yields no parseable timestamps is left untouched rather than silently emptied. The day boundary is fixed when the connection opens, so a session running past midnight keeps its records.
 
 Hook: `utils/useLiveLogs.js`  
 Shared client (port, endpoints, setup command): `utils/liveLogsServer.js`  

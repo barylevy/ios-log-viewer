@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
  * Live Logs Server
- * Reads current Cato client log locations, then polls for new content every
- * second and streams it to browser clients over WebSocket.
+ * Reads current Cato client log locations, sends the recent tail on connect,
+ * then polls for new content every second and streams it to browser clients
+ * over WebSocket.
  *
  * macOS — reads the fixed Cato log directories. Some paths under
  *         /private/var/root require root access:
@@ -304,6 +305,28 @@ function readDir(dirPath, pattern) {
   }
 }
 
+// How much existing text a newly connected client receives, so the viewer has
+// something to show immediately instead of waiting for the next write. The
+// client trims this to the current day; this cap just keeps the connect
+// message bounded when a source holds months of history.
+const INITIAL_TAIL_LINES = 5000;
+
+/**
+ * The last `n` lines of `text`, found by scanning back from the end so a
+ * multi-megabyte buffer isn't split into an array just to take its tail.
+ */
+function tailLines(text, n) {
+  if (!text) return '';
+
+  let idx = text.length;
+  for (let i = 0; i < n; i++) {
+    const prev = text.lastIndexOf('\n', idx - 1);
+    if (prev === -1) return text; // fewer than n lines — send it all
+    idx = prev;
+  }
+  return text.slice(idx + 1);
+}
+
 /** Read a single file, or return '' on error. */
 function readFile(filePath) {
   try { return fs.readFileSync(filePath, 'utf8'); } catch { return ''; }
@@ -507,7 +530,12 @@ function applyWinLogDir(dir) {
   // matches what happens on a fresh connection.
   if (!wss) return;
   for (const src of SOURCES) {
-    const msg = JSON.stringify({ type: 'reset', sourceKey: src.key, label: src.label, content: '' });
+    const msg = JSON.stringify({
+      type: 'reset',
+      sourceKey: src.key,
+      label: src.label,
+      content: tailLines(state[src.key], INITIAL_TAIL_LINES),
+    });
     wss.clients.forEach(client => {
       if (client.readyState !== WebSocket.OPEN) return;
       client.clientOffsets[src.key] = state[src.key].length;
@@ -519,17 +547,18 @@ function applyWinLogDir(dir) {
 function handleConnection(ws) {
   console.log('[live-logs] Client connected');
 
-  // Record where each source stands RIGHT NOW for this client.
-  // We only stream bytes written after this connection moment.
+  // Offsets mark where each source stands RIGHT NOW, so the polling loop only
+  // streams bytes written after this moment. The initial message carries the
+  // recent tail of what's already there so the viewer isn't blank until the
+  // next write — the client drops anything older than today.
   const offsets = {}; // { [sourceKey]: number }
   for (const src of SOURCES) {
     offsets[src.key] = state[src.key].length;
-    // Send an empty initial message so the viewer creates the tab
     ws.send(JSON.stringify({
       type: 'initial',
       sourceKey: src.key,
       label: src.label,
-      content: '',
+      content: tailLines(state[src.key], INITIAL_TAIL_LINES),
     }));
   }
 
