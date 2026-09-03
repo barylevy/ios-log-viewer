@@ -53,8 +53,8 @@ function firstExistingDir(candidates) {
 }
 
 // Anti-tamper isn't a directory of its own: it's AntiTamperLogs.log sitting
-// inside the ROOT container's AppLogs folder. Note that's a different folder
-// from the `app` source above, which reads the USER container's AppLogs.
+// inside the ROOT container's AppLogs folder — a different folder from the
+// `app` source below, which reads the USER container's AppLogs.
 // The pattern keeps this tab to anti-tamper files and tolerates rotation
 // (AntiTamperLogs.1.log and friends).
 const MAC_ANTITAMPER_PATTERN = /^AntiTamperLogs.*\.(log|txt)$/i;
@@ -159,10 +159,6 @@ function resolveAntiTamperDir(dir) {
   return firstExistingDir(WIN_ANTITAMPER_SUBDIRS.map(name => path.join(dir, name)));
 }
 
-// Placeholder for the standard installed-client log directory, once confirmed.
-// Used only as a fallback — an explicitly configured directory always wins.
-const INSTALLED_CLIENT_DIRS = [];
-
 const CONFIG_FILE = path.join(HOME, '.cato-live-logs.json');
 
 /**
@@ -233,14 +229,6 @@ function dirFromArgv(argv) {
   return null;
 }
 
-/** First existing directory from INSTALLED_CLIENT_DIRS, if any. */
-function findInstalledClientDir() {
-  for (const dir of INSTALLED_CLIENT_DIRS) {
-    try { if (fs.statSync(dir).isDirectory()) return dir; } catch { /* keep looking */ }
-  }
-  return null;
-}
-
 let winLogDir = dirFromArgv(process.argv)
   || process.env.CATO_LOG_DIR
   || process.env.CATO_LOG_ROOT
@@ -263,7 +251,7 @@ function winSourcesFor(dir) {
 }
 
 function buildWindowsSources() {
-  return winSourcesFor(normalizeLogDir(winLogDir) || findInstalledClientDir());
+  return winSourcesFor(normalizeLogDir(winLogDir));
 }
 
 let SOURCES = IS_WIN ? buildWindowsSources() : MAC_SOURCES;
@@ -311,7 +299,7 @@ function configInfo() {
     };
   }
 
-  const resolvedDir = normalizeLogDir(winLogDir) || findInstalledClientDir();
+  const resolvedDir = normalizeLogDir(winLogDir);
   let dirExists = false;
   try { dirExists = !!resolvedDir && fs.statSync(resolvedDir).isDirectory(); } catch { dirExists = false; }
 

@@ -5,12 +5,12 @@
  * endpoint shapes live in one place.
  */
 
-export const LIVE_SERVER_PORT = 4000;
-export const LIVE_SERVER_HTTP = `http://localhost:${LIVE_SERVER_PORT}`;
+const LIVE_SERVER_PORT = 4000;
+const LIVE_SERVER_HTTP = `http://localhost:${LIVE_SERVER_PORT}`;
 export const LIVE_SERVER_WS = `ws://localhost:${LIVE_SERVER_PORT}`;
 
 /** localStorage key mirroring the last saved Windows log folder, for input pre-fill. */
-export const LOG_DIR_KEY = 'liveLogs_logDir';
+const LOG_DIR_KEY = 'liveLogs_logDir';
 
 /** True when the viewer is running on Windows. */
 export function isWindows() {
