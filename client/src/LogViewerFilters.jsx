@@ -345,17 +345,16 @@ const LogViewerFilters = ({ filters, onFiltersChange, moduleOptions = [], logsCo
 
   const handleLogLevelToggle = (level) => {
     const currentLevels = filters.logLevel;
+    let newLevels;
 
     if (level === 'all') {
       // If 'all' is clicked, toggle between all levels and just 'all'
-      if (currentLevels.includes('all')) {
-        onFiltersChange({ logLevel: ['error', 'warning', 'info', 'debug', 'verbose'] });
-      } else {
-        onFiltersChange({ logLevel: ['all'] });
-      }
+      newLevels = currentLevels.includes('all')
+        ? ['error', 'warning', 'info', 'debug', 'verbose']
+        : ['all'];
     } else {
       // Remove 'all' if it exists and we're selecting specific levels
-      let newLevels = currentLevels.filter(l => l !== 'all');
+      newLevels = currentLevels.filter(l => l !== 'all');
 
       if (newLevels.includes(level)) {
         // Remove the level
@@ -368,9 +367,18 @@ const LogViewerFilters = ({ filters, onFiltersChange, moduleOptions = [], logsCo
         // Add the level
         newLevels.push(level);
       }
-
-      onFiltersChange({ logLevel: newLevels });
     }
+
+    // Context lines pad the rows around level matches, so they only mean
+    // something while a level filter is narrowing the view. Back on "All
+    // Levels" nothing is filtered out — clear the count instead of leaving a
+    // stale number sitting in the box. Covers both routes back to 'all':
+    // clicking it directly, and deselecting the last specific level.
+    onFiltersChange(
+      newLevels.includes('all')
+        ? { logLevel: newLevels, contextLines: 0 }
+        : { logLevel: newLevels }
+    );
   };
 
   // Get display text for selected levels
