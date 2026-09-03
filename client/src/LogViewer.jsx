@@ -404,21 +404,37 @@ const LogViewer = () => {
 
   const handleLiveSourceUpdate = useCallback(({ sourceKey, label, logs: parsedLogs, isInitial }) => {
     const tabId = `live:${sourceKey}`;
+
     if (isInitial) {
-      setFiles(prev => {
-        if (prev.find(f => f.id === tabId)) return prev;
-        const newFiles = [...prev, { name: label, id: tabId, isLive: true }];
-        if (!liveTabIdsRef.current.size) {
-          setActiveFileIndex(newFiles.length - 1);
+      // 'initial' creates the tab; 'reset' (after a rotation) also arrives here.
+      const isFirstLiveTab = liveTabIdsRef.current.size === 0;
+
+      if (!liveTabIdsRef.current.has(tabId)) {
+        liveTabIdsRef.current.add(tabId);
+        setFiles(prev => (
+          prev.some(f => f.id === tabId) ? prev : [...prev, { name: label, id: tabId, isLive: true }]
+        ));
+        if (isFirstLiveTab) {
+          // Tabs are cleared when the live connection opens, so this is index 0.
+          setActiveFileIndex(0);
           setShowingCombinedView(false);
         }
-        liveTabIdsRef.current.add(tabId);
-        return newFiles;
-      });
-      setLogsForFile(tabId, parsedLogs);
+      }
+
+      // Only the very first live tab may take over the visible list. Every
+      // later source — and every rotation reset — must update in the
+      // background, or whichever file rotated last would replace whatever tab
+      // the user is actually looking at. updateLogsBackground refreshes the
+      // visible rows only when the update belongs to the active tab.
+      if (isFirstLiveTab) {
+        setLogsForFile(tabId, parsedLogs);
+      } else {
+        updateLogsBackground(tabId, parsedLogs);
+      }
     } else {
       updateLogsBackground(tabId, parsedLogs);
     }
+
     setHasUserInteracted(true);
   }, [setLogsForFile, updateLogsBackground]);
 
