@@ -1010,32 +1010,18 @@ const LogViewer = () => {
     setIsFileDropActive(false);
   }, []);
 
-  const handleDrop = useCallback(async (e) => {
-    if (!isFileDrag(e)) return;
-    e.preventDefault();
-    setIsFileDropActive(false);
-
-    // If folders were dropped, walk their entries so we get every file with
-    // a webkitRelativePath set (matches the folder-picker code path).
-    const items = e.dataTransfer.items ? Array.from(e.dataTransfer.items) : [];
-    const entries = items
-      .filter((it) => it.kind === 'file')
-      .map((it) => (typeof it.webkitGetAsEntry === 'function' ? it.webkitGetAsEntry() : null))
-      .filter(Boolean);
-
-    let droppedFiles = entries.length
-      ? await collectFilesFromEntries(entries)
-      : Array.from(e.dataTransfer.files);
-
-    if (!droppedFiles.length) return;
+  // Shared ingestion path for files that arrive from outside the file pickers:
+  // drag & drop and the PWA file handler ("Open With" in Finder/Explorer).
+  const ingestExternalFiles = useCallback(async (incomingFiles) => {
+    if (!incomingFiles || !incomingFiles.length) return;
 
     beginPreparingFiles();
     try {
-      // Expand any dropped .zip / .tar.xz archives in place.
-      const hasArchive = droppedFiles.some(isArchiveFile);
+      // Expand any incoming .zip / .tar.xz archives in place.
+      const hasArchive = incomingFiles.some(isArchiveFile);
       let allFiles;
       try {
-        allFiles = hasArchive ? await expandArchivesInList(droppedFiles) : droppedFiles;
+        allFiles = hasArchive ? await expandArchivesInList(incomingFiles) : incomingFiles;
       } catch (err) {
         alert(`Failed to extract archive: ${err.message || err}`);
         return;
@@ -1050,7 +1036,7 @@ const LogViewer = () => {
       // so only files sharing the same pattern end up in the same tab.
       const groupedFiles = await groupFilesByDirectoryAndFormat(sortedTextFiles);
 
-      // If an archive was dropped, treat it like a folder load (clear tabs first).
+      // If an archive came in, treat it like a folder load (clear tabs first).
       if (hasArchive) handleClearTabs();
 
       // Load each group
@@ -1062,6 +1048,50 @@ const LogViewer = () => {
       endPreparingFiles();
     }
   }, [handleFileLoad, handleClearTabs, beginPreparingFiles, endPreparingFiles]);
+
+  const handleDrop = useCallback(async (e) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    setIsFileDropActive(false);
+
+    // If folders were dropped, walk their entries so we get every file with
+    // a webkitRelativePath set (matches the folder-picker code path).
+    const items = e.dataTransfer.items ? Array.from(e.dataTransfer.items) : [];
+    const entries = items
+      .filter((it) => it.kind === 'file')
+      .map((it) => (typeof it.webkitGetAsEntry === 'function' ? it.webkitGetAsEntry() : null))
+      .filter(Boolean);
+
+    const droppedFiles = entries.length
+      ? await collectFilesFromEntries(entries)
+      : Array.from(e.dataTransfer.files);
+
+    await ingestExternalFiles(droppedFiles);
+  }, [ingestExternalFiles]);
+
+  // PWA file handling: when the installed app is launched by opening a log file
+  // from the OS (Finder "Open With", Explorer double-click), the file handles
+  // arrive through the launch queue. Requires the app to be installed as a PWA;
+  // in a normal browser tab `launchQueue` is simply absent.
+  useEffect(() => {
+    if (!('launchQueue' in window) || !window.launchQueue) return;
+
+    window.launchQueue.setConsumer(async (launchParams) => {
+      const handles = launchParams?.files || [];
+      if (!handles.length) return;
+
+      const launchedFiles = [];
+      for (const handle of handles) {
+        try {
+          launchedFiles.push(await handle.getFile());
+        } catch (err) {
+          console.error('Could not read launched file:', err);
+        }
+      }
+
+      await ingestExternalFiles(launchedFiles);
+    });
+  }, [ingestExternalFiles]);
 
 
   // Open the tab-selection dialog
