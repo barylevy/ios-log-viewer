@@ -69,11 +69,10 @@ const LiveLogsSettings = ({ isOpen, onClose }) => {
     setIsSaving(false);
   };
 
-  // Only the Windows server has a configurable folder — macOS reads fixed
-  // system paths. When the server can't tell us (down, or too old for /config),
-  // fall back to the platform this viewer is running on.
+  // The server is Windows-only. When it can't tell us (down, or too old for
+  // /config), fall back to the platform this viewer is running on.
   const showFolderConfig = config ? !!config.configurable : isWindows();
-  const startCommand = buildSetupCommand(window.location.origin, true, logDir.trim());
+  const startCommand = buildSetupCommand(window.location.origin, logDir.trim());
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -142,13 +141,6 @@ const LiveLogsSettings = ({ isOpen, onClose }) => {
                         {config.antiTamper.currentFile || 'none'}
                       </dd>
                     </div>
-                  )}
-                  {!config.antiTamper.exists && (
-                    <p className="text-gray-500 dark:text-gray-400">
-                      Run the server with <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">sudo</code> —
-                      this folder sits under <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">/private/var/root</code>{' '}
-                      and is unreadable otherwise.
-                    </p>
                   )}
                 </dl>
               )}

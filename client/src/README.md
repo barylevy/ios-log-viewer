@@ -337,17 +337,12 @@ Stream logs from the local Cato client in real time directly into the viewer —
 
 ### How It Works
 
-A lightweight local WebSocket server (`live-logs-server.js`) runs on the user's machine, reads the Cato log locations for that platform, and pushes new content to the browser every second via WebSocket on port 4000. It supports both macOS and Windows.
+- **Windows** — a lightweight local WebSocket server (`live-logs-server.js`) runs on the user's machine, tails the Cato log folder, and pushes new content to the browser every second via WebSocket on port 4000.
+- **macOS** — no server. `scripts/sync-cato-logs.sh` mirrors the log sources into `~/CatoLiveLogs`, and the viewer reads that folder directly (Chrome/Edge). See [No-install mode](#no-install-mode-macos-chromeedge).
 
 ### Starting Live Logs
 
-Click the **"Live Logs"** button in the header. If the local server is not running, a dialog appears with a copyable command for your platform (with a macOS / Windows toggle) that downloads `live-logs-server.js`, installs the `ws` dependency, and starts it.
-
-**macOS** — `sudo` is required to read log directories under `/private/var/root/`:
-
-```bash
-sudo kill $(sudo lsof -ti:4000) 2>/dev/null; curl -o ~/live-logs-server.js <app-url>/live-logs-server.js && cd ~ && npm install ws && sudo node ~/live-logs-server.js
-```
+Click the **"Live Logs"** button in the header. On macOS, a chosen folder connects straight away; otherwise a dialog gives the two setup steps (see [No-install mode](#no-install-mode-macos-chromeedge)). On Windows, if the local server is not running, the dialog shows a copyable PowerShell command that downloads `live-logs-server.js`, installs the `ws` dependency, and starts it.
 
 **Windows** (PowerShell) — installs Node.js first if it's missing, then runs the server. Running it needs no elevation, since the build output folder lives under your own profile:
 
@@ -357,7 +352,7 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) { winget install -e -
 
 > The `$env:Path` refresh matters: the Node installer only updates the *stored* environment, so without it the `npm` later in the same line still fails with `CommandNotFoundException`. The winget step itself may raise a UAC prompt, and needs winget (Windows 10 1809+ / Windows 11) — otherwise install Node from [nodejs.org](https://nodejs.org) and rerun.
 
-`scripts/install.sh` (macOS) and `scripts/install.ps1` (Windows) do the same for a checked-out repo.
+`scripts/install.ps1` does the same for a checked-out repo.
 
 ### Button States
 
@@ -371,17 +366,17 @@ On Windows, if no log folder is configured yet (or it contains no matching files
 
 ### Live Log Sources — macOS
 
-Each source becomes its own tab with **green text**:
+Each source becomes its own tab. `sync-cato-logs.sh` copies it into `~/CatoLiveLogs/<key>/`:
 
-| Tab | Path |
-|-----|------|
-| AppLogs | `~/Library/Group Containers/CKGSB8CH43.group/AppLogs` |
-| Extension | `/private/var/root/Library/Group Containers/…/AppExtensionLogs` |
-| DNSRelay | `/private/var/root/Library/Group Containers/…/DNSExtensionLogs` |
-| UserAgent | `~/Library/Logs/CatoNetworksUserAgent` |
-| AntiTamper | `/private/var/root/Library/Group Containers/…/AntiTamper` |
-| Daemon | `/private/var/root/Library/Logs/com.catonetworks.mac.CatoClient.helper` |
-| Install | `/var/tmp/catoinstallext.txt` |
+| Tab (key) | Source |
+|-----|--------|
+| AppLogs (`app`) | `~/Library/Group Containers/CKGSB8CH43.group/AppLogs` |
+| Extension (`ext`) | `/private/var/root/Library/Group Containers/…/AppExtensionLogs` |
+| DNSRelay (`dns`) | `/private/var/root/Library/Group Containers/…/DNSExtensionLogs` |
+| AntiTamper (`antitamper`) | `AntiTamperLogs*` in the root `AppLogs` folder (or `AntiTamperLogs`) |
+| UserAgent (`agent`) | `~/Library/Logs/CatoNetworksUserAgent` |
+| Daemon (`daemon`) | `/private/var/root/Library/Logs/com.catonetworks.mac.CatoClient.helper` |
+| Install (`install`) | `/var/tmp/catoinstallext.txt` |
 
 ### Live Log Sources — Windows
 
@@ -416,7 +411,7 @@ The dialog shows the folder, the file currently being tailed, and how many match
 
 **The folder can be configured before the server ever runs.** With no server reachable, the dialog still accepts a path and stores it in `localStorage` (`liveLogs_logDir`), and shows a start command with `--dir="…"` already filled in. Whenever a server later reports `needsConfig`, the viewer POSTs that saved folder automatically — so **Live Logs** connects straight through instead of stopping to ask again.
 
-Unlike the macOS directory sources (which re-read every file each tick), the Windows source reads only the bytes appended since the last poll — dev build logs grow quickly.
+The Windows source reads only the bytes appended since the last poll — dev build logs grow quickly.
 
 ### HTTP Endpoints
 
@@ -424,13 +419,23 @@ Unlike the macOS directory sources (which re-read every file each tick), the Win
 |---|---|
 | `GET /health` | Liveness probe used before connecting |
 | `GET /sources` | Tab keys and labels |
-| `GET /config` | Platform, log folder, current file, whether configuration is needed |
-| `POST /config` | `{ logDir }` — validate, persist and switch the watched folder (Windows only) |
+| `GET /config` | Log folder, current file, whether configuration is needed |
+| `POST /config` | `{ logDir }` — validate, persist and switch the watched folder |
 
 ### Downloading Live Logs
 
 - **Per-tab download** — each live tab has a green ↓ download button beside its title. Clicking it exports that tab's logs to a file immediately (works on any tab, not just the active one).
 - **Download Merged** — while in live mode, the "Download Merged" button in the header merges all live tabs, sorts by timestamp, and exports as `live_logs_merged.log` with source-file tags (no file-picker dialog needed).
+
+### No-install mode (macOS, Chrome/Edge)
+
+When Node/npm can't be installed, the viewer can read the logs from a folder instead of a server. `scripts/sync-cato-logs.sh` (served from `/sync-cato-logs.sh`) runs as root and, every second, mirrors every Cato log source — including the root-owned ones a browser can't open — into `~/CatoLiveLogs/<sourceKey>/` using `rsync --inplace`. The viewer then polls that folder through the File System Access API.
+
+- Setup dialog ▸ copy the `sudo bash ~/sync-cato-logs.sh` command, leave it running, then **Choose CatoLiveLogs folder** (granted once; the handle is kept in IndexedDB and re-authorised on the next Live click).
+- Hook: `utils/useLiveLogsFs.js` (same callbacks as `useLiveLogs`). Pure append/reset decision logic: `utils/liveLogsFsCore.js` (`planRead`). Folder handle storage: `utils/liveLogsFsHandle.js`.
+- A growing last file is read from its previous size onwards; a rotated, added, removed or truncated file triggers a full re-read (`reset`), capped at 8 MB / 5,000 lines.
+- Source keys in the script and in `FS_SOURCES` must match.
+- Folder mode is tried first when a folder has been chosen; otherwise the viewer falls back to the WebSocket server.
 
 ### WebSocket Protocol
 
@@ -445,7 +450,7 @@ Live mode shows **today's records, but never fewer than the last 200** per sourc
 Hook: `utils/useLiveLogs.js`  
 Shared client (port, endpoints, setup command): `utils/liveLogsServer.js`  
 Settings dialog: `components/LiveLogsSettings.jsx`  
-Server: `scripts/live-logs-server.js` — also served as a static download from `/live-logs-server.js`. The copy in `client/public/` is generated by `scripts/sync-public.js`, which the client's `predev`/`prebuild` scripts run automatically; edit only the one in `scripts/`.
+Server (Windows): `scripts/live-logs-server.js` — also served as a static download from `/live-logs-server.js`. The copy in `client/public/` is generated by `scripts/sync-public.js`, which the client's `predev`/`prebuild` scripts run automatically; edit only the one in `scripts/`.
 
 ---
 
@@ -597,7 +602,10 @@ client/src/
     ├── logLevelColors.js      Level → color mapping, message cleaning
     ├── logParsingUtils.js     Shared parsing primitives: GAP_PATTERN, CLEAN_PATTERNS
     ├── processTypeMapper.js   Module name → process type (UI / Extn / Daemon / UsrAgnt)
-    └── useLiveLogs.js         WebSocket hook for live log streaming
+    ├── useLiveLogs.js         WebSocket hook for live log streaming
+    ├── useLiveLogsFs.js       Folder-reading hook (no server) for live log streaming
+    ├── liveLogsFsCore.js      Pure append/reset logic for folder mode
+    └── liveLogsFsHandle.js    Persisted folder handle + permission helpers
 
 scripts/
 └── live-logs-server.js        Local WebSocket server; also served as a static download

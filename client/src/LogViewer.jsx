@@ -14,8 +14,10 @@ import { isArchiveFile, expandArchivesInList } from './utils/archiveExtractor';
 import { exportLogsToFile } from './utils/exportLogs';
 import { AVAILABLE_COLUMNS } from './ColumnSettings';
 import useLiveLogs from './utils/useLiveLogs';
+import useLiveLogsFs from './utils/useLiveLogsFs';
+import { isFsAccessSupported, loadSavedHandle, pickMirrorFolder, MIRROR_DIR_NAME } from './utils/liveLogsFsHandle';
 import LiveLogsSettings from './components/LiveLogsSettings';
-import { checkLiveHealth, fetchLiveConfig, applySavedLogDir, buildSetupCommand, getSavedLogDir, isWindows } from './utils/liveLogsServer';
+import { checkLiveHealth, fetchLiveConfig, applySavedLogDir, buildSetupCommand, buildMirrorCommand, getSavedLogDir, isWindows } from './utils/liveLogsServer';
 
 // Turn a raw folder name like "2387341752-260422074919 (1)" into the short
 // label we want in the page title.
@@ -439,9 +441,8 @@ const LogViewer = () => {
   }, [setLogsForFile, updateLogsBackground]);
 
   const [showServerDialog, setShowServerDialog] = useState(false);
-  // Which platform's setup command the "server not running" dialog shows.
-  const [setupPlatform, setSetupPlatform] = useState(() => (isWindows() ? 'win' : 'mac'));
-  const setupOnWindows = setupPlatform === 'win';
+  // Windows streams through the local server; everywhere else uses folder mode.
+  const setupOnWindows = isWindows();
 
   const handleLiveConnected = useCallback(() => {
     handleClearTabs();
@@ -449,8 +450,26 @@ const LogViewer = () => {
     setIsLiveMode(true);
   }, [handleClearTabs]);
 
-  const { isConnected: isLiveConnected, connect: liveConnect, disconnect: liveDisconnect } =
+  const { isConnected: isWsConnected, connect: liveConnect, disconnect: liveDisconnect } =
     useLiveLogs({ onSourceUpdate: handleLiveSourceUpdate, onConnected: handleLiveConnected, onError: () => setShowServerDialog(true) });
+
+  // Folder mode: reads the folder the sync script mirrors the logs into, so no
+  // server (and no Node) is needed. Failures are surfaced by the toggle, which
+  // can still fall back to the server, so only a mid-session loss reports here.
+  const [fsProblem, setFsProblem] = useState(null);
+  const { isConnected: isFsConnected, connect: fsConnect, disconnect: fsDisconnect } =
+    useLiveLogsFs({
+      onSourceUpdate: handleLiveSourceUpdate,
+      onConnected: handleLiveConnected,
+      onError: (reason) => {
+        setFsProblem(reason);
+        if (reason === 'lost') {
+          setIsLiveMode(false);
+          setShowServerDialog(true);
+        }
+      },
+    });
+  const isLiveConnected = isWsConnected || isFsConnected;
 
   const [isLiveChecking, setIsLiveChecking] = useState(false);
   const [showLiveSettings, setShowLiveSettings] = useState(false);
@@ -458,12 +477,21 @@ const LogViewer = () => {
   const handleLiveToggle = useCallback(async () => {
     if (isLiveConnected) {
       liveDisconnect();
+      fsDisconnect();
       setIsLiveMode(false);
       return;
     }
     setIsLiveChecking(true);
     try {
-      if (!(await checkLiveHealth())) {
+      // A folder chosen earlier needs no install, so try it before the server.
+      setFsProblem(null);
+      if (isFsAccessSupported()) {
+        const saved = await loadSavedHandle();
+        if (saved && (await fsConnect(saved))) return;
+      }
+
+      // macOS has no server: without a usable folder, show the folder setup.
+      if (!isWindows() || !(await checkLiveHealth())) {
         setShowServerDialog(true);
         return;
       }
@@ -482,7 +510,21 @@ const LogViewer = () => {
     } finally {
       setIsLiveChecking(false);
     }
-  }, [isLiveConnected, liveConnect, liveDisconnect]);
+  }, [isLiveConnected, liveConnect, liveDisconnect, fsConnect, fsDisconnect]);
+
+  // "Choose folder" in the setup dialog — a click, so the picker and the
+  // permission prompt are both allowed.
+  const handleChooseMirrorFolder = useCallback(async () => {
+    try {
+      const handle = await pickMirrorFolder();
+      if (!handle) return;
+      setFsProblem(null);
+      if (await fsConnect(handle)) setShowServerDialog(false);
+    } catch (e) {
+      console.error('[live-logs] Could not open folder:', e);
+      setFsProblem('denied');
+    }
+  }, [fsConnect]);
 
   const handleFileLoad = useCallback((fileOrFiles, clearTabsFirst = false, groupPrefix = null) => {
     // Support both single file and array of files (for grouped Windows logs)
@@ -1452,34 +1494,63 @@ const LogViewer = () => {
                 </svg>
               </div>
               <div>
-                <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Live Logs Server Not Running</h3>
+                <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Set Up Live Logs</h3>
                 <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                  A small local server must run on your machine to stream logs. Paste this into{' '}
-                  {setupOnWindows ? 'PowerShell' : 'a terminal'}:
+                  {setupOnWindows
+                    ? 'A small local server must run on your machine to stream logs. Paste this into PowerShell:'
+                    : 'Mirror the Cato logs into a folder the viewer can read — nothing to install.'}
                 </p>
               </div>
             </div>
 
-            {/* Platform switch — defaults to the OS the viewer is running on */}
-            <div className="flex gap-1 mb-3">
-              {[{ id: 'mac', label: 'macOS' }, { id: 'win', label: 'Windows' }].map(opt => (
-                <button
-                  key={opt.id}
-                  onClick={() => setSetupPlatform(opt.id)}
-                  className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
-                    (opt.id === 'win') === setupOnWindows
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+            {/* macOS: mirror the logs, then read the folder */}
+            {!setupOnWindows && isFsAccessSupported() && (() => {
+              const mirrorCmd = buildMirrorCommand(window.location.origin);
+              return (
+                <div className="mb-4 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30 px-4 py-3">
+                  <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">Two steps</div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+                    1. Run this in a terminal and leave it running. It copies every Cato log, including the root-only ones, into{' '}
+                    <code className="bg-white dark:bg-gray-700 px-1 rounded">~/{MIRROR_DIR_NAME}</code>:
+                  </p>
+                  <div className="font-mono text-xs text-green-400 bg-gray-900 dark:bg-gray-950 rounded px-3 py-2 break-all select-all mb-2">{mirrorCmd}</div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => navigator.clipboard.writeText(mirrorCmd)}
+                      className="px-3 py-1.5 rounded text-xs bg-gray-700 hover:bg-gray-600 text-white font-medium transition-colors"
+                    >
+                      Copy command
+                    </button>
+                    <span className="text-xs text-gray-600 dark:text-gray-400">2.</span>
+                    <button
+                      onClick={handleChooseMirrorFolder}
+                      className="px-3 py-1.5 rounded text-xs bg-green-600 hover:bg-green-700 text-white font-medium transition-colors"
+                    >
+                      Choose {MIRROR_DIR_NAME} folder
+                    </button>
+                  </div>
+                  {fsProblem === 'empty' && (
+                    <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">That folder has no logs yet. Is the command above still running?</p>
+                  )}
+                  {fsProblem === 'denied' && (
+                    <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">Access to the folder wasn't granted. Choose it again and allow read access.</p>
+                  )}
+                  {fsProblem === 'lost' && (
+                    <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">Access to the folder was lost. Choose it again.</p>
+                  )}
+                </div>
+              );
+            })()}
 
-            {/* Single combined command */}
-            {(() => {
-              const cmd = buildSetupCommand(window.location.origin, setupOnWindows, getSavedLogDir());
+            {!setupOnWindows && !isFsAccessSupported() && (
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">
+                Reading the logs folder needs Chrome or Edge. Open the viewer in one of them.
+              </p>
+            )}
+
+            {/* Windows: single combined server command */}
+            {setupOnWindows && (() => {
+              const cmd = buildSetupCommand(window.location.origin, getSavedLogDir());
               return (
                 <div className="bg-gray-900 dark:bg-gray-950 rounded-lg px-4 py-3 mb-5">
                   <div className="font-mono text-sm text-green-400 break-all mb-3 select-all leading-relaxed">
@@ -1500,20 +1571,14 @@ const LogViewer = () => {
               );
             })()}
 
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-5">
-              Downloads the script, installs the <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">ws</code> dependency, and starts the server.{' '}
-              {setupOnWindows ? (
-                <>
-                  Installs Node.js first if it's missing (via winget — accept the UAC prompt), then starts the
-                  server. Running it needs no administrator rights. On first run, set your build folder from{' '}
-                  <span className="font-medium">Settings ▸ Live Logs Settings</span>.
-                </>
-              ) : (
-                <>
-                  <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">sudo</code> is required to read protected log directories.
-                </>
-              )}
-            </p>
+            {setupOnWindows && (
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-5">
+                Downloads the script, installs the <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">ws</code> dependency, and starts the server.{' '}
+                Installs Node.js first if it's missing (via winget — accept the UAC prompt), then starts the
+                server. Running it needs no administrator rights. On first run, set your build folder from{' '}
+                <span className="font-medium">Settings ▸ Live Logs Settings</span>.
+              </p>
+            )}
 
             <div className="flex justify-end">
               <button

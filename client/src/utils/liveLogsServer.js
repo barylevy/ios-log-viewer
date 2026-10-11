@@ -95,24 +95,30 @@ export async function applySavedLogDir() {
 }
 
 /**
- * The copy-paste command that downloads and starts the server.
+ * The copy-paste PowerShell command that downloads and starts the server
+ * (Windows only — macOS uses folder mode, see buildMirrorCommand).
  * @param {string} origin - window.location.origin
- * @param {boolean} windows - build the PowerShell variant instead of bash
- * @param {string} [logDir] - Windows only: bake this folder into the command
+ * @param {string} [logDir] - bake this folder into the command
  */
-export function buildSetupCommand(origin, windows, logDir = '') {
-  if (windows) {
-    // Install Node first if it's missing, then refresh PATH in this session —
-    // the installer only updates the stored environment, so without this the
-    // very next `npm` in the same window still fails with CommandNotFound.
-    const ensureNode =
-      `if (-not (Get-Command node -ErrorAction SilentlyContinue)) { ` +
-      `winget install -e --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements; ` +
-      `$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User') }`;
+export function buildSetupCommand(origin, logDir = '') {
+  // Install Node first if it's missing, then refresh PATH in this session —
+  // the installer only updates the stored environment, so without this the
+  // very next `npm` in the same window still fails with CommandNotFound.
+  const ensureNode =
+    `if (-not (Get-Command node -ErrorAction SilentlyContinue)) { ` +
+    `winget install -e --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements; ` +
+    `$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User') }`;
 
-    // No elevation to run: the build output folder lives under the user's own profile.
-    const dirArg = logDir ? ` --dir="${logDir}"` : '';
-    return `${ensureNode}; irm ${origin}/live-logs-server.js -OutFile $HOME\\live-logs-server.js; cd $HOME; npm install ws; node $HOME\\live-logs-server.js${dirArg}`;
-  }
-  return `sudo kill $(sudo lsof -ti:${LIVE_SERVER_PORT}) 2>/dev/null; curl -o ~/live-logs-server.js ${origin}/live-logs-server.js && cd ~ && npm install ws && sudo node ~/live-logs-server.js`;
+  // No elevation to run: the build output folder lives under the user's own profile.
+  const dirArg = logDir ? ` --dir="${logDir}"` : '';
+  return `${ensureNode}; irm ${origin}/live-logs-server.js -OutFile $HOME\\live-logs-server.js; cd $HOME; npm install ws; node $HOME\\live-logs-server.js${dirArg}`;
+}
+
+/**
+ * macOS command for the no-install option: downloads the mirror script (plain
+ * bash, ships with macOS) and runs it as root so it can reach the root-owned
+ * logs. The viewer then reads the folder it fills.
+ */
+export function buildMirrorCommand(origin) {
+  return `curl -o ~/sync-cato-logs.sh ${origin}/sync-cato-logs.sh && sudo bash ~/sync-cato-logs.sh`;
 }

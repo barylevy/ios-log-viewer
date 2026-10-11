@@ -5,15 +5,14 @@
  * then polls for new content every second and streams it to browser clients
  * over WebSocket.
  *
- * macOS — reads the fixed Cato log directories. Some paths under
- *         /private/var/root require root access:
- *           sudo node scripts/live-logs-server.js
+ * Windows only. macOS no longer uses this server — scripts/sync-cato-logs.sh
+ * mirrors the logs into a folder the viewer reads directly.
  *
- * Windows — tails the most recently modified cato_vpn_*.log inside the log
- *         directory. Give the full path; nothing is appended to it:
- *           node live-logs-server.js --dir="C:\\Program Files (x86)\\Cato Networks\\Cato Client"
- *           set CATO_LOG_DIR=C:\\Program Files (x86)\\Cato Networks\\Cato Client
- *           the viewer's Settings ▸ Live Logs Settings dialog (persisted)
+ * Tails the most recently modified cato_vpn_*.log inside the log directory.
+ * Give the full path; nothing is appended to it:
+ *   node live-logs-server.js --dir="C:\\Program Files (x86)\\Cato Networks\\Cato Client"
+ *   set CATO_LOG_DIR=C:\\Program Files (x86)\\Cato Networks\\Cato Client
+ *   the viewer's Settings ▸ Live Logs Settings dialog (persisted)
  *
  * The client connects to ws://localhost:4000
  *
@@ -32,13 +31,9 @@ const { StringDecoder } = require('string_decoder');
 const PORT = 4000;
 const POLL_MS = 1000; // how often to check for new bytes
 
-const IS_WIN = process.platform === 'win32';
-
 // ─── Source definitions ───────────────────────────────────────────────────────
-// Each entry becomes one tab in the viewer.
-// type 'dir'    → read all matching files in the directory, sorted naturally.
-// type 'file'   → read that single file.
-// type 'latest' → tail the most recently modified matching file in a directory.
+// Each entry becomes one tab in the viewer; every source tails the most
+// recently modified matching file in a directory.
 const HOME = os.homedir();
 
 /**
@@ -51,90 +46,6 @@ function firstExistingDir(candidates) {
   }
   return candidates[0];
 }
-
-// Anti-tamper isn't a directory of its own: it's AntiTamperLogs.log sitting
-// inside the ROOT container's AppLogs folder — a different folder from the
-// `app` source below, which reads the USER container's AppLogs.
-// The pattern keeps this tab to anti-tamper files and tolerates rotation
-// (AntiTamperLogs.1.log and friends).
-const MAC_ANTITAMPER_PATTERN = /^AntiTamperLogs.*\.(log|txt)$/i;
-const MAC_ANTITAMPER_DIRS = [
-  '/private/var/root/Library/Group Containers/CKGSB8CH43.group/AppLogs',        // confirmed
-  '/private/var/root/Library/Group Containers/CKGSB8CH43.group/AntiTamperLogs',
-  path.join(HOME, 'Library/Group Containers/CKGSB8CH43.group/AppLogs'),
-];
-
-/**
- * The first candidate that actually holds a matching file — so a container that
- * exists but has no anti-tamper log doesn't shadow one that does. Falls back to
- * the first existing directory, then to candidates[0] so /config can still say
- * where we looked.
- */
-function firstDirWithMatch(candidates, pattern) {
-  let firstExisting = null;
-
-  for (const dir of candidates) {
-    try {
-      if (!fs.statSync(dir).isDirectory()) continue;
-    } catch { continue; }
-
-    if (!firstExisting) firstExisting = dir;
-    if (listMatchingFiles(dir, pattern).length) return dir;
-  }
-
-  return firstExisting || candidates[0];
-}
-
-const MAC_SOURCES = [
-  {
-    key: 'app',
-    label: 'AppLogs',
-    type: 'dir',
-    path: path.join(HOME, 'Library/Group Containers/CKGSB8CH43.group/AppLogs'),
-    pattern: /\.(log|txt)$/i,
-  },
-  {
-    key: 'ext',
-    label: 'Extension',
-    type: 'dir',
-    path: '/private/var/root/Library/Group Containers/CKGSB8CH43.group/AppExtensionLogs',
-    pattern: /\.(log|txt)$/i,
-  },
-  {
-    key: 'dns',
-    label: 'DNSRelay',
-    type: 'dir',
-    path: '/private/var/root/Library/Group Containers/CKGSB8CH43.group/DNSExtensionLogs',
-    pattern: /\.(log|txt)$/i,
-  },
-  {
-    key: 'antitamper',
-    label: 'AntiTamper',
-    type: 'dir',
-    path: firstDirWithMatch(MAC_ANTITAMPER_DIRS, MAC_ANTITAMPER_PATTERN),
-    pattern: MAC_ANTITAMPER_PATTERN,
-  },
-  {
-    key: 'agent',
-    label: 'UserAgent',
-    type: 'dir',
-    path: path.join(HOME, 'Library/Logs/CatoNetworksUserAgent'),
-    pattern: /\.(log|txt)$/i,
-  },
-  {
-    key: 'daemon',
-    label: 'Daemon',
-    type: 'dir',
-    path: '/private/var/root/Library/Logs/com.catonetworks.mac.CatoClient.helper',
-    pattern: /\.(log|txt)$/i,
-  },
-  {
-    key: 'install',
-    label: 'Install',
-    type: 'file',
-    path: '/var/tmp/catoinstallext.txt',
-  },
-];
 
 // ─── Windows paths ────────────────────────────────────────────────────────────
 // The user gives the full directory holding the logs — the installed client's
@@ -254,7 +165,7 @@ function buildWindowsSources() {
   return winSourcesFor(normalizeLogDir(winLogDir));
 }
 
-let SOURCES = IS_WIN ? buildWindowsSources() : MAC_SOURCES;
+let SOURCES = buildWindowsSources();
 
 /**
  * Report a directory source for /config: where we're looking, whether it's
@@ -278,27 +189,6 @@ function describeDir(dir, pattern) {
 
 /** Snapshot of the current configuration, served at GET /config. */
 function configInfo() {
-  if (!IS_WIN) {
-    return {
-      platform: process.platform,
-      // Nothing to configure: the macOS sources are fixed system paths.
-      configurable: false,
-      needsConfig: false,
-      logDir: null,
-      resolvedDir: null,
-      dirExists: true,
-      currentFile: null,
-      matchCount: 0,
-      // Reported on macOS too: this folder's name has been ambiguous and it
-      // lives under /private/var/root, so it's worth surfacing what resolved.
-      antiTamper: describeDir(
-        MAC_SOURCES.find(s => s.key === 'antitamper')?.path || null,
-        MAC_ANTITAMPER_PATTERN,
-      ),
-      port: PORT,
-    };
-  }
-
   const resolvedDir = normalizeLogDir(winLogDir);
   let dirExists = false;
   try { dirExists = !!resolvedDir && fs.statSync(resolvedDir).isDirectory(); } catch { dirExists = false; }
@@ -330,30 +220,6 @@ function naturalSort(a, b) {
   return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
 }
 
-/** Read all matching files in a directory, concatenated in natural sort order. */
-function readDir(dirPath, pattern) {
-  try {
-    const names = fs.readdirSync(dirPath)
-      .filter(n => !pattern || pattern.test(n))
-      .sort(naturalSort);
-
-    let content = '';
-    for (const name of names) {
-      const full = path.join(dirPath, name);
-      try {
-        const stat = fs.statSync(full);
-        if (!stat.isFile()) continue;
-        const text = fs.readFileSync(full, 'utf8');
-        content += text;
-        if (text.length > 0 && !text.endsWith('\n')) content += '\n';
-      } catch { /* skip unreadable files */ }
-    }
-    return content;
-  } catch {
-    return '';
-  }
-}
-
 // How much existing text a newly connected client receives, so the viewer has
 // something to show immediately instead of waiting for the next write. The
 // client trims this to the current day; this cap just keeps the connect
@@ -374,11 +240,6 @@ function tailLines(text, n) {
     idx = prev;
   }
   return text.slice(idx + 1);
-}
-
-/** Read a single file, or return '' on error. */
-function readFile(filePath) {
-  try { return fs.readFileSync(filePath, 'utf8'); } catch { return ''; }
 }
 
 /** Read `length` bytes from `filePath` starting at byte offset `start`. */
@@ -442,9 +303,7 @@ function readLatest(src) {
 
 /** @returns {{content: string, forceReset: boolean}} */
 function readSource(src) {
-  if (src.type === 'latest') return readLatest(src);
-  if (src.type === 'dir') return { content: readDir(src.path, src.pattern), forceReset: false };
-  return { content: readFile(src.path), forceReset: false };
+  return readLatest(src);
 }
 
 // ─── State ────────────────────────────────────────────────────────────────────
@@ -452,7 +311,7 @@ function readSource(src) {
 const state = {}; // { [key]: string } — always the full current content
 
 function init() {
-  if (IS_WIN && SOURCES.length === 0) {
+  if (SOURCES.length === 0) {
     const info = configInfo();
     console.log(`  ✗ No log folder configured.`);
     console.log(`    Set one with --dir="<full path to the log folder>", the CATO_LOG_DIR env var,`);
@@ -526,9 +385,6 @@ function handleRequest(req, res) {
   }
 
   if (route === '/config' && req.method === 'POST') {
-    if (!IS_WIN) {
-      return sendJson(res, 400, { error: 'Folder configuration only applies to Windows.' });
-    }
     return readJsonBody(req, (err, body) => {
       if (err) return sendJson(res, 400, { error: err.message });
 
@@ -707,12 +563,8 @@ function start() {
 function printPortConflict() {
   console.error(`\n[live-logs] ERROR: Port ${PORT} is already in use by another process.`);
   console.error(`\nTo free it, run:`);
-  if (IS_WIN) {
-    console.error(`  netstat -ano | findstr :${PORT}`);
-    console.error(`  taskkill /PID <pid> /F\n`);
-  } else {
-    console.error(`  lsof -ti:${PORT} | xargs kill\n`);
-  }
+  console.error(`  netstat -ano | findstr :${PORT}`);
+  console.error(`  taskkill /PID <pid> /F\n`);
   console.error(`Then start the server again.\n`);
   process.exit(1);
 }
@@ -726,8 +578,6 @@ module.exports = {
   WIN_ANTITAMPER_SUBDIRS,
   WIN_ANTITAMPER_PATTERN,
   firstExistingDir,
-  firstDirWithMatch,
-  MAC_ANTITAMPER_PATTERN,
   resolveAntiTamperDir,
   winSourcesFor,
   normalizeLogDir,

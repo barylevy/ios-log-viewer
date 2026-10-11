@@ -17,8 +17,6 @@ const {
   WIN_ANTITAMPER_SUBDIRS,
   WIN_ANTITAMPER_PATTERN,
   firstExistingDir,
-  firstDirWithMatch,
-  MAC_ANTITAMPER_PATTERN,
   resolveAntiTamperDir,
   winSourcesFor,
   normalizeLogDir,
@@ -268,61 +266,5 @@ describe('firstExistingDir', () => {
     } finally {
       fs.rmSync(other, { recursive: true, force: true });
     }
-  });
-});
-
-
-describe('macOS AntiTamper selection', () => {
-  let base;
-
-  beforeAll(() => {
-    base = fs.mkdtempSync(path.join(os.tmpdir(), 'cato-mac-at-'));
-    fs.mkdirSync(path.join(base, 'AppLogs'));
-    fs.mkdirSync(path.join(base, 'Empty'));
-    // The real layout: anti-tamper logs sit among ordinary app logs.
-    fs.writeFileSync(path.join(base, 'AppLogs', 'AntiTamperLogs.log'), 'tamper\n');
-    fs.writeFileSync(path.join(base, 'AppLogs', 'AntiTamperLogs.1.log'), 'rotated\n');
-    fs.writeFileSync(path.join(base, 'AppLogs', 'com.catonetworks.mac.CatoClient 2026-09-03.log'), 'app\n');
-  });
-
-  afterAll(() => fs.rmSync(base, { recursive: true, force: true }));
-
-  it('matches anti-tamper files, including rotated ones', () => {
-    expect(MAC_ANTITAMPER_PATTERN.test('AntiTamperLogs.log')).toBe(true);
-    expect(MAC_ANTITAMPER_PATTERN.test('AntiTamperLogs.1.log')).toBe(true);
-    expect(MAC_ANTITAMPER_PATTERN.test('AntiTamperLogs.txt')).toBe(true);
-  });
-
-  it('does not match the app logs sharing that folder', () => {
-    // Without this the AntiTamper tab would duplicate AppLogs.
-    expect(MAC_ANTITAMPER_PATTERN.test('com.catonetworks.mac.CatoClient 2026-09-03.log')).toBe(false);
-    expect(MAC_ANTITAMPER_PATTERN.test('daemon_log.txt')).toBe(false);
-  });
-
-  it('selects only the anti-tamper files from a shared folder', () => {
-    const names = listMatchingFiles(path.join(base, 'AppLogs'), MAC_ANTITAMPER_PATTERN)
-      .map(f => f.name).sort();
-    expect(names).toEqual(['AntiTamperLogs.1.log', 'AntiTamperLogs.log']);
-  });
-
-  it('skips a candidate that exists but holds no anti-tamper file', () => {
-    const chosen = firstDirWithMatch(
-      [path.join(base, 'Empty'), path.join(base, 'AppLogs')],
-      MAC_ANTITAMPER_PATTERN,
-    );
-    expect(chosen).toBe(path.join(base, 'AppLogs'));
-  });
-
-  it('falls back to the first existing candidate when none hold a match', () => {
-    const chosen = firstDirWithMatch(
-      [path.join(base, 'Nope'), path.join(base, 'Empty')],
-      MAC_ANTITAMPER_PATTERN,
-    );
-    expect(chosen).toBe(path.join(base, 'Empty'));
-  });
-
-  it('falls back to the first candidate when none exist at all', () => {
-    const first = path.join(base, 'Nope');
-    expect(firstDirWithMatch([first, path.join(base, 'AlsoNope')], MAC_ANTITAMPER_PATTERN)).toBe(first);
   });
 });
