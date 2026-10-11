@@ -13,6 +13,7 @@ import {
 } from './dateTimeUtils';
 import { cleanMessage } from './utils/logLevelColors';
 import { replaceProcessIdWithType } from './utils/processTypeMapper';
+import useRecordTextScale from './utils/useRecordTextScale';
 
 // Unified column registry. Each entry can render its own header label and
 // body cell. The whole row is laid out as a single flex container; columns
@@ -794,6 +795,7 @@ LogItem.displayName = 'LogItem';
 
 const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogId, filters, onFiltersChange, onSearchMatchUpdate, onHover, pivotLog, onSetPivot, onClearPivot, stickyLogs, onAddStickyLog, highlightLog, visibleColumns = {}, columnOrder = DEFAULT_COLUMN_ORDER, onColumnOrderChange, viewKey = 'default', isLiveMode = false }) => {
   const virtuosoRef = useRef(null);
+  const recordScale = useRecordTextScale();
   // Refs for each item element to allow focus
   const itemRefs = useRef({});
   
@@ -1969,7 +1971,7 @@ const LogListView = ({ logs, allLogs, onLogClick, highlightedLogId, selectedLogI
       </div>
 
       {/* React Virtuoso List - NO CUSTOM VIRTUAL SCROLLING! */}
-      <div className="flex-1">
+      <div className="flex-1 log-records" style={{ '--record-scale': recordScale }}>
         <Virtuoso
           ref={virtuosoRef}
           data={flatLogs}
