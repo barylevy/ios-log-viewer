@@ -10,7 +10,7 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { parseLogContent } from '../LogParser';
-import { trimLiveBuffer, filterLiveRecords } from './useLiveLogs';
+import { trimLiveBuffer } from './useLiveLogs';
 import {
   FS_SOURCES, LOG_FILE_PATTERN, INITIAL_TAIL_LINES, MAX_INITIAL_BYTES,
   naturalCompare, planRead, tailLines,
@@ -99,7 +99,7 @@ export default function useLiveLogsFs({ onSourceUpdate, onConnected, onDisconnec
   }, []);
 
   /** @param {FileSystemDirectoryHandle} root  call from a click (may prompt) */
-  const connect = useCallback(async (root, cutoff = Date.now()) => {
+  const connect = useCallback(async (root) => {
     if (runRef.current || !root) return false;
 
     if (!(await ensureMirrorPermission(root))) {
@@ -113,6 +113,11 @@ export default function useLiveLogsFs({ onSourceUpdate, onConnected, onDisconnec
       cbRef.current.onError?.(error?.name === 'NotAllowedError' ? 'denied' : 'sync');
       return false;
     }
+
+    // Fixed when the session opens so records don't vanish if it runs past midnight.
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const cutoff = startOfToday.getTime();
 
     const run = { timer: null, stopped: false };
     const acc = {};   // { [key]: string }   accumulated raw text
@@ -129,7 +134,7 @@ export default function useLiveLogsFs({ onSourceUpdate, onConnected, onDisconnec
         }
       }
       cbRef.current.onSourceUpdate?.({
-        sourceKey: src.key, label: src.label, logs: filterLiveRecords(logs, cutoff), isInitial: type !== 'append',
+        sourceKey: src.key, label: src.label, logs, isInitial: type !== 'append',
       });
     };
 

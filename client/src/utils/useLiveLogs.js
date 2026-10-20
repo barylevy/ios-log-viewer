@@ -15,20 +15,44 @@ import { useState, useRef, useCallback } from 'react';
 import { parseLogContent } from '../LogParser';
 import { LIVE_SERVER_WS } from './liveLogsServer';
 
-/** Only records verifiably created at or after the Live Logs click are visible. */
-export function filterLiveRecords(logs, cutoff) {
-  return logs.filter(log => Number.isFinite(log.timestampMs) && log.timestampMs >= cutoff);
-}
+/** Quiet sources keep at least this many records, even if older than today. */
+export const MIN_LIVE_RECORDS = 200;
 
-/** Trim the historical prefix while preserving complete multi-line records. */
-export function trimLiveBuffer(raw, logs, cutoff) {
+/**
+ * Cut a raw log buffer down to what live mode should show: records from today,
+ * but never fewer than `minRecords`.
+ *
+ * The floor matters for sources that are written rarely — AntiTamper may log a
+ * handful of lines a week, and a strict day filter would leave its tab blank.
+ * Busy sources are unaffected: when today already has more than the floor, the
+ * day boundary is what applies.
+ *
+ * Returns the trimmed text, or null to leave the buffer untouched — which is
+ * what happens when nothing can be dated. A source whose format we can't parse
+ * timestamps for must not be silently emptied.
+ *
+ * @param {string} raw    accumulated text
+ * @param {any[]} logs    that text already parsed
+ * @param {number} cutoff epoch ms for the start of today
+ * @param {number} [minRecords]
+ */
+export function trimLiveBuffer(raw, logs, cutoff, minRecords = MIN_LIVE_RECORDS) {
   if (!raw || !logs.length) return null;
-  // Keep incomplete input available for the parser when more bytes arrive.
-  if (!logs.some(log => Number.isFinite(log.timestampMs))) return null;
-  const startIndex = logs.findIndex(log => Number.isFinite(log.timestampMs) && log.timestampMs >= cutoff);
-  if (startIndex === -1) return '';
-  if (startIndex === 0) return null;
-  return raw.split('\n').slice(logs[startIndex].lineNumber - 1).join('\n');
+
+  // Nothing datable — can't tell old from new, so keep everything.
+  if (!logs.some(l => l.timestampMs != null)) return null;
+
+  let firstToday = logs.findIndex(l => l.timestampMs != null && l.timestampMs >= cutoff);
+  if (firstToday === -1) firstToday = logs.length; // nothing from today at all
+
+  // Whichever keeps more: today's records, or the last `minRecords`.
+  const floorIndex = Math.max(0, logs.length - minRecords);
+  const startIndex = Math.min(firstToday, floorIndex);
+
+  if (startIndex <= 0) return null; // already starts where we want it to
+
+  const startLine = logs[startIndex].lineNumber; // 1-based
+  return raw.split('\n').slice(startLine - 1).join('\n');
 }
 
 /**
@@ -45,18 +69,21 @@ export default function useLiveLogs({ onSourceUpdate, onConnected, onDisconnecte
   // Accumulated raw text per source — re-parsing the whole text on each update
   // keeps multi-line log-entry stitching correct without needing a streaming parser.
   const accRef = useRef({}); // { [sourceKey]: string }
-  // Fixed at the user's click, before setup or connection delays.
+  // Live mode shows today's activity only. Fixed when the connection opens so
+  // records don't disappear mid-session if it runs past midnight.
   const cutoffRef = useRef(0);
 
   // Keep callback ref stable so connect/disconnect don't change identity
   const cbRef = useRef({ onSourceUpdate, onConnected, onDisconnected, onError });
   cbRef.current = { onSourceUpdate, onConnected, onDisconnected, onError };
 
-  const connect = useCallback((cutoff = Date.now()) => {
+  const connect = useCallback(() => {
     if (wsRef.current) return; // Already open
     accRef.current = {};
 
-    cutoffRef.current = cutoff;
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    cutoffRef.current = startOfToday.getTime();
 
     const ws = new WebSocket(LIVE_SERVER_WS);
     wsRef.current = ws;
@@ -98,7 +125,7 @@ export default function useLiveLogs({ onSourceUpdate, onConnected, onDisconnecte
         cbRef.current.onSourceUpdate?.({
           sourceKey,
           label,
-          logs: filterLiveRecords(logs, cutoffRef.current),
+          logs,
           isInitial: type !== 'append',
         });
       } catch (e) {

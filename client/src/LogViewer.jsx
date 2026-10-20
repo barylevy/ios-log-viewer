@@ -403,7 +403,6 @@ const LogViewer = () => {
   // ── Live / Online mode ────────────────────────────────────────────────────
   const [isLiveMode, setIsLiveMode] = useState(false);
   const liveTabIdsRef = useRef(new Set());
-  const liveStartedAtRef = useRef(null);
 
   const handleLiveSourceUpdate = useCallback(({ sourceKey, label, logs: parsedLogs, isInitial }) => {
     const tabId = `live:${sourceKey}`;
@@ -482,15 +481,13 @@ const LogViewer = () => {
       setIsLiveMode(false);
       return;
     }
-    const startedAt = Date.now();
-    liveStartedAtRef.current = startedAt;
     setIsLiveChecking(true);
     try {
       // A folder chosen earlier needs no install, so try it before the server.
       setFsProblem(null);
       if (isFsAccessSupported()) {
         const saved = await loadSavedHandle();
-        if (saved && (await fsConnect(saved, startedAt))) return;
+        if (saved && (await fsConnect(saved))) return;
       }
 
       // macOS has no server: without a usable folder, show the folder setup.
@@ -509,7 +506,7 @@ const LogViewer = () => {
         setShowLiveSettings(true);
         return;
       }
-      liveConnect(startedAt);
+      liveConnect();
     } finally {
       setIsLiveChecking(false);
     }
@@ -518,12 +515,11 @@ const LogViewer = () => {
   // "Choose folder" in the setup dialog — a click, so the picker and the
   // permission prompt are both allowed.
   const handleChooseMirrorFolder = useCallback(async () => {
-    const startedAt = liveStartedAtRef.current ?? Date.now();
     try {
       const handle = await pickMirrorFolder();
       if (!handle) return;
       setFsProblem(null);
-      if (await fsConnect(handle, startedAt)) setShowServerDialog(false);
+      if (await fsConnect(handle)) setShowServerDialog(false);
     } catch (e) {
       console.error('[live-logs] Could not open folder:', e);
       setFsProblem('denied');
