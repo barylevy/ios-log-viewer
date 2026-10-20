@@ -432,7 +432,7 @@ The Windows source reads only the bytes appended since the last poll — dev bui
 When Node/npm can't be installed, the viewer can read the logs from a folder instead of a server. `scripts/sync-cato-logs.sh` (served from `/sync-cato-logs.sh`) runs as root and, every second, mirrors every Cato log source — including the root-owned ones a browser can't open — into `~/.cato_live_logs/<sourceKey>/` using `rsync --inplace`. The viewer then polls that folder through the File System Access API.
 
 - Setup dialog ▸ copy the `sudo bash ~/sync-cato-logs.sh` command, leave it running, then **Choose .cato_live_logs folder** and grant read/write access. Use **Cmd+Shift+G** in the picker and enter `~/.cato_live_logs` to reveal the hidden folder. The handle is kept in IndexedDB and re-authorised on the next Live click.
-- Each new folder-mode session pauses the sync script with a unique request, deletes only the known source subfolders in the mirror, then waits for the script to acknowledge a fresh copy before connecting. Original Cato logs are preserved, so their historical entries can appear in the fresh copy. If the script is stopped or outdated, connection fails without deleting the mirror. Restart the updated script and select the new hidden folder after upgrading.
+- Each new folder-mode session pauses the sync script with a unique request, deletes only the known source subfolders in the mirror, then waits for the script to acknowledge a fresh copy before connecting. Original Cato logs are preserved; historical entries in the fresh copy are excluded from the live display. If the script is stopped or outdated, connection fails without deleting the mirror. Restart the updated script and select the new hidden folder after upgrading.
 - Hook: `utils/useLiveLogsFs.js` (same callbacks as `useLiveLogs`). Pure append/reset decision logic: `utils/liveLogsFsCore.js` (`planRead`). Folder handle storage: `utils/liveLogsFsHandle.js`.
 - A growing last file is read from its previous size onwards; a rotated, added, removed or truncated file triggers a full re-read (`reset`), capped at 8 MB / 5,000 lines.
 - Source keys in the script and in `FS_SOURCES` must match.
@@ -442,11 +442,11 @@ When Node/npm can't be installed, the viewer can read the logs from a folder ins
 
 | Message type | Meaning |
 |---|---|
-| `initial` | The recent tail (up to 5,000 lines) so the tab isn't blank on connect. The client drops anything before today |
+| `initial` | The recent tail (up to 5,000 lines). The client shows only records created at or after the Live Logs click |
 | `append` | New bytes added since last send |
 | `reset` | File rotated, truncated, or folder reconfigured — resend from scratch |
 
-Live mode shows **today's records, but never fewer than the last 200** per source (`MIN_LIVE_RECORDS`). The floor keeps rarely-written sources such as AntiTamper usable — a strict day filter left them blank — while busy sources are unaffected, since today already exceeds it. The client trims its raw buffer to match, so later appends don't re-parse history. A source whose format yields no parseable timestamps is left untouched rather than silently emptied. The day boundary is fixed when the connection opens, so a session running past midnight keeps its records.
+Live mode shows only records with a readable timestamp **at or after the moment the user clicks Live Logs**. This cutoff is captured before permission prompts, mirror cleanup, and connection setup, and stays fixed for initial snapshots, appends, rotations, and sessions crossing midnight. Quiet sources remain empty until a new record arrives; there is no historical-record fallback. Records with missing or invalid timestamps are hidden.
 
 Hook: `utils/useLiveLogs.js`  
 Shared client (port, endpoints, setup command): `utils/liveLogsServer.js`  
