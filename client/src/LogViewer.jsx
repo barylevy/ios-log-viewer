@@ -1529,11 +1529,15 @@ const LogViewer = () => {
                       Choose {MIRROR_DIR_NAME} folder
                     </button>
                   </div>
+                  <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">In the folder picker, press Cmd+Shift+G and enter ~/.cato_live_logs to open the hidden folder. Starting Live Logs clears the previous mirror and waits for a fresh copy.</p>
                   {fsProblem === 'empty' && (
                     <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">That folder has no logs yet. Is the command above still running?</p>
                   )}
                   {fsProblem === 'denied' && (
-                    <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">Access to the folder wasn't granted. Choose it again and allow read access.</p>
+                    <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">Access to the folder wasn't granted. Choose it again and allow read and write access.</p>
+                  )}
+                  {fsProblem === 'sync' && (
+                    <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">The sync script did not respond or the mirror could not be cleared. Run the updated command above and choose ~/.cato_live_logs with read and write access.</p>
                   )}
                   {fsProblem === 'lost' && (
                     <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">Access to the folder was lost. Choose it again.</p>

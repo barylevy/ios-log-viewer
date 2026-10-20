@@ -22,3 +22,11 @@ describe('nextScale', () => {
     expect(nextScale('a', 1)).toBeNull();
   });
 });
+
+describe('nextScale with a non-Latin keyboard layout', () => {
+  it('falls back to the physical key code', () => {
+    expect(nextScale('=', 1, 'Equal')).toBe(1.1);
+    expect(nextScale('ס', 1, 'Minus')).toBe(0.9);
+    expect(nextScale('ש', 2, 'Digit0')).toBe(1);
+  });
+});

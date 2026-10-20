@@ -338,7 +338,7 @@ Stream logs from the local Cato client in real time directly into the viewer —
 ### How It Works
 
 - **Windows** — a lightweight local WebSocket server (`live-logs-server.js`) runs on the user's machine, tails the Cato log folder, and pushes new content to the browser every second via WebSocket on port 4000.
-- **macOS** — no server. `scripts/sync-cato-logs.sh` mirrors the log sources into `~/CatoLiveLogs`, and the viewer reads that folder directly (Chrome/Edge). See [No-install mode](#no-install-mode-macos-chromeedge).
+- **macOS** — no server. `scripts/sync-cato-logs.sh` mirrors the log sources into `~/.cato_live_logs`, and the viewer reads that folder directly (Chrome/Edge). See [No-install mode](#no-install-mode-macos-chromeedge).
 
 ### Starting Live Logs
 
@@ -366,7 +366,7 @@ On Windows, if no log folder is configured yet (or it contains no matching files
 
 ### Live Log Sources — macOS
 
-Each source becomes its own tab. `sync-cato-logs.sh` copies it into `~/CatoLiveLogs/<key>/`:
+Each source becomes its own tab. `sync-cato-logs.sh` copies it into `~/.cato_live_logs/<key>/`:
 
 | Tab (key) | Source |
 |-----|--------|
@@ -429,9 +429,10 @@ The Windows source reads only the bytes appended since the last poll — dev bui
 
 ### No-install mode (macOS, Chrome/Edge)
 
-When Node/npm can't be installed, the viewer can read the logs from a folder instead of a server. `scripts/sync-cato-logs.sh` (served from `/sync-cato-logs.sh`) runs as root and, every second, mirrors every Cato log source — including the root-owned ones a browser can't open — into `~/CatoLiveLogs/<sourceKey>/` using `rsync --inplace`. The viewer then polls that folder through the File System Access API.
+When Node/npm can't be installed, the viewer can read the logs from a folder instead of a server. `scripts/sync-cato-logs.sh` (served from `/sync-cato-logs.sh`) runs as root and, every second, mirrors every Cato log source — including the root-owned ones a browser can't open — into `~/.cato_live_logs/<sourceKey>/` using `rsync --inplace`. The viewer then polls that folder through the File System Access API.
 
-- Setup dialog ▸ copy the `sudo bash ~/sync-cato-logs.sh` command, leave it running, then **Choose CatoLiveLogs folder** (granted once; the handle is kept in IndexedDB and re-authorised on the next Live click).
+- Setup dialog ▸ copy the `sudo bash ~/sync-cato-logs.sh` command, leave it running, then **Choose .cato_live_logs folder** and grant read/write access. Use **Cmd+Shift+G** in the picker and enter `~/.cato_live_logs` to reveal the hidden folder. The handle is kept in IndexedDB and re-authorised on the next Live click.
+- Each new folder-mode session pauses the sync script with a unique request, deletes only the known source subfolders in the mirror, then waits for the script to acknowledge a fresh copy before connecting. Original Cato logs are preserved, so their historical entries can appear in the fresh copy. If the script is stopped or outdated, connection fails without deleting the mirror. Restart the updated script and select the new hidden folder after upgrading.
 - Hook: `utils/useLiveLogsFs.js` (same callbacks as `useLiveLogs`). Pure append/reset decision logic: `utils/liveLogsFsCore.js` (`planRead`). Folder handle storage: `utils/liveLogsFsHandle.js`.
 - A growing last file is read from its previous size onwards; a rotated, added, removed or truncated file triggers a full re-read (`reset`), capped at 8 MB / 5,000 lines.
 - Source keys in the script and in `FS_SOURCES` must match.

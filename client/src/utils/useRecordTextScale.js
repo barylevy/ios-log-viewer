@@ -21,10 +21,12 @@ const clamp = (n) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.round(n * 10) 
  * @param {string} key  KeyboardEvent.key
  * @param {number} current
  */
-export function nextScale(key, current) {
-  if (key === '=' || key === '+') return clamp(current + STEP);
-  if (key === '-' || key === '_') return clamp(current - STEP);
-  if (key === '0') return 1;
+export function nextScale(key, current, code = '') {
+  // `code` is the physical key, which stays the same under any keyboard layout
+  // (e.g. Hebrew), where `key` may not be '=' / '-' / '0' at all.
+  if (key === '=' || key === '+' || code === 'Equal' || code === 'NumpadAdd') return clamp(current + STEP);
+  if (key === '-' || key === '_' || code === 'Minus' || code === 'NumpadSubtract') return clamp(current - STEP);
+  if (key === '0' || code === 'Digit0' || code === 'Numpad0') return 1;
   return null;
 }
 
@@ -47,15 +49,17 @@ export default function useRecordTextScale() {
   useEffect(() => {
     const onKeyDown = (e) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
-      const next = nextScale(e.key, scaleRef.current);
+      const next = nextScale(e.key, scaleRef.current, e.code);
       if (next === null) return;
       e.preventDefault(); // keep the browser from zooming the whole page
+      e.stopPropagation();
       scaleRef.current = next;
       setScale(next);
       try { localStorage.setItem(STORAGE_KEY, String(next)); } catch { /* ignore */ }
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    // Capture phase: run before any other handler can swallow the event.
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
   }, []);
 
   return scale;

@@ -8,10 +8,10 @@
 
 const DB_NAME = 'cato-live-logs';
 const STORE = 'handles';
-const KEY = 'root';
+const KEY = 'cato-live-logs-root';
 
 /** The folder the sync script fills; shown in the UI as the suggested pick. */
-export const MIRROR_DIR_NAME = 'CatoLiveLogs';
+export const MIRROR_DIR_NAME = '.cato_live_logs';
 
 /** True in Chromium browsers, the only ones that can read a folder directly. */
 export function isFsAccessSupported() {
@@ -56,7 +56,8 @@ export async function forgetHandle() {
 /** Ask the user to pick the mirrored folder. Returns null if they cancel. */
 export async function pickMirrorFolder() {
   try {
-    const handle = await window.showDirectoryPicker({ id: 'cato-live-logs', mode: 'read' });
+    const handle = await window.showDirectoryPicker({ id: 'cato-live-logs', mode: 'readwrite' });
+    if (handle.name !== MIRROR_DIR_NAME) throw new Error(`Choose ${MIRROR_DIR_NAME}.`);
     await saveHandle(handle);
     return handle;
   } catch (e) {
@@ -66,11 +67,11 @@ export async function pickMirrorFolder() {
 }
 
 /**
- * Make sure we may read `handle`. Prompting needs a user gesture, so call this
+ * Make sure we may read and clear `handle`. Prompting needs a user gesture, so call this
  * straight from a click handler.
  */
-export async function ensureReadPermission(handle) {
-  const opts = { mode: 'read' };
+export async function ensureMirrorPermission(handle) {
+  const opts = { mode: 'readwrite' };
   try {
     if ((await handle.queryPermission(opts)) === 'granted') return true;
     return (await handle.requestPermission(opts)) === 'granted';

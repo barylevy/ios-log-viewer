@@ -2,7 +2,7 @@
  * useLiveLogsFs — live logs read straight from a folder, with no local server.
  *
  * scripts/sync-cato-logs.sh (run with sudo) mirrors every Cato log source into
- * ~/CatoLiveLogs/<sourceKey>/, including the root-owned ones a browser can't
+ * ~/.cato_live_logs/<sourceKey>/, including the root-owned ones a browser can't
  * reach. This hook polls that folder through the File System Access API and
  * feeds the viewer exactly like useLiveLogs does, so the tabs don't care which
  * transport produced the update.
@@ -15,7 +15,8 @@ import {
   FS_SOURCES, LOG_FILE_PATTERN, INITIAL_TAIL_LINES, MAX_INITIAL_BYTES,
   naturalCompare, planRead, tailLines,
 } from './liveLogsFsCore';
-import { ensureReadPermission } from './liveLogsFsHandle';
+import { ensureMirrorPermission } from './liveLogsFsHandle';
+import { resetMirrorSession } from './liveLogsMirrorSession';
 
 const POLL_MS = 1000;
 
@@ -79,7 +80,7 @@ async function readFresh(files) {
  * @param {(update:{sourceKey:string,label:string,logs:any[],isInitial:boolean})=>void} opts.onSourceUpdate
  * @param {() => void} [opts.onConnected]
  * @param {() => void} [opts.onDisconnected]
- * @param {(reason:'empty'|'denied'|'lost') => void} [opts.onError]
+ * @param {(reason:'empty'|'denied'|'lost'|'sync') => void} [opts.onError]
  */
 export default function useLiveLogsFs({ onSourceUpdate, onConnected, onDisconnected, onError } = {}) {
   const [isConnected, setIsConnected] = useState(false);
@@ -101,8 +102,15 @@ export default function useLiveLogsFs({ onSourceUpdate, onConnected, onDisconnec
   const connect = useCallback(async (root) => {
     if (runRef.current || !root) return false;
 
-    if (!(await ensureReadPermission(root))) {
+    if (!(await ensureMirrorPermission(root))) {
       cbRef.current.onError?.('denied');
+      return false;
+    }
+
+    try {
+      await resetMirrorSession(root);
+    } catch (error) {
+      cbRef.current.onError?.(error?.name === 'NotAllowedError' ? 'denied' : 'sync');
       return false;
     }
 
@@ -179,7 +187,7 @@ export default function useLiveLogsFs({ onSourceUpdate, onConnected, onDisconnec
       }
     };
 
-    // Is anything mirrored? An empty folder means the sync script isn't running.
+    // Check whether the fresh mirror contains any source folders.
     let hasSource = false;
     try {
       for await (const [, entry] of root.entries()) {
