@@ -883,7 +883,6 @@ const LogViewer = () => {
     liveTabIdsRef.current.clear();
     // Wipe the entire model (logs, sticky notes, headers, current file, etc.)
     resetModel();
-    resetModel();
 
     // Clear all UI state in this component
     setFiles([]);
@@ -1184,39 +1183,18 @@ const LogViewer = () => {
     [selectedLog, setSelectedLog],
   );
 
-  // Navigation functions for modal
-  const navigateToNextLog = useCallback(() => {
-    if (!selectedLog || !filteredLogs.length) return;
-
-    const currentIndex = filteredLogs.findIndex((log) => log.id === selectedLog.id);
-    if (currentIndex >= 0 && currentIndex < filteredLogs.length - 1) {
-      const nextLog = filteredLogs[currentIndex + 1];
-      setSelectedLog({ ...nextLog, lineIndex: currentIndex + 2 }); // Keep lineIndex for modal navigation, lineNumber is preserved from original log
+  const selectedLogIndex = useMemo(
+    () => (selectedLog ? filteredLogs.findIndex((log) => log.id === selectedLog.id) : -1),
+    [selectedLog, filteredLogs],
+  );
+  const hasNextLog = selectedLogIndex >= 0 && selectedLogIndex < filteredLogs.length - 1;
+  const hasPrevLog = selectedLogIndex > 0;
+  const navigateSelectedLog = (direction: -1 | 1) => {
+    const index = selectedLogIndex + direction;
+    if (selectedLogIndex >= 0 && index >= 0 && index < filteredLogs.length) {
+      setSelectedLog(filteredLogs[index]);
     }
-  }, [selectedLog, filteredLogs, setSelectedLog]);
-
-  const navigateToPrevLog = useCallback(() => {
-    if (!selectedLog || !filteredLogs.length) return;
-
-    const currentIndex = filteredLogs.findIndex((log) => log.id === selectedLog.id);
-    if (currentIndex > 0) {
-      const prevLog = filteredLogs[currentIndex - 1];
-      setSelectedLog({ ...prevLog, lineIndex: currentIndex }); // Keep lineIndex for modal navigation, lineNumber is preserved from original log
-    }
-  }, [selectedLog, filteredLogs, setSelectedLog]);
-
-  // Check if next/prev navigation is available
-  const hasNextLog = useMemo(() => {
-    if (!selectedLog || !filteredLogs.length) return false;
-    const currentIndex = filteredLogs.findIndex((log) => log.id === selectedLog.id);
-    return currentIndex >= 0 && currentIndex < filteredLogs.length - 1;
-  }, [selectedLog, filteredLogs]);
-
-  const hasPrevLog = useMemo(() => {
-    if (!selectedLog || !filteredLogs.length) return false;
-    const currentIndex = filteredLogs.findIndex((log) => log.id === selectedLog.id);
-    return currentIndex > 0;
-  }, [selectedLog, filteredLogs]);
+  };
 
   const memoizedContent = useMemo(() => {
     if (!hasUserInteracted) {
@@ -1445,8 +1423,8 @@ const LogViewer = () => {
           log={selectedLog}
           onClose={() => setSelectedLog(null)}
           onAddStickyLog={addStickyLog}
-          onNext={navigateToNextLog}
-          onPrev={navigateToPrevLog}
+          onNext={() => navigateSelectedLog(1)}
+          onPrev={() => navigateSelectedLog(-1)}
           hasNext={hasNextLog}
           hasPrev={hasPrevLog}
         />

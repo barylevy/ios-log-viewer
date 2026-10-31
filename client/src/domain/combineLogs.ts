@@ -16,7 +16,6 @@ export function combineLogs(sources: readonly LogSource[]): LogRecord[] {
         ...record,
         id,
         originalId: record.id,
-        baseId: record.baseId ?? record.id,
         sourceFile: record.sourceFile || source.id,
         sourceTabId: source.id,
       };

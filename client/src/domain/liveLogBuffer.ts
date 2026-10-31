@@ -69,7 +69,6 @@ export class LiveLogBuffer {
     }
     for (const record of parsed) {
       record.lineNumber += firstLine - 1;
-      record.originalLineNumbers = record.originalLineNumbers.map((line) => line + firstLine - 1);
       record.id = `${this.generation}:${record.lineNumber}`;
       if (record.processName && record.processName !== record.process)
         this.processNames.set(record.process, record.processName);

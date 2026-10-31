@@ -463,7 +463,6 @@ export const parseLogLine = (
     thread: parsedFormat?.threadId || extractThread(line),
     process: parsedFormat?.processId || extractProcess(line),
     lineNumber: lineNumber,
-    originalLineNumbers: [lineNumber],
   };
 };
 
@@ -505,8 +504,6 @@ export const parseLogContent = (
       // a single record instead of a separate row per line.
       currentLog.raw = (currentLog.raw || '') + '\n' + line;
       currentLog.message = (currentLog.message || '') + '\n' + line;
-      if (!currentLog.originalLineNumbers) currentLog.originalLineNumbers = [currentLog.lineNumber];
-      currentLog.originalLineNumbers.push(idx + 1);
     } else {
       // If the first line(s) have no timestamp, treat as a log
       if (currentLog) logs.push(currentLog);

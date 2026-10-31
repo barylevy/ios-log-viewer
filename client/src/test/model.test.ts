@@ -54,6 +54,22 @@ describe('typed viewer state transitions', () => {
     act(() => result.current.removeStickyLog(result.current.stickyLogs[0].id));
     expect(result.current.stickyLogs).toHaveLength(0);
   });
+  it('keeps bookmark identity when a grouped file is combined with other tabs', () => {
+    const grouped = combineLogs([
+      { id: 'first.log', logs: logs() },
+      { id: 'second.log', logs: logs() },
+    ]);
+    const combined = combineLogs([{ id: 'group', logs: grouped }]);
+    const { result } = renderHook(useLogsModel);
+    act(() => result.current.setLogsForFile('group', grouped));
+    act(() => result.current.addStickyLog(grouped[0]));
+    act(() => result.current.setLogsForFile('Combined Files', combined));
+    expect(result.current.stickyLogs.map((bookmark) => bookmark.id)).toEqual([combined[0].id]);
+    expect(result.current.stickyLogs[0].id).not.toBe(combined[1].id);
+    act(() => result.current.updateStickyLogTitle(combined[0].id, 'Investigate'));
+    act(() => result.current.switchToFile('group'));
+    expect(result.current.stickyLogs[0]).toMatchObject({ id: grouped[0].id, title: 'Investigate' });
+  });
   it('does not resurrect an in-flight file after reset', async () => {
     let resolveLoad!: (value: LoadedLogFile) => void;
     vi.mocked(loadLogFile).mockImplementation(

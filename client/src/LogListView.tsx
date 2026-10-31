@@ -1,11 +1,8 @@
 import type {
   ReactNode,
   RefObject,
-  Dispatch,
-  SetStateAction,
   CSSProperties,
   DragEvent,
-  MouseEvent as ReactMouseEvent,
   ChangeEvent,
   KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
@@ -15,13 +12,6 @@ import type { LogRecord, LogId, LogFilters, StickyLog } from './domain/logRecord
 import type { CompiledQuery } from './domain/logQuery';
 import type { ColumnVisibility } from './domain/viewerTypes';
 
-interface ContextMenu {
-  x: number;
-  y: number;
-  timestamp: string;
-  lineNumber: number;
-  log: LogRecord;
-}
 interface ColumnLayout {
   id: string;
   size: number;
@@ -70,10 +60,8 @@ interface RowProps {
   isSelected: boolean;
   filters: LogFilters;
   index: number;
-  onFiltersChange: (changes: Partial<LogFilters>) => void;
   previousLog: LogRecord | null;
-  contextMenu: ContextMenu | null;
-  setContextMenu: Dispatch<SetStateAction<ContextMenu | null>>;
+  onOpenContextMenu: (target: LogMenuTarget) => void;
   onHover: (log: LogRecord | null) => void;
   pivotLog: LogRecord | null;
   stickyLogsSet: ReadonlySet<LogId>;
@@ -106,13 +94,8 @@ interface Props {
   viewKey?: string;
   isLiveMode?: boolean;
 }
-interface Group {
-  type: string;
-  date: string | null;
-  logs: (LogRecord & { originalIndex: number })[];
-}
-
 import HighlightedText from './components/HighlightedText';
+import LogContextMenu, { type LogMenuTarget } from './components/LogContextMenu';
 import {
   compileQuery,
   matchesQuery,
@@ -470,7 +453,7 @@ const LogItemComponent = ({
   filters,
   index,
   previousLog,
-  setContextMenu,
+  onOpenContextMenu,
   onHover,
   pivotLog,
   stickyLogsSet,
@@ -506,19 +489,7 @@ const LogItemComponent = ({
     return messageLines > 3 || estimatedLines > 3;
   }, [cleanedMessage]);
 
-  // Check if this log has a sticky label (O(1) Set lookup)
-  // Handle both direct ID match and baseId + sourceFile match for merged logs
-  const hasSticky = useMemo(() => {
-    if (stickyLogsSet.has(log.id)) return true;
-
-    // For merged logs, also check baseId + sourceFile combination
-    if (log.baseId && log.sourceFile) {
-      const compositeKey = `${log.baseId}_${log.sourceFile}`;
-      return stickyLogsSet.has(compositeKey);
-    }
-
-    return false;
-  }, [stickyLogsSet, log.id, log.baseId, log.sourceFile]);
+  const hasSticky = stickyLogsSet.has(log.id);
 
   // Calculate time gap threshold once and cache it
   const timeGapThreshold = useMemo(() => {
@@ -595,74 +566,6 @@ const LogItemComponent = ({
   };
   const logLevelColor = levelColors[logLevel];
 
-  // Handle right-click context menu
-  const handleContextMenu = useCallback(
-    (e: ReactMouseEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      if (log.timestamp) {
-        // Calculate menu dimensions dynamically
-        const calculateMenuHeight = () => {
-          const buttonHeight = 24; // py-1 = ~24px per button
-          const separatorHeight = 9; // my-1 + border = ~9px per separator
-          const containerPadding = 8; // py-1 on container = 8px total
-
-          // Count menu items dynamically
-          const menuItems = [
-            'Sticky Log Line',
-            'separator',
-            'Set as "From" log line index',
-            'Set as "To" log line index',
-            'separator',
-            'Set "From" date',
-            'Set "To" date',
-            'separator',
-            'Set Pivot Time',
-            pivotLog ? 'Clear Pivot Time' : null, // Only shown if pivotLog exists
-          ].filter(Boolean); // Remove null items
-
-          const buttons = menuItems.filter((item) => item !== 'separator').length;
-          const separators = menuItems.filter((item) => item === 'separator').length;
-
-          return buttons * buttonHeight + separators * separatorHeight + containerPadding;
-        };
-
-        const menuHeight = calculateMenuHeight();
-        const menuWidth = 144; // min-w-36 = 9rem = 144px
-
-        // Get viewport dimensions
-        const viewportHeight = window.innerHeight;
-        const viewportWidth = window.innerWidth;
-
-        // Calculate initial position
-        let x = e.clientX;
-        let y = e.clientY;
-
-        // Adjust horizontal position if menu would go off-screen
-        if (x + menuWidth > viewportWidth) {
-          x = viewportWidth - menuWidth - 10; // 10px margin from edge
-        }
-
-        // Adjust vertical position if menu would go off-screen
-        if (y + menuHeight > viewportHeight) {
-          y = y - menuHeight; // Position above the cursor
-          // Ensure it doesn't go above the top of the screen
-          if (y < 10) {
-            y = 10; // 10px margin from top
-          }
-        }
-
-        setContextMenu({
-          x: x,
-          y: y,
-          timestamp: log.timestamp,
-          lineNumber: log.lineNumber,
-          log: log,
-        });
-      }
-    },
-    [log.timestamp, pivotLog],
-  );
-
   return (
     <>
       <div
@@ -713,8 +616,11 @@ const LogItemComponent = ({
           }
           onHover(null);
         }}
-        onClick={() => onClick({ ...log, lineIndex: index + 1 })}
-        onContextMenu={handleContextMenu}
+        onClick={() => onClick(log)}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          if (log.timestamp) onOpenContextMenu({ x: event.clientX, y: event.clientY, log });
+        }}
       >
         <div style={{ display: 'flex', alignItems: 'flex-start' }}>
           {(() => {
@@ -869,13 +775,14 @@ const LogListView = ({
     return new Set<LogId>();
   });
 
-  const persistCollapsedColIds = useCallback((set: Set<string>) => {
+  useEffect(() => {
     try {
-      localStorage.setItem('logViewerCollapsedColumns', JSON.stringify([...set]));
+      localStorage.setItem('logViewerColumnSizing', JSON.stringify(columnSizing));
+      localStorage.setItem('logViewerCollapsedColumns', JSON.stringify([...collapsedColIds]));
     } catch {
-      /* ignore */
+      // Keep column changes in memory if browser storage is unavailable.
     }
-  }, []);
+  }, [columnSizing, collapsedColIds]);
 
   // Ref to outermost list container, used to query rendered cells for
   // measuring auto-fit widths.
@@ -899,6 +806,25 @@ const LogListView = ({
     return max;
   }, []);
 
+  const toggleColumnCollapse = (id: string) => {
+    const wasCollapsed = collapsedColIds.has(id);
+    const measured = computeAutoFitWidth(id);
+    const minSize = COLUMN_DEFS[id].minSize || 30;
+    const width = measured === null ? minSize : Math.max(minSize, Math.ceil(measured) + 2);
+    setCollapsedColIds((previous) => {
+      const next = new Set(previous);
+      if (wasCollapsed) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    setColumnSizing((previous) => {
+      const next = { ...previous };
+      if (wasCollapsed) delete next[id];
+      else next[id] = width;
+      return next;
+    });
+  };
+
   const table = useReactTable({
     data: EMPTY_DATA,
     columns: tableColumns,
@@ -907,17 +833,7 @@ const LogListView = ({
       columnVisibility: columnVisibilityState,
       columnSizing,
     },
-    onColumnSizingChange: (updater) => {
-      setColumnSizing((prev) => {
-        const next = typeof updater === 'function' ? updater(prev) : updater;
-        try {
-          localStorage.setItem('logViewerColumnSizing', JSON.stringify(next));
-        } catch {
-          /* ignore */
-        }
-        return next;
-      });
-    },
+    onColumnSizingChange: setColumnSizing,
     onColumnOrderChange: (updater) => {
       if (!onColumnOrderChange) return;
       const next = typeof updater === 'function' ? updater(columnOrder) : updater;
@@ -975,23 +891,10 @@ const LogListView = ({
     setDragOverColId(null);
   };
 
-  // Convert stickyLogs to Set for O(1) lookup instead of O(n) array.some()
-  // Include both direct IDs and composite keys (baseId + sourceFile) for cross-tab matching
-  const stickyLogsSet = useMemo(() => {
-    if (!stickyLogs || stickyLogs.length === 0) return new Set<LogId>();
-    const ids = new Set<LogId>();
-    stickyLogs.forEach((stickyLog) => {
-      ids.add(stickyLog.id);
-
-      // For All Tabs view: create composite key from sticky log's original data
-      // This matches against the log's baseId (which is its original id before combining)
-      if (stickyLog.sourceFile) {
-        // Sticky log from specific tab - match by its id + sourceFile
-        ids.add(`${stickyLog.id}_${stickyLog.sourceFile}`);
-      }
-    });
-    return ids;
-  }, [stickyLogs]);
+  const stickyLogsSet = useMemo(
+    () => new Set(stickyLogs.map((bookmark) => bookmark.id)),
+    [stickyLogs],
+  );
   const [currentStickyDate, setCurrentStickyDate] = useState<string | null>(null);
   const [targetNavigationDate, setTargetNavigationDate] = useState<string | null>(null);
   // Search navigation state
@@ -1008,7 +911,7 @@ const LogListView = ({
     }
   });
   // Shared context menu state for all log items
-  const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
+  const [contextMenu, setContextMenu] = useState<LogMenuTarget | null>(null);
   // Track which log item is currently being hovered
   const [hoveredLogId, setHoveredLogId] = useState<LogId | null>(null);
   // Track visible range for smart scrolling
@@ -1043,81 +946,23 @@ const LogListView = ({
     }));
   }, []);
 
-  // Group logs by date for sticky headers
-  const groupedLogs = useMemo(() => {
-    if (!logs || logs.length === 0) return [];
-
-    // Filter out user details/header lines since they're shown in the header
-    const filteredLogs = logs.filter((log) => {
-      const message = log.message || log.raw || '';
-      const trimmedMessage = message.trim();
-
-      // Filter out header/user details lines
-      return !(
-        trimmedMessage.startsWith('User:') ||
-        trimmedMessage.startsWith('Account:') ||
-        trimmedMessage.startsWith('Client version:') ||
-        trimmedMessage.startsWith('OS version:')
-      );
-    });
-
-    const groups: Group[] = [];
-    let currentDate: string | null = null;
-    let currentGroup: Group['logs'] = [];
-
-    filteredLogs.forEach((log, index) => {
-      const logDate = log.displayDate;
-
-      // If this log has a date
-      if (logDate && logDate !== currentDate) {
-        // Save previous group if it exists
-        if (currentGroup.length > 0) {
-          groups.push({
-            type: 'group',
-            date: currentDate,
-            logs: currentGroup,
-          });
-        }
-
-        // Start new group
-        currentDate = logDate;
-        currentGroup = [{ ...log, originalIndex: index }];
-      } else {
-        // Log doesn't have a date or has the same date
-        // Use the current date (could be null for logs without dates)
-        currentGroup.push({ ...log, originalIndex: index });
-      }
-    });
-
-    // Add the last group
-    if (currentGroup.length > 0) {
-      groups.push({
-        type: 'group',
-        date: currentDate,
-        logs: currentGroup,
-      });
-    }
-
-    return groups;
-  }, [logs]);
-
-  // Flatten for React Virtuoso - only logs, no separators - optimized dependencies
+  // Undated records inherit the preceding date for separators and date navigation.
   const flatLogs = useMemo(() => {
-    if (!groupedLogs || groupedLogs.length === 0) return [];
-
-    const items: (LogRecord & { originalIndex: number; date: string | null })[] = [];
-    groupedLogs.forEach((group) => {
-      // Add logs from this group with date metadata
-      group.logs.forEach((log) => {
-        items.push({
-          ...log,
-          date: group.date, // Store date for sticky header calculation
-        });
-      });
-    });
-
-    return items;
-  }, [groupedLogs]); // Removed unnecessary filter dependencies
+    const rows: (LogRecord & { date: string | null })[] = [];
+    let date: string | null = null;
+    for (const log of logs) {
+      const message = (log.message || log.raw || '').trim();
+      if (
+        ['User:', 'Account:', 'Client version:', 'OS version:'].some((prefix) =>
+          message.startsWith(prefix),
+        )
+      )
+        continue;
+      if (log.displayDate) date = log.displayDate;
+      rows.push({ ...log, date });
+    }
+    return rows;
+  }, [logs]);
   const highlightQueries = useMemo(
     () => ({
       filter: compileQuery(filters.searchText, filters.filterMode, filters.filterCaseSensitive),
@@ -1205,23 +1050,6 @@ const LogListView = ({
     };
   }, [goToMatch]);
 
-  // Close context menu when clicking elsewhere
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (!(e.target instanceof Element)) return;
-      // Check if the click is outside the context menu
-      if (contextMenu && !e.target.closest('.context-menu')) {
-        e.stopPropagation();
-        e.preventDefault();
-        setContextMenu(null);
-      }
-    };
-    if (contextMenu) {
-      document.addEventListener('click', handleClickOutside, true);
-      return () => document.removeEventListener('click', handleClickOutside, true);
-    }
-  }, [contextMenu]);
-
   // Handle keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1281,28 +1109,17 @@ const LogListView = ({
         // Priority 1: Use hovered log if available
         if (hoveredLogId !== null) {
           targetLog = logs.find((log) => log.id === hoveredLogId);
-          console.log('Space key triggered for hovered log:', hoveredLogId);
         }
         // Priority 2: If no hovered log but there's a selected log (modal open), use that
         else if (selectedLogId !== null) {
           targetLog = logs.find((log) => log.id === selectedLogId);
-          console.log('Space key triggered for selected log:', selectedLogId);
         }
         // Priority 3: If no hovered or selected log but there's a highlighted log, use that
         else if (highlightedLogId !== null) {
           targetLog = logs.find((log) => log.id === highlightedLogId);
-          console.log('Space key triggered for highlighted log:', highlightedLogId);
         }
 
-        if (targetLog && onLogClick) {
-          // Find the index of the target log in flatLogs to get the correct line number
-          const logIndex = flatLogs.findIndex((log) => log.id === targetLog.id);
-          if (logIndex !== -1) {
-            onLogClick({ ...targetLog, lineIndex: logIndex + 1 });
-          } else {
-            onLogClick(targetLog);
-          }
-        }
+        if (targetLog) onLogClick(targetLog);
       }
     };
 
@@ -1415,14 +1232,13 @@ const LogListView = ({
     return () => window.removeEventListener('scrollToLogIndex', handleScrollToLog);
   }, [highlightLog]);
 
-  const setRangeFilter = (kind: RangeBoundary) => {
-    if (!contextMenu) return;
+  const setRangeFilter = (kind: RangeBoundary, log: LogRecord) => {
     const isRow = kind === 'rowFrom' || kind === 'rowTo';
     const isFrom = kind === 'rowFrom' || kind === 'dateFrom';
     const value = isRow
-      ? String(contextMenu.lineNumber)
-      : contextMenu.log.timestampMs !== null
-        ? new Date(contextMenu.log.timestampMs).toISOString()
+      ? String(log.lineNumber)
+      : log.timestampMs !== null
+        ? new Date(log.timestampMs).toISOString()
         : '';
     if (value) {
       onFiltersChange({ searchText: updateQueryRange(filters.searchText, kind, value) });
@@ -1439,45 +1255,8 @@ const LogListView = ({
         }, 100);
       }
     }
-    setContextMenu(null);
   };
-
-  // Pivot time handlers
-  const handleSetPivot = useCallback(() => {
-    if (onSetPivot && contextMenu) {
-      const log = flatLogs.find((l) => l.lineNumber === contextMenu.lineNumber);
-      if (log) {
-        onSetPivot(log);
-      }
-    }
-    setContextMenu(null);
-  }, [onSetPivot, contextMenu, flatLogs]);
-
-  const handleClearPivot = useCallback(() => {
-    if (onClearPivot) {
-      onClearPivot();
-    }
-    setContextMenu(null);
-  }, [onClearPivot]);
-
-  // ===== STICKY LOG FUNCTIONALITY =====
-  const handleAddStickyLog = useCallback(() => {
-    if (onAddStickyLog && contextMenu) {
-      const log = contextMenu.log;
-      const lineNumber = contextMenu.lineNumber;
-
-      if (log && lineNumber) {
-        // Create sticky log object with line number and cleaned message for tooltip
-        const stickyLogData = {
-          ...log,
-          lineNumber: lineNumber,
-          cleanedMessage: cleanMessage(log.message), // Add cleaned message for tooltip
-        };
-        onAddStickyLog(stickyLogData);
-      }
-    }
-    setContextMenu(null);
-  }, [onAddStickyLog, contextMenu]);
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
   // Validate go to line input
   const validateGoToLineInput = useCallback(
@@ -1565,40 +1344,21 @@ const LogListView = ({
     [handleGoToLine],
   );
 
-  // Get all unique dates from allLogs (sorted) and create a mapping to display dates
-  const { allDates, dateToDisplay } = useMemo<{
-    allDates: string[];
-    dateToDisplay: Record<string, string>;
-  }>(() => {
-    if (!allLogs || allLogs.length === 0) return { allDates: [], dateToDisplay: {} };
-
-    // Group logs by displayDate and track first timestamp of each date
-    const dateMap = new Map<string, number>();
-    allLogs.forEach((log) => {
-      const displayDate = log.displayDate;
-      const timestampMs = log.timestampMs;
-      if (displayDate && timestampMs) {
-        if (!dateMap.has(displayDate)) {
-          dateMap.set(displayDate, timestampMs);
-        }
+  // Order source dates by their first timestamp, independently of the active filter.
+  const allDates = useMemo(() => {
+    const firstTimestampByDate = new Map<string, number>();
+    for (const log of allLogs || []) {
+      if (
+        log.displayDate &&
+        log.timestampMs !== null &&
+        !firstTimestampByDate.has(log.displayDate)
+      ) {
+        firstTimestampByDate.set(log.displayDate, log.timestampMs);
       }
-    });
-
-    // Sort dates by their first timestamp
-    const sortedDates = Array.from(dateMap.entries())
-      .sort((a, b) => a[1] - b[1]) // Sort by timestampMs
-      .map(([date]) => date); // Extract just the date strings
-
-    // Create mapping (identity mapping since we're using displayDate directly)
-    const mapping: Record<string, string> = {};
-    sortedDates.forEach((date) => {
-      mapping[date] = date;
-    });
-
-    return {
-      allDates: sortedDates,
-      dateToDisplay: mapping,
-    };
+    }
+    return [...firstTimestampByDate.entries()]
+      .sort((left, right) => left[1] - right[1])
+      .map(([date]) => date);
   }, [allLogs]);
 
   // Find current date index for navigation
@@ -1688,7 +1448,7 @@ const LogListView = ({
                 }`}
                 title={
                   currentDateIndex > 0
-                    ? `Go to ${dateToDisplay[allDates[currentDateIndex - 1]] || allDates[currentDateIndex - 1]}`
+                    ? `Go to ${allDates[currentDateIndex - 1]}`
                     : 'No previous date'
                 }
               >
@@ -1716,7 +1476,7 @@ const LogListView = ({
               >
                 {allDates.map((date) => (
                   <option key={date} value={date}>
-                    {dateToDisplay[date] || date}
+                    {date}
                   </option>
                 ))}
               </select>
@@ -1732,7 +1492,7 @@ const LogListView = ({
                 }`}
                 title={
                   currentDateIndex < allDates.length - 1
-                    ? `Go to ${dateToDisplay[allDates[currentDateIndex + 1]] || allDates[currentDateIndex + 1]}`
+                    ? `Go to ${allDates[currentDateIndex + 1]}`
                     : 'No next date'
                 }
               >
@@ -1801,57 +1561,10 @@ const LogListView = ({
                     onMouseDown={header.getResizeHandler()}
                     onTouchStart={header.getResizeHandler()}
                     onClick={(e) => e.stopPropagation()}
-                    onDoubleClick={(e) => {
-                      // Double-click the separator: "attach" this column to
-                      // the next one by removing its right-edge padding and
-                      // shrinking its width to fit just its content.
-                      // Double-clicking again restores the normal gap.
-                      e.stopPropagation();
-                      e.preventDefault();
-                      const wasCollapsed = collapsedColIds.has(id);
-                      if (wasCollapsed) {
-                        // Restore: remove from collapsed set; clear any stored
-                        // width so the column returns to its default size.
-                        setCollapsedColIds((prev) => {
-                          const next = new Set(prev);
-                          next.delete(id);
-                          persistCollapsedColIds(next);
-                          return next;
-                        });
-                        setColumnSizing((prev) => {
-                          if (!(id in prev)) return prev;
-                          const next = { ...prev };
-                          delete next[id];
-                          try {
-                            localStorage.setItem('logViewerColumnSizing', JSON.stringify(next));
-                          } catch {
-                            /* ignore */
-                          }
-                          return next;
-                        });
-                        return;
-                      }
-                      // Mark as collapsed first so the next render uses
-                      // padding-right=0; measure the inner content to size it.
-                      const measured = computeAutoFitWidth(id);
-                      const minSize = def.minSize || 30;
-                      const target =
-                        measured != null ? Math.max(minSize, Math.ceil(measured) + 2) : minSize;
-                      setCollapsedColIds((prev) => {
-                        const next = new Set(prev);
-                        next.add(id);
-                        persistCollapsedColIds(next);
-                        return next;
-                      });
-                      setColumnSizing((prev) => {
-                        const next = { ...prev, [id]: target };
-                        try {
-                          localStorage.setItem('logViewerColumnSizing', JSON.stringify(next));
-                        } catch {
-                          /* ignore */
-                        }
-                        return next;
-                      });
+                    onDoubleClick={(event) => {
+                      event.stopPropagation();
+                      event.preventDefault();
+                      toggleColumnCollapse(id);
                     }}
                     onDragStart={(e) => e.preventDefault()}
                     draggable={false}
@@ -1917,10 +1630,8 @@ const LogListView = ({
                   isSelected={selectedLogId === log.id}
                   filters={filters}
                   index={index}
-                  onFiltersChange={onFiltersChange}
                   previousLog={previousLog}
-                  contextMenu={contextMenu}
-                  setContextMenu={setContextMenu}
+                  onOpenContextMenu={setContextMenu}
                   onHover={handleHover}
                   pivotLog={pivotLog}
                   stickyLogsSet={stickyLogsSet}
@@ -1939,73 +1650,16 @@ const LogListView = ({
         />
       </div>
 
-      {/* Context Menu */}
       {contextMenu && (
-        <div
-          className="context-menu fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1 min-w-36"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            onClick={handleAddStickyLog}
-            className="w-full px-2 py-1 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
-          >
-            Sticky Log Line
-          </button>
-
-          {/* Separator */}
-          <div className="border-t border-gray-200 dark:border-gray-600 my-1"></div>
-
-          <button
-            onClick={() => setRangeFilter('rowFrom')}
-            className="w-full px-2 py-1 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
-          >
-            Set as "From" log line index
-          </button>
-          <button
-            onClick={() => setRangeFilter('rowTo')}
-            className="w-full px-2 py-1 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
-          >
-            Set as "To" log line index
-          </button>
-
-          {/* Separator */}
-          <div className="border-t border-gray-200 dark:border-gray-600 my-1"></div>
-
-          <button
-            onClick={() => setRangeFilter('dateFrom')}
-            className="w-full px-2 py-1 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
-          >
-            Set "From" date
-          </button>
-          <button
-            onClick={() => setRangeFilter('dateTo')}
-            className="w-full px-2 py-1 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
-          >
-            Set "To" date
-          </button>
-
-          {/* Separator */}
-          <div className="border-t border-gray-200 dark:border-gray-600 my-1"></div>
-
-          <button
-            onClick={handleSetPivot}
-            className="w-full px-2 py-1 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
-          >
-            Set Pivot Time
-          </button>
-          <button
-            onClick={handleClearPivot}
-            disabled={!pivotLog}
-            className={`w-full px-2 py-1 text-left text-xs ${
-              pivotLog
-                ? 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
-                : 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
-            }`}
-          >
-            Clear Pivot Time
-          </button>
-        </div>
+        <LogContextMenu
+          target={contextMenu}
+          hasPivot={pivotLog !== null}
+          onRangeChange={setRangeFilter}
+          onSetPivot={onSetPivot}
+          onClearPivot={onClearPivot}
+          onAddStickyLog={onAddStickyLog}
+          onClose={closeContextMenu}
+        />
       )}
 
       {/* Go to Line Dialog */}
