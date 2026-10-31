@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { parseLogContent, parseLogLine } from '../LogParser';
-import { compileQuery, filterLogs, highlightSegments, matchesQuery } from '../domain/logQuery';
+import {
+  compileQuery,
+  filterLogs,
+  highlightSegments,
+  matchesQuery,
+  updateQueryRange,
+  type RangeBoundary,
+} from '../domain/logQuery';
 import { createDefaultFilters } from '../domain/logRecord';
 import { parseTimestamp } from '../domain/timestamps';
 import { combineLogs } from '../domain/combineLogs';
@@ -82,6 +89,105 @@ describe('one expression grammar for filters and search', () => {
         .join(''),
     ).toBe('error warning');
   });
+});
+
+describe('editing query ranges', () => {
+  it.each<{ boundary: RangeBoundary; value: string; expected: string }>([
+    { boundary: 'rowFrom', value: '3', expected: '#3 :: #9' },
+    { boundary: 'rowTo', value: '8', expected: '#1 :: #8' },
+    { boundary: 'dateFrom', value: '2026-10-31', expected: '#1 :: #9 || #2026-10-31 ::' },
+    { boundary: 'dateTo', value: '2026-10-31', expected: '#1 :: #9 || :: #2026-10-31' },
+  ])('updates $boundary without dropping other bounds', ({ boundary, value, expected }) => {
+    const query = updateQueryRange('#1::#9', boundary, value);
+    expect(query).toBe(expected);
+    expect(compileQuery(query).error).toBeNull();
+  });
+
+  it('keeps the upper date when replacing the lower date', () => {
+    const query = updateQueryRange('#2026-10-30 :: #2026-10-31', 'dateFrom', '2026-10-29');
+    expect(query).toBe('#2026-10-29 :: #2026-10-31');
+    expect(matchesQuery(compileQuery(query), record('included'))).toBe(true);
+    expect(
+      matchesQuery(compileQuery(query), {
+        ...record('later'),
+        timestampMs: parseTimestamp('2026-11-01'),
+      }),
+    ).toBe(false);
+  });
+
+  it.each(['#2 :: #2026-10-31', '#2026-10-31 :: #2'])(
+    'preserves mixed row/date range %s',
+    (query) => {
+      const updated = updateQueryRange(query, 'rowFrom', '2');
+      const compiled = compileQuery(updated);
+      expect(compiled.error).toBeNull();
+      expect(matchesQuery(compiled, record('before', 0, 0))).toBe(false);
+      expect(matchesQuery(compiled, record('included', 0, 1))).toBe(true);
+    },
+  );
+
+  it('retains grouping, negation, and gap expressions when replacing a range', () => {
+    const expression = '(error || warning) && !heartbeat || #gap=5';
+    const query = updateQueryRange(
+      '(error || warning) && !heartbeat || #1 :: #9 || #gap=5',
+      'rowFrom',
+      '2',
+    );
+    expect(query).toBe(`${expression} || #2 :: #9`);
+    expect(matchesQuery(compileQuery(query), record('warning', 0, 1))).toBe(true);
+    expect(matchesQuery(compileQuery(query), record('warning heartbeat', 0, 1))).toBe(false);
+  });
+
+  it('leaves quoted operators and quoted range syntax literal', () => {
+    const expression = '"error || warning" && "#1 :: #9"';
+    const query = updateQueryRange(expression, 'rowFrom', '2');
+    expect(query).toBe(`${expression} || #2 ::`);
+    expect(compileQuery(expression).rowStart).toBeNull();
+    expect(matchesQuery(compileQuery(query), record('error || warning #1 :: #9', 0, 1))).toBe(true);
+  });
+
+  it('applies every row and date constraint instead of only the first range', () => {
+    const query = compileQuery(
+      '#2 :: #4 || #2026-10-31T12:00:01.000Z :: #2026-10-31T12:00:03.000Z',
+    );
+    const timedRecord = (id: number, second: number) => ({
+      ...record('message', second, id),
+      timestampMs: Date.parse(`2026-10-31T12:00:0${second}.000Z`),
+    });
+    expect(query.error).toBeNull();
+    expect(matchesQuery(query, timedRecord(1, 2))).toBe(true);
+    expect(matchesQuery(query, timedRecord(0, 2))).toBe(false);
+    expect(matchesQuery(query, timedRecord(1, 4))).toBe(false);
+  });
+
+  it('retains the strictest unedited limit when ranges overlap', () => {
+    const text = updateQueryRange('#1 :: #2 || #1 :: #9', 'rowFrom', '2');
+    const query = compileQuery(text);
+    expect(query.rowStart).toBe(2);
+    expect(query.rowEnd).toBe(2);
+    expect(matchesQuery(query, record('included', 0, 1))).toBe(true);
+    expect(matchesQuery(query, record('outside', 0, 2))).toBe(false);
+  });
+
+  it.each(['[#1 :: #9]', '\\#1 :: #9'])(
+    'leaves regex classes and escaped range text untouched: %s',
+    (text) => {
+      const query = compileQuery(text, 'regex');
+      expect(query.error).toBeNull();
+      expect(query.rowStart).toBeNull();
+      expect(query.rowEnd).toBeNull();
+    },
+  );
+
+  it.each(['error && #2 :: #9 && warning', '(#2 :: #9) && error && warning'])(
+    'removes only the range from %s',
+    (text) => {
+      const query = compileQuery(text);
+      expect(query.error).toBeNull();
+      expect(matchesQuery(query, record('error warning', 0, 1))).toBe(true);
+      expect(matchesQuery(query, record('error', 0, 1))).toBe(false);
+    },
+  );
 });
 
 describe('timestamps', () => {

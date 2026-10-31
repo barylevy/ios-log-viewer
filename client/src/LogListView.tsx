@@ -113,12 +113,17 @@ interface Group {
 }
 
 import HighlightedText from './components/HighlightedText';
-import { compileQuery, matchesQuery } from './domain/logQuery';
+import {
+  compileQuery,
+  matchesQuery,
+  updateQueryRange,
+  type RangeBoundary,
+} from './domain/logQuery';
 import React, { memo, useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import { Virtuoso } from 'react-virtuoso';
 import { useReactTable, getCoreRowModel } from '@tanstack/react-table';
 import { LOG_LEVEL_MATRIX, CATO_COLORS } from './constants';
-import { extractTimeGapFromSearch, GAP_PATTERN } from './dateTimeUtils';
+import { extractTimeGapFromSearch } from './dateTimeUtils';
 import { cleanMessage } from './utils/logLevelColors';
 import { replaceProcessIdWithType } from './utils/processTypeMapper';
 import useRecordTextScale from './utils/useRecordTextScale';
@@ -454,175 +459,6 @@ const extractFileInfo = (log: LogRecord, previousLog: LogRecord | null): FileInf
   }
 
   return null;
-};
-
-// Helper function to clean and organize filters
-const cleanAndCombineFilters = (
-  currentFilter: string,
-  newFilterType: string,
-  newFilterValue: string,
-) => {
-  if (!currentFilter) return newFilterValue;
-
-  // Split by || and clean each part
-  const parts = currentFilter
-    .split('||')
-    .map((part) => part.trim())
-    .filter((part) => part);
-
-  // Extract existing filters
-  let rowFromFilter = null;
-  let rowToFilter = null;
-  let dateFromFilter = null;
-  let dateToFilter = null;
-  let gapFilter = null;
-  const otherFilters: string[] = [];
-
-  parts.forEach((part) => {
-    // Check for gap filter first
-    if (GAP_PATTERN.test(part)) {
-      gapFilter = part;
-      return;
-    }
-
-    // Check for mixed ranges first
-    const rowToDateMatch = part.match(
-      /^#(\d+) :: #(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}:\d{3})?)$/,
-    );
-    if (rowToDateMatch) {
-      rowFromFilter = `#${rowToDateMatch[1]} ::`;
-      dateToFilter = `:: #${rowToDateMatch[2]}`;
-      return;
-    }
-
-    const dateToRowMatch = part.match(
-      /^#(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}:\d{3})?) :: #(\d+)$/,
-    );
-    if (dateToRowMatch) {
-      dateFromFilter = `#${dateToRowMatch[1]} ::`;
-      rowToFilter = `:: #${dateToRowMatch[2]}`;
-      return;
-    }
-
-    // Regular patterns
-    if (part.match(/^#\d+ ::$/)) {
-      rowFromFilter = part;
-    } else if (part.match(/^:: #\d+$/)) {
-      rowToFilter = part;
-    } else if (part.match(/^#\d+ :: #\d+$/)) {
-      // Combined row filter
-      const match = part.match(/^#(\d+) :: #(\d+)$/);
-      if (match) {
-        rowFromFilter = `#${match[1]} ::`;
-        rowToFilter = `:: #${match[2]}`;
-      }
-    } else if (part.match(/^#\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}:\d{2}:\d{3})? ::$/)) {
-      dateFromFilter = part;
-    } else if (part.match(/^:: #\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}:\d{2}:\d{3})?$/)) {
-      dateToFilter = part;
-    } else if (
-      part.match(
-        /^#\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}:\d{2}:\d{3})? :: #\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}:\d{2}:\d{3})?$/,
-      )
-    ) {
-      // Combined date filter
-      const match = part.match(
-        /^#(\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}:\d{2}:\d{3})?) :: #(\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}:\d{2}:\d{3})?)$/,
-      );
-      if (match) {
-        dateFromFilter = `#${match[1]} ::`;
-        dateToFilter = `:: #${match[3]}`;
-      }
-    } else {
-      // Other filters (text search, etc.)
-      otherFilters.push(part);
-    }
-  });
-
-  // Apply the new filter
-  if (newFilterType === 'rowFrom') {
-    rowFromFilter = newFilterValue;
-  } else if (newFilterType === 'rowTo') {
-    rowToFilter = newFilterValue;
-  } else if (newFilterType === 'dateFrom') {
-    dateFromFilter = newFilterValue;
-  } else if (newFilterType === 'dateTo') {
-    dateToFilter = newFilterValue;
-  }
-
-  // Build the result - handle mixed ranges
-  const result = [];
-
-  // Add other filters first
-  if (otherFilters.length > 0) {
-    result.push(...otherFilters);
-  }
-
-  // Determine if we have a mixed range scenario
-  const hasRowFrom = !!rowFromFilter;
-  const hasRowTo = !!rowToFilter;
-  const hasDateFrom = !!dateFromFilter;
-  const hasDateTo = !!dateToFilter;
-
-  // Handle all range combinations
-  let rangeHandled = false;
-
-  // Mixed range: row from + date to
-  if (hasRowFrom && hasDateTo && !hasRowTo && !hasDateFrom) {
-    const fromNum = rowFromFilter!.replace('#', '').replace(' ::', '');
-    const toDate = dateToFilter!.replace(':: #', '');
-    const mixedRange = `#${fromNum} :: #${toDate}`;
-    result.push(mixedRange);
-    rangeHandled = true;
-  }
-  // Mixed range: date from + row to
-  else if (hasDateFrom && hasRowTo && !hasRowFrom && !hasDateTo) {
-    const fromDate = dateFromFilter!.replace('#', '').replace(' ::', '');
-    const toNum = rowToFilter!.replace(':: #', '');
-    const mixedRange = `#${fromDate} :: #${toNum}`;
-    result.push(mixedRange);
-    rangeHandled = true;
-  }
-  // Pure row range
-  else if (hasRowFrom && hasRowTo && !hasDateFrom && !hasDateTo) {
-    const fromNum = rowFromFilter!.replace('#', '').replace(' ::', '');
-    const toNum = rowToFilter!.replace(':: #', '');
-    const rowRange = `#${fromNum} :: #${toNum}`;
-    result.push(rowRange);
-    rangeHandled = true;
-  }
-  // Pure date range
-  else if (hasDateFrom && hasDateTo && !hasRowFrom && !hasRowTo) {
-    const fromDate = dateFromFilter!.replace('#', '').replace(' ::', '');
-    const toDate = dateToFilter!.replace(':: #', '');
-    const dateRange = `#${fromDate} :: #${toDate}`;
-    result.push(dateRange);
-    rangeHandled = true;
-  }
-
-  // Handle single filters only if no range was created
-  if (!rangeHandled) {
-    if (hasRowFrom) {
-      result.push(rowFromFilter);
-    }
-    if (hasRowTo) {
-      result.push(rowToFilter);
-    }
-    if (hasDateFrom) {
-      result.push(dateFromFilter);
-    }
-    if (hasDateTo) {
-      result.push(dateToFilter);
-    }
-  }
-
-  // Add gap filter if exists
-  if (gapFilter) {
-    result.push(gapFilter);
-  }
-
-  const finalResult = result.join(' || ');
-  return finalResult;
 };
 
 // Component definition
@@ -1311,29 +1147,6 @@ const LogListView = ({
     setCurrentMatchIndex(matchIndices.length ? 0 : -1);
   }, [filters.searchQuery]); // Only reset when search query changes
 
-  // Auto-scroll to selected log when it changes (for modal navigation)
-  // Disabled: This was causing unwanted scrolling when clicking on visible records
-  // The modal navigation (prev/next) doesn't need this since users can already see the highlighted record
-  // useEffect(() => {
-  //   if (selectedLogId && virtuosoRef.current && flatLogs.length > 0) {
-  //     const selectedIndex = flatLogs.findIndex(log => log.id === selectedLogId);
-  //     if (selectedIndex >= 0) {
-  //       // Only scroll if the item is not currently visible
-  //       const isVisible = visibleRange &&
-  //         selectedIndex >= visibleRange.startIndex &&
-  //         selectedIndex <= visibleRange.endIndex;
-
-  //       if (!isVisible) {
-  //         virtuosoRef.current.scrollToIndex({
-  //           index: selectedIndex,
-  //           align: 'center',
-  //           behavior: 'smooth'
-  //         });
-  //       }
-  //     }
-  //   }
-  // }, [selectedLogId, flatLogs, visibleRange]);
-
   // Next/Prev navigation
   const flashHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashHighlightForLog = useCallback(
@@ -1359,48 +1172,19 @@ const LogListView = ({
     [],
   );
 
-  const goToNextMatch = useCallback(() => {
-    if (!virtuosoRef.current || !matchIndices.length) return;
-    // Non-cyclic: stop if already at last match
-    if (currentMatchIndex >= matchIndices.length - 1) return;
-    const next = currentMatchIndex + 1;
-    const target = matchIndices[next];
-    // Scroll to match without opening modal
-    virtuosoRef.current.scrollToIndex({
-      index: target,
-      align: 'center',
-      behavior: 'auto',
-    });
-    setCurrentMatchIndex(next);
-    const targetLog = flatLogs[target];
-    if (targetLog) flashHighlightForLog(targetLog.id);
-    // Focus the target item after scrolling
-    setTimeout(() => {
-      const wrapper = itemRefs.current[target];
-      if (wrapper) wrapper.focus();
-    }, 100);
-  }, [currentMatchIndex, matchIndices, flatLogs, flashHighlightForLog]);
-  const goToPreviousMatch = useCallback(() => {
-    if (!virtuosoRef.current || !matchIndices.length) return;
-    // Non-cyclic: stop if already at first match
-    if (currentMatchIndex <= 0) return;
-    const prev = currentMatchIndex - 1;
-    const target = matchIndices[prev];
-    // Scroll to match without opening modal
-    virtuosoRef.current.scrollToIndex({
-      index: target,
-      align: 'center',
-      behavior: 'auto',
-    });
-    setCurrentMatchIndex(prev);
-    const targetLog = flatLogs[target];
-    if (targetLog) flashHighlightForLog(targetLog.id);
-    // Focus the target item after scrolling
-    setTimeout(() => {
-      const wrapper = itemRefs.current[target];
-      if (wrapper) wrapper.focus();
-    }, 100);
-  }, [currentMatchIndex, matchIndices, flatLogs, flashHighlightForLog]);
+  const goToMatch = useCallback(
+    (direction: -1 | 1) => {
+      const next = currentMatchIndex + direction;
+      if (!virtuosoRef.current || next < 0 || next >= matchIndices.length) return;
+      const target = matchIndices[next];
+      virtuosoRef.current.scrollToIndex({ index: target, align: 'center', behavior: 'auto' });
+      setCurrentMatchIndex(next);
+      const targetLog = flatLogs[target];
+      if (targetLog) flashHighlightForLog(targetLog.id);
+      setTimeout(() => itemRefs.current[target]?.focus(), 100);
+    },
+    [currentMatchIndex, matchIndices, flatLogs, flashHighlightForLog],
+  );
 
   // Notify parent when match position or total changes
   useEffect(() => {
@@ -1411,15 +1195,15 @@ const LogListView = ({
     }
   }, [currentMatchIndex, matchIndices, onSearchMatchUpdate]);
   useEffect(() => {
-    const handleNext = () => goToNextMatch();
-    const handlePrev = () => goToPreviousMatch();
+    const handleNext = () => goToMatch(1);
+    const handlePrev = () => goToMatch(-1);
     window.addEventListener('nextSearchMatch', handleNext);
     window.addEventListener('prevSearchMatch', handlePrev);
     return () => {
       window.removeEventListener('nextSearchMatch', handleNext);
       window.removeEventListener('prevSearchMatch', handlePrev);
     };
-  }, [goToNextMatch, goToPreviousMatch]);
+  }, [goToMatch]);
 
   // Close context menu when clicking elsewhere
   useEffect(() => {
@@ -1631,88 +1415,32 @@ const LogListView = ({
     return () => window.removeEventListener('scrollToLogIndex', handleScrollToLog);
   }, [highlightLog]);
 
-  // Context menu filter functions
-  const extractFullTimestampForFilter = (timestamp: string) => {
-    if (!timestamp) return '';
-    // Match YYYY-MM-DD HH:MM:SS:MS
-    const match = timestamp.match(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}:\d{3}/);
-    if (match) return match[0];
-    // If not matched, fallback to just the date
-    const dateMatch = timestamp.match(/\d{4}-\d{2}-\d{2}/);
-    return dateMatch ? dateMatch[0] : timestamp;
+  const setRangeFilter = (kind: RangeBoundary) => {
+    if (!contextMenu) return;
+    const isRow = kind === 'rowFrom' || kind === 'rowTo';
+    const isFrom = kind === 'rowFrom' || kind === 'dateFrom';
+    const value = isRow
+      ? String(contextMenu.lineNumber)
+      : contextMenu.log.timestampMs !== null
+        ? new Date(contextMenu.log.timestampMs).toISOString()
+        : '';
+    if (value) {
+      onFiltersChange({ searchText: updateQueryRange(filters.searchText, kind, value) });
+      if (isRow) {
+        // Wait for the filter to update the list before scrolling to its boundary.
+        setTimeout(() => {
+          if (isFrom || flatLogs.length > 0) {
+            virtuosoRef.current?.scrollToIndex({
+              index: isFrom ? 0 : flatLogs.length - 1,
+              align: isFrom ? 'start' : 'end',
+              behavior: 'smooth',
+            });
+          }
+        }, 100);
+      }
+    }
+    setContextMenu(null);
   };
-
-  const setAsFromFilter = useCallback(() => {
-    if (onFiltersChange && contextMenu) {
-      const currentFilter = filters.searchText || '';
-      const newFilter = cleanAndCombineFilters(
-        currentFilter,
-        'rowFrom',
-        `#${contextMenu.lineNumber} ::`,
-      );
-      onFiltersChange({ searchText: newFilter });
-
-      // Scroll to top after setting "From" filter
-      setTimeout(() => {
-        if (virtuosoRef.current) {
-          virtuosoRef.current.scrollToIndex({
-            index: 0,
-            align: 'start',
-            behavior: 'smooth',
-          });
-        }
-      }, 100); // Small delay to ensure filter is applied first
-    }
-    setContextMenu(null);
-  }, [onFiltersChange, contextMenu, filters.searchText]);
-
-  const setAsToFilter = useCallback(() => {
-    if (onFiltersChange && contextMenu) {
-      const currentFilter = filters.searchText || '';
-      const newFilter = cleanAndCombineFilters(
-        currentFilter,
-        'rowTo',
-        `:: #${contextMenu.lineNumber}`,
-      );
-      onFiltersChange({ searchText: newFilter });
-
-      // Scroll to bottom after setting "To" filter
-      setTimeout(() => {
-        if (virtuosoRef.current && flatLogs.length > 0) {
-          virtuosoRef.current.scrollToIndex({
-            index: flatLogs.length - 1,
-            align: 'end',
-            behavior: 'smooth',
-          });
-        }
-      }, 100); // Small delay to ensure filter is applied first
-    }
-    setContextMenu(null);
-  }, [onFiltersChange, contextMenu, filters.searchText, flatLogs.length]);
-
-  const setAsFromDateFilter = useCallback(() => {
-    if (onFiltersChange && contextMenu) {
-      const currentFilter = filters.searchText || '';
-      const fullTimestamp = extractFullTimestampForFilter(contextMenu.timestamp);
-      if (!fullTimestamp) return setContextMenu(null);
-
-      const newFilter = cleanAndCombineFilters(currentFilter, 'dateFrom', `#${fullTimestamp} ::`);
-      onFiltersChange({ searchText: newFilter });
-    }
-    setContextMenu(null);
-  }, [onFiltersChange, contextMenu, filters.searchText]);
-
-  const setAsToDateFilter = useCallback(() => {
-    if (onFiltersChange && contextMenu) {
-      const currentFilter = filters.searchText || '';
-      const fullTimestamp = extractFullTimestampForFilter(contextMenu.timestamp);
-      if (!fullTimestamp) return setContextMenu(null);
-
-      const newFilter = cleanAndCombineFilters(currentFilter, 'dateTo', `:: #${fullTimestamp}`);
-      onFiltersChange({ searchText: newFilter });
-    }
-    setContextMenu(null);
-  }, [onFiltersChange, contextMenu, filters.searchText]);
 
   // Pivot time handlers
   const handleSetPivot = useCallback(() => {
@@ -2229,13 +1957,13 @@ const LogListView = ({
           <div className="border-t border-gray-200 dark:border-gray-600 my-1"></div>
 
           <button
-            onClick={setAsFromFilter}
+            onClick={() => setRangeFilter('rowFrom')}
             className="w-full px-2 py-1 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
           >
             Set as "From" log line index
           </button>
           <button
-            onClick={setAsToFilter}
+            onClick={() => setRangeFilter('rowTo')}
             className="w-full px-2 py-1 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
           >
             Set as "To" log line index
@@ -2245,13 +1973,13 @@ const LogListView = ({
           <div className="border-t border-gray-200 dark:border-gray-600 my-1"></div>
 
           <button
-            onClick={setAsFromDateFilter}
+            onClick={() => setRangeFilter('dateFrom')}
             className="w-full px-2 py-1 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
           >
             Set "From" date
           </button>
           <button
-            onClick={setAsToDateFilter}
+            onClick={() => setRangeFilter('dateTo')}
             className="w-full px-2 py-1 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
           >
             Set "To" date

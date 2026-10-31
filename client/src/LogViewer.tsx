@@ -17,8 +17,7 @@ import LogViewerFilters from './LogViewerFilters';
 import LogTabs from './LogTabs';
 import SelectionFilesDialog from './SelectionFilesDialog';
 import useLogsModel from './useLogsModel';
-import { getFileIdentifier } from './utils/fileLoader';
-import { getFileDisplayName } from './utils/fileLoader';
+import { getFileIdentifier, getFileDisplayName } from './utils/fileLoader';
 import { saveSession, loadSession, clearSession } from './utils/sessionStorage';
 import {
   groupFilesByDirectoryAndFormat,

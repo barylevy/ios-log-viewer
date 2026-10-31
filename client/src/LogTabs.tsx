@@ -1,6 +1,6 @@
 import type { ViewerFile } from './domain/viewerTypes';
 import React, { useMemo } from 'react';
-import { getFileDisplayName, getFileFullName } from './useLogsModel';
+import { getFileDisplayName, getFileFullName } from './utils/fileLoader';
 
 interface Props {
   files: ViewerFile[];

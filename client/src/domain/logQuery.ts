@@ -18,6 +18,76 @@ export interface CompiledQuery {
   error: string | null;
 }
 
+export type RangeBoundary = 'rowFrom' | 'rowTo' | 'dateFrom' | 'dateTo';
+
+const RANGE_ENDPOINT =
+  '#(\\d{4}-\\d{2}-\\d{2}(?:[ T]\\d{2}:\\d{2}:\\d{2}(?:[:.]\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})?)?|\\d+)';
+const RANGE_PATTERN = new RegExp(`^(?:${RANGE_ENDPOINT})?\\s*::\\s*(?:${RANGE_ENDPOINT})?`);
+
+/** Ranges constrain the whole query. Quoted text and regex classes stay literal. */
+function readQueryRanges(text: string) {
+  const ranges: { from?: string; to?: string }[] = [];
+  let quoted = false;
+  let characterClass = false;
+  for (let index = 0; index < text.length; index++) {
+    const character = text[index];
+    if (character === '\\') {
+      index++;
+      continue;
+    }
+    if (character === '"' && !characterClass) quoted = !quoted;
+    if (quoted) continue;
+    if (character === '[') characterClass = true;
+    if (character === ']') characterClass = false;
+    if (characterClass || (character !== '#' && character !== ':')) continue;
+    if (index > 0 && !/[\s(|&]/.test(text[index - 1])) continue;
+    if (character === ':' && !/(?:^|\|\||&&|\()\s*$/.test(text.slice(0, index))) continue;
+    const match = RANGE_PATTERN.exec(text.slice(index));
+    if (!match || !/^(?:\s*(?:$|\|\||&&|\)))/.test(text.slice(index + match[0].length))) continue;
+    ranges.push({ from: match[1], to: match[2] });
+
+    let before = text.slice(0, index).trimEnd();
+    let after = text.slice(index + match[0].length).trimStart();
+    // Remove parentheses enclosing only the range, then one adjacent operator.
+    while (before.endsWith('(') && after.startsWith(')')) {
+      before = before.slice(0, -1).trimEnd();
+      after = after.slice(1).trimStart();
+    }
+    if (/^(\|\||&&)/.test(after)) after = after.slice(2).trimStart();
+    else before = before.replace(/(?:\|\||&&)$/, '').trimEnd();
+    text = `${before} ${after}`.trim();
+    index = -1;
+    quoted = false;
+    characterClass = false;
+  }
+  return { text, ranges };
+}
+
+/** Replace one boundary while retaining the expression and other range limits. */
+export function updateQueryRange(text: string, boundary: RangeBoundary, value: string): string {
+  const parsed = readQueryRanges(text);
+  const bounds: Record<RangeBoundary, string[]> = {
+    rowFrom: [],
+    rowTo: [],
+    dateFrom: [],
+    dateTo: [],
+  };
+  for (const range of parsed.ranges) {
+    if (range.from) bounds[/^\d+$/.test(range.from) ? 'rowFrom' : 'dateFrom'].push(range.from);
+    if (range.to) bounds[/^\d+$/.test(range.to) ? 'rowTo' : 'dateTo'].push(range.to);
+  }
+  bounds[boundary] = [value];
+  const starts = [...bounds.rowFrom, ...bounds.dateFrom];
+  const ends = [...bounds.rowTo, ...bounds.dateTo];
+  const clauses = [parsed.text];
+  for (let index = 0; index < Math.max(starts.length, ends.length); index++) {
+    clauses.push(
+      `${starts[index] ? `#${starts[index]} ` : ''}::${ends[index] ? ` #${ends[index]}` : ''}`,
+    );
+  }
+  return clauses.filter(Boolean).join(' || ');
+}
+
 export function searchableText(record: LogRecord): string {
   return [
     record.message,
@@ -122,35 +192,27 @@ export function compileQuery(
   };
   try {
     if (text.length > 4096) throw new Error('Filters must be at most 4096 characters.');
-    // Ranges constrain the whole query, preserving the viewer's existing range syntax.
-    const endpoint = '#(\\d{4}-\\d{2}-\\d{2}(?:[ T]\\d{2}:\\d{2}:\\d{2}(?:[:.]\\d{3})?)?|\\d+)';
-    const range = new RegExp(`(?:${endpoint})?\\s*::\\s*(?:${endpoint})?`);
-    const match = range.exec(text);
-    if (match) {
-      function applyEndpoint(value: string | undefined, start: boolean): void {
-        if (!value) return;
-        if (/^\d+$/.test(value)) {
-          if (start) result.rowStart = Number(value);
-          else result.rowEnd = Number(value);
-          return;
-        }
-        let time = parseTimestamp(value);
-        if (time === null) throw new Error('Invalid date in range.');
-        if (!start && value.length === 10) {
-          const end = new Date(time);
-          end.setDate(end.getDate() + 1);
-          time = end.getTime() - 1;
-        }
-        if (start) result.timeStart = time;
-        else result.timeEnd = time;
+    const parsed = readQueryRanges(text);
+    function applyEndpoint(value: string | undefined, start: boolean): void {
+      if (!value) return;
+      const isRow = /^\d+$/.test(value);
+      let limit = isRow ? Number(value) : parseTimestamp(value);
+      if (limit === null) throw new Error('Invalid date in range.');
+      if (!isRow && !start && value.length === 10) {
+        const end = new Date(limit);
+        end.setDate(end.getDate() + 1);
+        limit = end.getTime() - 1;
       }
-      applyEndpoint(match[1], true);
-      applyEndpoint(match[2], false);
-      text = text
-        .replace(range, '')
-        .replace(/^\s*(?:\|\||&&)|(?:\|\||&&)\s*$/g, '')
-        .trim();
+      const key = isRow ? (start ? 'rowStart' : 'rowEnd') : start ? 'timeStart' : 'timeEnd';
+      const previous = result[key];
+      result[key] =
+        previous === null ? limit : start ? Math.max(previous, limit) : Math.min(previous, limit);
     }
+    for (const range of parsed.ranges) {
+      applyEndpoint(range.from, true);
+      applyEndpoint(range.to, false);
+    }
+    text = parsed.text;
     if (text.trim()) result.expression = parseExpression(text, mode, caseSensitive);
     function collectHighlights(expression: Expression, excluded = false): void {
       if (expression.kind === 'term' && !excluded) result.highlights.push(expression.pattern);

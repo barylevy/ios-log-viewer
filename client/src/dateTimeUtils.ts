@@ -190,23 +190,3 @@ export const extractTimeGapFromSearch = (searchText: string): number => {
 
   return 0;
 };
-
-/**
- * Format time gap duration for display
- * @param {number} gapSeconds - Gap in seconds
- * @returns {string} - Formatted gap string
- */
-export const formatTimeGap = (gapSeconds: number): string => {
-  if (gapSeconds < 60) {
-    return `${gapSeconds.toFixed(1)}s`;
-  } else if (gapSeconds < 3600) {
-    const minutes = Math.floor(gapSeconds / 60);
-    const seconds = (gapSeconds % 60).toFixed(1);
-    return `${minutes}m ${seconds}s`;
-  } else {
-    const hours = Math.floor(gapSeconds / 3600);
-    const minutes = Math.floor((gapSeconds % 3600) / 60);
-    const seconds = (gapSeconds % 60).toFixed(1);
-    return `${hours}h ${minutes}m ${seconds}s`;
-  }
-};

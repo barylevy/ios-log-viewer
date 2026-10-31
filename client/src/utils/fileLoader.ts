@@ -71,8 +71,6 @@ export const getFileFullName = (fileId: string | null | undefined): string => {
   return fullPath;
 };
 
-export { parseHeaderInfo } from '../domain/logHeaders';
-
 export interface LoadedLogFile {
   fileId: string;
   logs: LogRecord[];

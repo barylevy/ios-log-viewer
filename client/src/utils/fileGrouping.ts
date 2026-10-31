@@ -85,24 +85,6 @@ export function groupFilesByPrefix(files: File[]) {
 }
 
 /**
- * Check if a file is likely part of a Windows log group
- * (has date/number suffix pattern suggesting it's part of a series)
- * @param {string} fileName - The file name
- * @returns {boolean} True if file appears to be part of a group
- */
-export function isPartOfFileGroup(fileName: string) {
-  const nameWithoutExt = fileName.replace(/\.(txt|log)$/i, '');
-
-  // Check for date patterns: 2024-01-15, 20240115, 2024_01_15
-  const hasDatePattern = /\d{4}[-_]?\d{2}[-_]?\d{2}/.test(nameWithoutExt);
-
-  // Check for number patterns: _001, _part1, _1, -001
-  const hasNumberPattern = /[_-](part|p)?\d+$/.test(nameWithoutExt);
-
-  return hasDatePattern || hasNumberPattern;
-}
-
-/**
  * Get a display name for a file group
  * @param {string} prefix - The group prefix
  * @param {File[]} files - The files in the group

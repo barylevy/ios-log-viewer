@@ -1,10 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
-import {
-  getFileIdentifier,
-  getFileDisplayName,
-  getFileFullName,
-  loadLogFile,
-} from './utils/fileLoader';
+import { getFileIdentifier, loadLogFile } from './utils/fileLoader';
 import { combineLogs } from './domain/combineLogs';
 import { filterLogs } from './domain/logQuery';
 import {
@@ -321,7 +316,6 @@ export default function useLogsModel() {
     [],
   );
   const highlightLog = useCallback((id: LogId | null) => dispatch({ type: 'highlight', id }), []);
-  const clearHighlight = useCallback(() => dispatch({ type: 'highlight', id: null }), []);
   const setLogFileHeaders = useCallback(
     (headers: FileHeaders) => dispatch({ type: 'headers', headers }),
     [],
@@ -453,7 +447,6 @@ export default function useLogsModel() {
     highlightedLogId: state.highlightedId,
     logFileHeaders: state.headersByFile,
     allFileLogs: state.logsByFile,
-    allFileFilters: state.filtersByFile,
     currentFileName: state.activeFileId,
     stickyLogs,
     loadLogs,
@@ -464,7 +457,6 @@ export default function useLogsModel() {
     updateFilters,
     updateFiltersForAllFiles,
     highlightLog,
-    clearHighlight,
     getCurrentFileHeaders,
     setLogsForFile,
     updateLogsBackground,
@@ -473,8 +465,6 @@ export default function useLogsModel() {
     removeLogsForFile,
     clearSavedFilters,
     resetModel,
-    getFileDisplayName,
-    getFileFullName,
     addStickyLog,
     removeStickyLog,
     clearAllStickyLogs,
@@ -482,5 +472,3 @@ export default function useLogsModel() {
     scrollToLog,
   };
 }
-
-export { getFileIdentifier, getFileDisplayName, getFileFullName } from './utils/fileLoader';

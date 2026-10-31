@@ -96,22 +96,7 @@ const LogViewerFilters = ({
   const [searchHistory, setSearchHistory] = useState<string[]>(() =>
     readStringHistory('logViewer_searchHistory'),
   );
-  const [filterMode, setFilterMode] = useState<MatchMode>(() => {
-    // Load filter mode from localStorage
-    const saved = localStorage.getItem('logViewer_filterMode');
-    return saved === 'regex' ? 'regex' : 'text';
-  });
-  const [searchMode, setSearchMode] = useState<MatchMode>(() => {
-    // Load search mode from localStorage
-    const saved = localStorage.getItem('logViewer_searchMode');
-    return saved === 'regex' ? 'regex' : 'text';
-  });
-  const [filterCaseSensitive, setFilterCaseSensitive] = useState(() => {
-    return localStorage.getItem('logViewer_filterCaseSensitive') === 'true';
-  });
-  const [searchCaseSensitive, setSearchCaseSensitive] = useState(() => {
-    return localStorage.getItem('logViewer_searchCaseSensitive') === 'true';
-  });
+  const { filterMode, searchMode, filterCaseSensitive, searchCaseSensitive } = filters;
 
   // === Saved filters ===
   const SAVED_FILTERS_KEY = 'logViewer_savedFilters';
@@ -150,131 +135,46 @@ const LogViewerFilters = ({
   const [filterDropdownPos, setFilterDropdownPos] = useState({ top: 0, left: 0 });
   const [searchDropdownPos, setSearchDropdownPos] = useState({ top: 0, left: 0 });
 
-  // Save filter mode to localStorage and propagate to parent
+  // The model owns preferences; this view only persists them for the next visit.
   useEffect(() => {
     localStorage.setItem('logViewer_filterMode', filterMode);
-    onFiltersChange({ filterMode });
-  }, [filterMode]);
-
-  // Save search mode to localStorage and propagate to parent
-  useEffect(() => {
     localStorage.setItem('logViewer_searchMode', searchMode);
-    onFiltersChange({ searchMode });
-  }, [searchMode]);
-
-  // Save case-sensitive flags to localStorage and propagate to parent
-  useEffect(() => {
     localStorage.setItem('logViewer_filterCaseSensitive', String(filterCaseSensitive));
-    onFiltersChange({ filterCaseSensitive });
-  }, [filterCaseSensitive]);
+    localStorage.setItem('logViewer_searchCaseSensitive', String(searchCaseSensitive));
+  }, [filterMode, searchMode, filterCaseSensitive, searchCaseSensitive]);
+
+  const rememberQuery = (field: 'searchText' | 'searchQuery') => {
+    const phrases = filters[field]
+      .split(/\|\||&&/)
+      .map((phrase) => phrase.trim().replace(/^\(|\)$/g, ''))
+      .filter(Boolean);
+    const setHistory = field === 'searchText' ? setFilterHistory : setSearchHistory;
+    setHistory((previous) => {
+      let history = previous;
+      for (const phrase of phrases) {
+        history = [phrase, ...history.filter((item) => item !== phrase)].slice(0, 50);
+      }
+      return history;
+    });
+  };
 
   useEffect(() => {
-    localStorage.setItem('logViewer_searchCaseSensitive', String(searchCaseSensitive));
-    onFiltersChange({ searchCaseSensitive });
-  }, [searchCaseSensitive]);
+    if (filterHistory.length)
+      localStorage.setItem('logViewer_filterHistory', JSON.stringify(filterHistory));
+    else localStorage.removeItem('logViewer_filterHistory');
+  }, [filterHistory]);
 
-  const handleFilterChange = <Key extends keyof LogFilters>(key: Key, value: LogFilters[Key]) => {
-    onFiltersChange({ [key]: value });
-  };
+  useEffect(() => {
+    if (searchHistory.length)
+      localStorage.setItem('logViewer_searchHistory', JSON.stringify(searchHistory));
+    else localStorage.removeItem('logViewer_searchHistory');
+  }, [searchHistory]);
 
-  // Save phrases to history when user finishes typing
-  const handleFilterBlur = () => {
-    const value = filters.searchText;
-    if (value && value.trim()) {
-      // Split by || and save each phrase individually
-      const phrases = value
-        .split(/\|\||&&/)
-        .map((phrase) => phrase.trim().replace(/^\(|\)$/g, ''))
-        .filter((phrase) => phrase.length > 0);
-      phrases.forEach((phrase) => saveToFilterHistory(phrase));
-    }
-  };
-
-  // Handle Enter key to also save phrases
-  const handleFilterKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      handleFilterBlur();
-    }
-  };
-
-  // Save search phrases to history when user finishes typing
-  const handleSearchBlur = () => {
-    const value = filters.searchQuery;
-    if (value && value.trim()) {
-      // Split by || and && and save each phrase individually
-      const phrases = value
-        .split(/\|\||&&/)
-        .map((phrase) => phrase.trim().replace(/^\(|\)$/g, ''))
-        .filter((phrase) => phrase.length > 0);
-      phrases.forEach((phrase) => saveToSearchHistory(phrase));
-    }
-  };
-
-  // Handle Enter key to also save search phrases
-  const handleSearchKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      handleSearchBlur();
-    }
-  };
-
-  // Save filter phrase to history
-  const saveToFilterHistory = (phrase: string) => {
-    setFilterHistory((prevHistory) => {
-      // Remove if already exists
-      const filtered = prevHistory.filter((item) => item !== phrase);
-      // Add to beginning
-      const newHistory = [phrase, ...filtered].slice(0, 50); // Keep max 50 items
-
-      // Save to localStorage
-      localStorage.setItem('logViewer_filterHistory', JSON.stringify(newHistory));
-
-      return newHistory;
-    });
-  };
-
-  // Add phrase to current filter
-  const addPhraseToFilter = (phrase: string) => {
-    const currentFilter = filters.searchText || '';
-    const newFilter = currentFilter ? `${currentFilter} || ${phrase}` : phrase;
-    handleFilterChange('searchText', newFilter);
-    setIsFilterHistoryOpen(false);
-  };
-
-  // Clear filter history
-  const clearFilterHistory = () => {
-    setFilterHistory([]);
-    localStorage.removeItem('logViewer_filterHistory');
-    setIsFilterHistoryOpen(false);
-  };
-
-  // Save search phrase to history
-  const saveToSearchHistory = (phrase: string) => {
-    setSearchHistory((prevHistory) => {
-      // Remove if already exists
-      const filtered = prevHistory.filter((item) => item !== phrase);
-      // Add to beginning
-      const newHistory = [phrase, ...filtered].slice(0, 50); // Keep max 50 items
-
-      // Save to localStorage
-      localStorage.setItem('logViewer_searchHistory', JSON.stringify(newHistory));
-
-      return newHistory;
-    });
-  };
-
-  // Add phrase to current search
-  const addPhraseToSearch = (phrase: string) => {
-    const currentSearch = filters.searchQuery || '';
-    const newSearch = currentSearch ? `${currentSearch} || ${phrase}` : phrase;
-    handleFilterChange('searchQuery', newSearch);
-    setIsSearchHistoryOpen(false);
-  };
-
-  // Clear search history
-  const clearSearchHistory = () => {
-    setSearchHistory([]);
-    localStorage.removeItem('logViewer_searchHistory');
-    setIsSearchHistoryOpen(false);
+  const addHistoryPhrase = (field: 'searchText' | 'searchQuery', phrase: string) => {
+    const current = filters[field];
+    onFiltersChange({ [field]: current ? `${current} || ${phrase}` : phrase });
+    if (field === 'searchText') setIsFilterHistoryOpen(false);
+    else setIsSearchHistoryOpen(false);
   };
 
   // Close dropdown when clicking outside (using click event to allow checkbox selection)
@@ -461,7 +361,7 @@ const LogViewerFilters = ({
         {/* Search Mode Dropdown */}
         <select
           value={searchMode}
-          onChange={(e) => setSearchMode(e.target.value as MatchMode)}
+          onChange={(e) => onFiltersChange({ searchMode: e.target.value as MatchMode })}
           className="h-6 px-1 border-none bg-transparent text-gray-700 dark:text-gray-300 text-xs focus:outline-none cursor-pointer"
           title="Switch between text and regex search"
         >
@@ -474,9 +374,11 @@ const LogViewerFilters = ({
           type="text"
           placeholder="Search in record logs. Add #gap=5 for time gap indicators..."
           value={filters.searchQuery || ''}
-          onChange={(e) => handleFilterChange('searchQuery', e.target.value)}
-          onBlur={handleSearchBlur}
-          onKeyDown={handleSearchKeyDown}
+          onChange={(e) => onFiltersChange({ searchQuery: e.target.value })}
+          onBlur={() => rememberQuery('searchQuery')}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') rememberQuery('searchQuery');
+          }}
           className="flex-1 min-w-0 h-6 px-2 border-none focus:outline-none bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
           title="Search in logs. Add #gap=5 to show visual separators between records with 5+ second gaps. Combine with search terms: 'error #gap=3' shows errors with gap indicators."
         />
@@ -519,7 +421,7 @@ const LogViewerFilters = ({
             </>
           )}
           <button
-            onClick={() => setSearchCaseSensitive((v) => !v)}
+            onClick={() => onFiltersChange({ searchCaseSensitive: !searchCaseSensitive })}
             title={
               searchCaseSensitive
                 ? 'Case sensitive — click to make case insensitive'
@@ -537,7 +439,7 @@ const LogViewerFilters = ({
             <>
               <div className="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
               <button
-                onClick={() => handleFilterChange('searchQuery', '')}
+                onClick={() => onFiltersChange({ searchQuery: '' })}
                 className="h-6 px-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 border-none focus:outline-none bg-transparent"
               >
                 ×
@@ -588,7 +490,7 @@ const LogViewerFilters = ({
               {searchHistory.slice(0, 10).map((phrase, index) => (
                 <button
                   key={index}
-                  onClick={() => addPhraseToSearch(phrase)}
+                  onClick={() => addHistoryPhrase('searchQuery', phrase)}
                   className="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 border-b border-gray-100 dark:border-gray-600 last:border-b-0"
                   title={`Add "${phrase}" to search`}
                 >
@@ -599,7 +501,10 @@ const LogViewerFilters = ({
               {/* Clear History Button */}
               <div className="border-t border-gray-200 dark:border-gray-600 mt-1">
                 <button
-                  onClick={clearSearchHistory}
+                  onClick={() => {
+                    setSearchHistory([]);
+                    setIsSearchHistoryOpen(false);
+                  }}
                   className="w-full px-3 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 text-center"
                 >
                   Clear History
@@ -623,7 +528,7 @@ const LogViewerFilters = ({
             {/* Filter Mode Dropdown */}
             <select
               value={filterMode}
-              onChange={(e) => setFilterMode(e.target.value as MatchMode)}
+              onChange={(e) => onFiltersChange({ filterMode: e.target.value as MatchMode })}
               className="h-6 px-1 border-none bg-transparent text-gray-700 dark:text-gray-300 text-xs focus:outline-none cursor-pointer"
               title="Switch between text and regex search"
             >
@@ -636,16 +541,18 @@ const LogViewerFilters = ({
               type="text"
               placeholder="Filter logs: text || terms, !exclude, #gap=5, #row::, #date:: ranges. Hover for full guide."
               value={filters.searchText}
-              onChange={(e) => handleFilterChange('searchText', e.target.value)}
-              onBlur={handleFilterBlur}
-              onKeyDown={handleFilterKeyDown}
+              onChange={(e) => onFiltersChange({ searchText: e.target.value })}
+              onBlur={() => rememberQuery('searchText')}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') rememberQuery('searchText');
+              }}
               className="flex-1 min-w-0 h-6 px-2 border-none focus:outline-none bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
               title={FILTER_TOOLTIP}
             />
             {/* Right-side controls: Aa case-toggle, clear, history chevron */}
             <div className="flex items-center flex-shrink-0">
               <button
-                onClick={() => setFilterCaseSensitive((v) => !v)}
+                onClick={() => onFiltersChange({ filterCaseSensitive: !filterCaseSensitive })}
                 title={
                   filterCaseSensitive
                     ? 'Case sensitive — click to make case insensitive'
@@ -663,7 +570,7 @@ const LogViewerFilters = ({
                 <>
                   <div className="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
                   <button
-                    onClick={() => handleFilterChange('searchText', '')}
+                    onClick={() => onFiltersChange({ searchText: '' })}
                     className="h-6 px-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 border-none focus:outline-none bg-transparent"
                   >
                     ×
@@ -715,7 +622,7 @@ const LogViewerFilters = ({
                 {filterHistory.slice(0, 10).map((phrase, index) => (
                   <button
                     key={index}
-                    onClick={() => addPhraseToFilter(phrase)}
+                    onClick={() => addHistoryPhrase('searchText', phrase)}
                     className="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 border-b border-gray-100 dark:border-gray-600 last:border-b-0"
                     title={`Add "${phrase}" to filter`}
                   >
@@ -726,7 +633,10 @@ const LogViewerFilters = ({
                 {/* Clear History Button */}
                 <div className="border-t border-gray-200 dark:border-gray-600 mt-1">
                   <button
-                    onClick={clearFilterHistory}
+                    onClick={() => {
+                      setFilterHistory([]);
+                      setIsFilterHistoryOpen(false);
+                    }}
                     className="w-full px-3 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 text-center"
                   >
                     Clear History
@@ -817,7 +727,7 @@ const LogViewerFilters = ({
         min="0"
         max="50"
         value={filters.contextLines || 0}
-        onChange={(e) => handleFilterChange('contextLines', parseInt(e.target.value) || 0)}
+        onChange={(e) => onFiltersChange({ contextLines: parseInt(e.target.value) || 0 })}
         className="w-16 px-2 h-6 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs"
         placeholder="0"
       />
@@ -830,7 +740,7 @@ const LogViewerFilters = ({
       <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Module:</label>
       <select
         value={filters.selectedModule || 'all'}
-        onChange={(e) => handleFilterChange('selectedModule', e.target.value)}
+        onChange={(e) => onFiltersChange({ selectedModule: e.target.value })}
         className="px-2 h-6 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs w-28 max-w-28 truncate"
         title={
           filters.selectedModule && filters.selectedModule !== 'all'
@@ -884,12 +794,6 @@ const LogViewerFilters = ({
   const applyFilterData = (input: unknown, name: string, handle: FileSystemFileHandle | null) => {
     const filterData = readFilterData(input);
     onFiltersChange(filterData);
-    if (filterData.filterMode !== undefined) setFilterMode(filterData.filterMode);
-    if (filterData.searchMode !== undefined) setSearchMode(filterData.searchMode);
-    if (filterData.filterCaseSensitive !== undefined)
-      setFilterCaseSensitive(filterData.filterCaseSensitive);
-    if (filterData.searchCaseSensitive !== undefined)
-      setSearchCaseSensitive(filterData.searchCaseSensitive);
     fileHandleRef.current = handle;
     setActiveFilterName(name);
   };

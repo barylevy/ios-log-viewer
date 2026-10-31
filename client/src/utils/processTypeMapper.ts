@@ -1,82 +1,21 @@
-/**
- * Maps module/class names to process types.
- * Mappings are loaded from processTypeMappings.json — add new entries there.
- */
-
 import mappingsJson from './processTypeMappings.json';
 
-// Process type constants (kept for backwards-compat with any future callers)
-export const PROCESS_TYPES = {
-  UI: 'UI',
-  EXTENSION: 'Extn',
-  DAEMON: 'Daemon',
-  USER_AGENT: 'UsrAgnt',
-};
+// Add mappings in processTypeMappings.json. Exact matches take precedence.
+const moduleProcessTypes: Readonly<Record<string, string>> = mappingsJson;
 
-// Mutable copy so addModuleMapping / runtime overrides still work
-const MODULE_TO_PROCESS_TYPE: Record<string, string> = { ...mappingsJson };
-
-/**
- * Get process type from module name
- * @param {string} moduleName - The module/class name from the log
- * @returns {string|null} - The process type or null if not found
- */
-export const getProcessTypeFromModule = (moduleName: string): string | null => {
+export function getProcessTypeFromModule(moduleName: string): string | null {
   if (!moduleName) return null;
+  if (moduleProcessTypes[moduleName]) return moduleProcessTypes[moduleName];
 
-  // Direct match
-  if (MODULE_TO_PROCESS_TYPE[moduleName]) {
-    return MODULE_TO_PROCESS_TYPE[moduleName];
+  for (const [className, processType] of Object.entries(moduleProcessTypes)) {
+    if (moduleName.includes(className)) return processType;
   }
-
-  // Check if module name contains any of the mapped class names
-  for (const [className, processType] of Object.entries(MODULE_TO_PROCESS_TYPE)) {
-    if (moduleName.includes(className)) {
-      return processType;
-    }
-  }
-
   return null;
-};
+}
 
-/**
- * Add a new module to process type mapping
- * This allows easy extension of the mapping
- * @param {string} moduleName - The module/class name
- * @param {string} processType - The process type (use PROCESS_TYPES constants)
- */
-export const addModuleMapping = (moduleName: string, processType: string): void => {
-  MODULE_TO_PROCESS_TYPE[moduleName] = processType;
-};
-
-/**
- * Get all current mappings
- * @returns {Object} - Copy of current mappings
- */
-export const getAllMappings = () => {
-  return { ...MODULE_TO_PROCESS_TYPE };
-};
-
-/**
- * Replace process ID in source file name with process type
- * Example: "MainView[1234].swift" -> "MainView[UI].swift"
- * @param {string} sourceName - The source file name with process ID
- * @param {string} moduleName - The module/class name from the log
- * @returns {string} - Source name with process type instead of ID
- */
-export const replaceProcessIdWithType = (sourceName: string, moduleName: string): string => {
+/** Example: MainView[1234].swift becomes MainView[UI].swift. */
+export function replaceProcessIdWithType(sourceName: string, moduleName: string): string {
   if (!sourceName || !moduleName) return sourceName;
-
   const processType = getProcessTypeFromModule(moduleName);
-  if (!processType) return sourceName;
-
-  // Pattern to match process ID in brackets, e.g., [1234]
-  // Handles various formats: [123], [12345], etc.
-  const processIdPattern = /\[\d+\]/;
-
-  if (processIdPattern.test(sourceName)) {
-    return sourceName.replace(processIdPattern, `[${processType}]`);
-  }
-
-  return sourceName;
-};
+  return processType ? sourceName.replace(/\[\d+\]/, `[${processType}]`) : sourceName;
+}
