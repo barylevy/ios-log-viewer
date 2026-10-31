@@ -58,7 +58,7 @@
 {"Date": "2025-08-04", "Time": "07:14:29:867", "ProcessId": "300015", "ThreadID": "759", "logLevel": null, "FileName": "AuthenticationCredentialsProvider", "Line": "166", "Module": "AuthenticationCredentialsProvider"}
 
 2025-08-04 07:14:36:207 [AuthenticationCredentialsProvider:36] [305524] [759] save password
-{"Date": "2025-08-04", "Time": "07:14:36:207", "ProcessId": "759", "ThreadID": "305524", "logLevel": null, "FileName": "AuthenticationCredentialsProvider", "Line": "36", "Module": "AuthenticationCredentialsProvider"}
+{"Date": "2025-08-04", "Time": "07:14:36:207", "ProcessId": "305524", "ThreadID": "759", "logLevel": null, "FileName": "AuthenticationCredentialsProvider", "Line": "36", "Module": "AuthenticationCredentialsProvider"}
 
 2025-08-04 07:14:36:211 [AuthenticationCredentialsProvider:104] [305524] [759] savePassword: data was updated successfully
 {"Date": "2025-08-04", "Time": "07:14:36:211", "ProcessId": "305524", "ThreadID": "759", "logLevel": null, "FileName": "AuthenticationCredentialsProvider", "Line": "104", "Module": "AuthenticationCredentialsProvider"}
@@ -68,7 +68,7 @@
 {"Date": "2025-08-04", "Time": "07:14:36:518", "ProcessId": "759", "ThreadID": "6381", "logLevel": null, "FileName": "HardwareMetricsManager", "Line": "93", "Module": "HardwareMetricsManager"}
 
 2025-08-04 07:14:36:518 [HardwareMetricsManager:242] [6381] [759] DEM found utun4 with IPv4 Address: 172.31.63.184
-{"Date": "2025-08-04", "Time": "07:14:36:518", "ProcessId": "6381", "ThreadID": "759", "logLevel": null, "FileName": "HardwareMetricsManager", "Line": "242", "Module": "HardwareMetricsManager"}
+{"Date": "2025-08-04", "Time": "07:14:36:518", "ProcessId": "759", "ThreadID": "6381", "logLevel": null, "FileName": "HardwareMetricsManager", "Line": "242", "Module": "HardwareMetricsManager"}
 
 2025-08-04 07:14:36:519 [ConnectionViewModel:152] [6381] [759] connectionState didSet:connected, subtitle:alwaysOnActivated
 {"Date": "2025-08-04", "Time": "07:14:36:519", "ProcessId": "759", "ThreadID": "6381", "logLevel": null, "FileName": "ConnectionViewModel", "Line": "152", "Module": "ConnectionViewModel"}
@@ -78,7 +78,7 @@
 {"Date": "2025-08-04", "Time": "07:13:16:691", "ProcessId": "759", "ThreadID": "6381", "logLevel": null, "FileName": "CNSharedManager+macOS", "Line": "121", "Module": "CNSharedManager+macOS"}
 
 2025-08-04 07:13:16:691 [CNSharedManager+macOS:125] [6381] [759] Error: got message: Connection error. Trying to reconnect...
-{"Date": "2025-08-04", "Time": "07:13:16:691", "ProcessId": "6381", "ThreadID": "759", "logLevel": null, "FileName": "CNSharedManager+macOS", "Line": "125", "Module": "CNSharedManager+macOS"}
+{"Date": "2025-08-04", "Time": "07:13:16:691", "ProcessId": "759", "ThreadID": "6381", "logLevel": null, "FileName": "CNSharedManager+macOS", "Line": "125", "Module": "CNSharedManager+macOS"}
 
 # Mac log with state changes
 2025-08-04 07:14:29:708 [CNSharedManager+macOS:93] [6381] [759] connectingState msg recieved: connected
@@ -88,7 +88,7 @@
 {"Date": "2025-08-04", "Time": "07:14:29:708", "ProcessId": "759", "ThreadID": "6381", "logLevel": null, "FileName": "CNSharedManager+macOS", "Line": "97", "Module": "CNSharedManager+macOS"}
 
 2025-08-04 07:14:36:499 [CNSharedManager+macOS:152] [6381] [759] * got notification from extension:tunnelBecameAuth*
-{"Date": "2025-08-04", "Time": "07:14:36:499", "ProcessId": "6381", "ThreadID": "759", "logLevel": null, "FileName": "CNSharedManager+macOS", "Line": "152", "Module": "CNSharedManager+macOS"}
+{"Date": "2025-08-04", "Time": "07:14:36:499", "ProcessId": "759", "ThreadID": "6381", "logLevel": null, "FileName": "CNSharedManager+macOS", "Line": "152", "Module": "CNSharedManager+macOS"}
 
 2025-12-11 08:35:19:101 [CNSharedManager+macOS:25] [I] [t:22659] [p:2017] init shared manager
 {"Date": "2025-12-11", "Time": "08:35:19:101", "ProcessId": "2017", "ThreadID": "22659", "logLevel": "I", "FileName": "CNSharedManager+macOS", "Line": "25", "Module": "CNSharedManager+macOS"}

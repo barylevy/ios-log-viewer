@@ -6,29 +6,54 @@
     "predev": "node ../scripts/sync-public.js",
     "dev": "vite",
     "prebuild": "node ../scripts/sync-public.js",
-    "build": "vite build",
+    "build": "npm run typecheck && vite build",
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\" \"*.{ts,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"*.{ts,json}\"",
+    "check": "npm run typecheck && npm run lint && npm run test:run && npm run build"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/material": "^9.5.0",
     "@tanstack/react-table": "^8.21.3",
     "jszip": "^3.10.1",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^7.8.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "react-virtuoso": "^4.14.0",
     "xz-decompress": "^0.2.3"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "14.6.8",
+    "@types/node": "26.6.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@types/wicg-file-system-access": "2023.10.7",
+    "@vitejs/plugin-react": "6.1.2",
+    "@vitest/ui": "5.0.5",
     "autoprefixer": "^10.4.15",
+    "eslint": "10.14.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "fake-indexeddb": "6.2.7",
     "jsdom": "^27.0.0",
     "postcss": "^8.4.24",
+    "prettier": "3.9.10",
     "tailwindcss": "^3.4.1",
-    "vite": "^5.0.0",
-    "vitest": "^3.2.4"
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.1",
+    "vite": "8.3.5",
+    "vitest": "5.0.5"
+  },
+  "private": true,
+  "engines": {
+    "node": "^22.13.0 || >=24.0.0"
   }
 }

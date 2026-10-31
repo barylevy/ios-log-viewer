@@ -1,9 +1,13 @@
 {
   "name": "ios-log-viewer",
   "version": "1.0.0",
-  "description": "iOS Log Viewer with AI Chat",
+  "description": "Local-first multi-platform client log viewer",
   "scripts": {
     "dev": "npm --prefix client run dev",
-    "build": "npm --prefix client run build"
+    "build": "npm --prefix client run build",
+    "test": "npm --prefix client run test:run",
+    "check": "npm --prefix client run check",
+    "typecheck": "npm --prefix client run typecheck",
+    "lint": "npm --prefix client run lint"
   }
 }

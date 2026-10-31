@@ -27,9 +27,42 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { StringDecoder } = require('string_decoder');
+const { randomBytes, timingSafeEqual } = require('crypto');
 
 const PORT = 4000;
 const POLL_MS = 1000; // how often to check for new bytes
+
+// Access is limited to an exact viewer origin and a per-install pairing token.
+function optionValue(name, argv = process.argv.slice(2)) {
+  const inline = argv.find(argument => argument.startsWith(`${name}=`));
+  if (inline) return inline.slice(name.length + 1);
+  const index = argv.indexOf(name);
+  return index >= 0 ? argv[index + 1] : undefined;
+}
+const VIEWER_TOKEN = optionValue('--token') || process.env.CATO_VIEWER_TOKEN || randomBytes(24).toString('hex');
+const configuredOrigin = optionValue('--origin') || process.env.CATO_VIEWER_ORIGIN;
+const ALLOWED_ORIGINS = new Set(configuredOrigin ? [new URL(configuredOrigin).origin] : [
+  'http://localhost:3000', 'http://127.0.0.1:3000',
+  'http://localhost:5173', 'http://127.0.0.1:5173',
+]);
+const MAX_BUFFER_BYTES = 8 * 1024 * 1024;
+
+function isAllowedOrigin(origin, allowedOrigins = ALLOWED_ORIGINS) {
+  return typeof origin === 'string' && allowedOrigins.has(origin);
+}
+function tokenMatches(value, token = VIEWER_TOKEN) {
+  if (typeof value !== 'string') return false;
+  const provided = Buffer.from(value);
+  const expected = Buffer.from(token);
+  return provided.length === expected.length && timingSafeEqual(provided, expected);
+}
+function isLoopbackHost(host) {
+  return host === `localhost:${PORT}` || host === `127.0.0.1:${PORT}`;
+}
+function websocketAuthorized(request) {
+  const protocols = (request.headers['sec-websocket-protocol'] || '').split(',').map(value => value.trim());
+  return isLoopbackHost(request.headers.host) && isAllowedOrigin(request.headers.origin) && tokenMatches(protocols[1]);
+}
 
 // ─── Source definitions ───────────────────────────────────────────────────────
 // Each entry becomes one tab in the viewer; every source tails the most
@@ -80,7 +113,7 @@ const CONFIG_FILE = path.join(HOME, '.cato-live-logs.json');
 function normalizeLogDir(dir) {
   if (!dir) return null;
   const trimmed = String(dir).trim().replace(/[\\/]+$/, '');
-  return trimmed || null;
+  return trimmed || (/^[A-Za-z]:[\\/]$/.test(String(dir).trim()) ? String(dir).trim() : null);
 }
 
 /** All regular files in `dir` matching `pattern`, with stat info. */
@@ -259,6 +292,14 @@ function readRange(filePath, start, length) {
   }
 }
 
+function boundLogText(text) {
+  if (Buffer.byteLength(text, 'utf8') <= MAX_BUFFER_BYTES) return text;
+  // At most four UTF-8 bytes per UTF-16 code unit; this conservative tail stays bounded.
+  const tail = text.slice(-Math.floor(MAX_BUFFER_BYTES / 4));
+  const newline = tail.indexOf('\n');
+  return newline >= 0 ? tail.slice(newline + 1) : tail;
+}
+
 // Per-'latest'-source tail bookkeeping: which file we're on and how many bytes
 // of it we've consumed. Lets us read only the new bytes instead of re-reading a
 // growing dev log every second.
@@ -288,17 +329,22 @@ function readLatest(src) {
   }
 
   if (sameFile && latest.size > prev.size) {
-    const buf = readRange(latest.path, prev.size, latest.size - prev.size);
-    tails[key] = { filePath: latest.path, size: prev.size + buf.length };
-    return { content: (state[key] || '') + decoders[key].write(buf), forceReset: false };
+    const start = Math.max(prev.size, latest.size - MAX_BUFFER_BYTES);
+    const buf = readRange(latest.path, start, latest.size - start);
+    tails[key] = { filePath: latest.path, size: start + buf.length };
+    const skipped = start > prev.size;
+    const appended = (skipped ? '' : state[key] || '') + decoders[key].write(buf);
+    const bounded = boundLogText(appended);
+    return { content: bounded, forceReset: skipped || bounded.length !== appended.length };
   }
 
   // New file, or the current one was truncated/rotated in place — start over.
   let buf;
-  try { buf = fs.readFileSync(latest.path); } catch { return { content: state[key] || '', forceReset: false }; }
+  try { buf = readRange(latest.path, Math.max(0, latest.size - MAX_BUFFER_BYTES), Math.min(latest.size, MAX_BUFFER_BYTES)); } catch { return { content: state[key] || '', forceReset: false }; }
   decoders[key] = new StringDecoder('utf8');
-  tails[key] = { filePath: latest.path, size: buf.length };
-  return { content: decoders[key].write(buf), forceReset: true };
+  tails[key] = { filePath: latest.path, size: latest.size };
+  const text = decoders[key].write(buf);
+  return { content: latest.size > MAX_BUFFER_BYTES ? text.slice(text.indexOf('\n') + 1) : text, forceReset: true };
 }
 
 /** @returns {{content: string, forceReset: boolean}} */
@@ -362,13 +408,21 @@ function readJsonBody(req, cb) {
 }
 
 function handleRequest(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  if (!isLoopbackHost(req.headers.host)) return sendJson(res, 403, { error: 'Invalid host.' });
+  const origin = req.headers.origin;
+  if (origin && !isAllowedOrigin(origin)) return sendJson(res, 403, { error: 'Viewer origin is not allowed.' });
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Viewer-Token');
+  res.setHeader('Cache-Control', 'no-store');
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
-
   const route = (req.url || '').split('?')[0];
+  if (route !== '/health' && !tokenMatches(req.headers['x-viewer-token'])) {
+    return sendJson(res, 401, { error: 'Pair this viewer with the token printed by the live-logs server.' });
+  }
 
   if (route === '/sources') {
     return sendJson(res, 200, SOURCES.map(s => ({ key: s.key, label: s.label })));
@@ -388,6 +442,7 @@ function handleRequest(req, res) {
     return readJsonBody(req, (err, body) => {
       if (err) return sendJson(res, 400, { error: err.message });
 
+      if (!body || typeof body !== 'object' || Array.isArray(body)) return sendJson(res, 400, { error: 'Expected a configuration object.' });
       // `root` is the legacy field name; both carry the full directory now.
       const raw = typeof body.logDir === 'string' ? body.logDir
         : typeof body.root === 'string' ? body.root
@@ -443,6 +498,7 @@ function applyWinLogDir(dir) {
     });
     wss.clients.forEach(client => {
       if (client.readyState !== WebSocket.OPEN) return;
+      if (client.bufferedAmount > MAX_BUFFER_BYTES) { client.close(1008, 'Client is too slow. Reconnect to resume.'); return; }
       client.clientOffsets[src.key] = state[src.key].length;
       client.send(msg);
     });
@@ -480,7 +536,12 @@ function poll() {
 
   for (const src of SOURCES) {
     const prev = state[src.key];
-    const { content: curr, forceReset } = readSource(src);
+    let result;
+    try { result = readSource(src); } catch (error) {
+      console.warn(`[live-logs] Unable to read ${src.key}: ${error.message}`);
+      continue;
+    }
+    const { content: curr, forceReset } = result;
 
     if (curr === prev && !forceReset) continue; // Nothing changed
 
@@ -491,6 +552,7 @@ function poll() {
 
     wss.clients.forEach(client => {
       if (client.readyState !== WebSocket.OPEN) return;
+      if (client.bufferedAmount > MAX_BUFFER_BYTES) { client.close(1008, 'Client is too slow. Reconnect to resume.'); return; }
 
       const clientOffset = client.clientOffsets[src.key] ?? 0;
 
@@ -519,7 +581,11 @@ function start() {
   init();
 
   server = http.createServer(handleRequest);
-  wss = new WebSocket.Server({ server });
+  wss = new WebSocket.Server({
+    server, maxPayload: 64 * 1024,
+    verifyClient: ({ req }) => websocketAuthorized(req),
+    handleProtocols: protocols => protocols.has('cato-logs') ? 'cato-logs' : false,
+  });
   wss.on('connection', handleConnection);
   setInterval(poll, POLL_MS);
 
@@ -556,6 +622,8 @@ function start() {
 
   server.listen(PORT, '127.0.0.1', () => {
     console.log(`\n[live-logs] Server ready at ws://localhost:${PORT}`);
+    console.log(`[live-logs] Pairing token: ${VIEWER_TOKEN}`);
+    console.log(`[live-logs] Allowed viewer origins: ${[...ALLOWED_ORIGINS].join(', ')}`);
     console.log('[live-logs] Press Ctrl-C to stop.\n');
   });
 }
@@ -574,6 +642,7 @@ function printPortConflict() {
 if (require.main === module) start();
 
 module.exports = {
+  isAllowedOrigin, tokenMatches, isLoopbackHost, websocketAuthorized, handleRequest, boundLogText,
   WIN_LOG_PATTERN,
   WIN_ANTITAMPER_SUBDIRS,
   WIN_ANTITAMPER_PATTERN,

@@ -8,17 +8,21 @@
 const fs = require('fs');
 const path = require('path');
 
-const FILES = ['live-logs-server.js', 'sync-cato-logs.sh'];
+const FILES = [
+  ['live-logs-server.js', 'live-logs-server.js'],
+  ['sync-cato-logs.sh', 'sync-cato-logs.sh'],
+  ['package.json', 'live-logs-server-package.json'],
+];
 
-for (const name of FILES) {
+for (const [name, outputName] of FILES) {
   const src = path.join(__dirname, name);
-  const dest = path.join(__dirname, '..', 'client', 'public', name);
+  const dest = path.join(__dirname, '..', 'client', 'public', outputName);
 
   try {
     fs.copyFileSync(src, dest);
     console.log(`[sync-public] ${path.relative(process.cwd(), dest)} updated`);
   } catch (err) {
-    // Never fail the dev/build run over this — just say what went wrong.
-    console.warn(`[sync-public] Could not copy ${name}: ${err.message}`);
+    process.exitCode = 1;
+    console.error(`[sync-public] Could not copy ${name}: ${err.message}`);
   }
 }

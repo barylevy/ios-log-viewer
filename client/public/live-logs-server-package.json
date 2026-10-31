@@ -8,6 +8,6 @@
     "start:sudo": "sudo node live-logs-server.js"
   },
   "dependencies": {
-    "ws": "^8.18.0"
+    "ws": "^8.22.1"
   }
 }

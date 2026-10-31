@@ -1,0 +1,1704 @@
+import type { DragEvent } from 'react';
+import type { LogRecord, LogHeaders } from './domain/logRecord';
+import {
+  errorMessage,
+  type ViewerFile,
+  type LiveSourceUpdate,
+  type LiveFolderError,
+  type ColumnVisibility,
+} from './domain/viewerTypes';
+import { collectDroppedFiles } from './services/dropFiles';
+import { combineLogs } from './domain/combineLogs';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import LogListView from './LogListView';
+import LogModal from './LogModal';
+import LogViewerHeader from './LogViewerHeader';
+import LogViewerFilters from './LogViewerFilters';
+import LogTabs from './LogTabs';
+import SelectionFilesDialog from './SelectionFilesDialog';
+import useLogsModel from './useLogsModel';
+import { getFileIdentifier } from './utils/fileLoader';
+import { getFileDisplayName } from './utils/fileLoader';
+import { saveSession, loadSession, clearSession } from './utils/sessionStorage';
+import {
+  groupFilesByDirectoryAndFormat,
+  naturalSort,
+  hasValidLogExtension,
+} from './utils/fileGrouping';
+import { isArchiveFile, expandArchivesInList } from './utils/archiveExtractor';
+import { exportLogsToFile } from './utils/exportLogs';
+import { AVAILABLE_COLUMNS } from './ColumnSettings';
+import useLiveLogs from './utils/useLiveLogs';
+import useLiveLogsFs from './utils/useLiveLogsFs';
+import {
+  isFsAccessSupported,
+  loadSavedHandle,
+  pickMirrorFolder,
+  MIRROR_DIR_NAME,
+} from './utils/liveLogsFsHandle';
+import LiveLogsSettings from './components/LiveLogsSettings';
+import {
+  checkLiveHealth,
+  fetchLiveConfig,
+  applySavedLogDir,
+  buildSetupCommand,
+  buildMirrorCommand,
+  getSavedLogDir,
+  isWindows,
+} from './utils/liveLogsServer';
+
+// Turn a raw folder name like "2387341752-260422074919 (1)" into the short
+// label we want in the page title.
+//   - drop any trailing " (N)" duplicate marker
+//   - if the name is "<id>-<YYMMDDHHMMSS>" or just "<YYMMDDHHMMSS>", format
+//     the timestamp as "YY.MM.DD-HHMMSS"  (e.g. 260428063435 -> 26.04.28-063435)
+//   - otherwise: if it's "<id>-<suffix>", keep just the suffix
+function cleanFolderLabel(name: string | null | undefined) {
+  if (!name) return '';
+  let label = String(name).trim();
+  label = label.replace(/\s*\(\d+\)\s*$/, '');
+
+  // Look at the part after the last '-' (or the whole label if no '-').
+  const dashIdx = label.lastIndexOf('-');
+  const tail = dashIdx >= 0 ? label.slice(dashIdx + 1) : label;
+  const tsMatch = /^(\d{2})(\d{2})(\d{2})(\d{6})$/.exec(tail);
+  if (tsMatch) {
+    const [, yy, mm, dd, hms] = tsMatch;
+    return `${yy}.${mm}.${dd}-${hms}`;
+  }
+
+  if (dashIdx >= 0 && dashIdx < label.length - 1) {
+    label = label.slice(dashIdx + 1);
+  }
+  return label.trim();
+}
+
+const LogViewer = () => {
+  const {
+    loadError,
+    logs,
+    filteredLogs,
+    moduleOptions,
+    selectedLog,
+    filters,
+    highlightedLogId,
+    logFileHeaders,
+    allFileLogs,
+    stickyLogs,
+    requestFileLoad,
+    isFileLoading,
+    isAnyFileLoading,
+    setSelectedLog,
+    updateFilters,
+    updateFiltersForAllFiles,
+    highlightLog,
+    getCurrentFileHeaders,
+    setLogsForFile,
+    updateLogsBackground,
+    setLogFileHeaders,
+    switchToFile,
+    removeLogsForFile,
+    addStickyLog,
+    removeStickyLog,
+    clearAllStickyLogs,
+    updateStickyLogTitle,
+    scrollToLog,
+    resetModel,
+  } = useLogsModel();
+
+  // Pivot time tracking
+  const [pivotLog, setPivotLog] = useState<LogRecord | null>(null);
+  const [hoveredLog, setHoveredLog] = useState<LogRecord | null>(null);
+  const [lastHoveredLog, setLastHoveredLog] = useState<LogRecord | null>(null);
+
+  // Column visibility state
+  const [visibleColumns, setVisibleColumns] = useState<ColumnVisibility>(() => {
+    const saved = localStorage.getItem('logViewerColumns');
+    if (saved) {
+      return JSON.parse(saved);
+    }
+    // Default columns
+    const defaultColumns: ColumnVisibility = {};
+    AVAILABLE_COLUMNS.forEach((col) => {
+      defaultColumns[col.id] = col.defaultVisible;
+    });
+    return defaultColumns;
+  });
+
+  // Column change version to force re-render
+  const [columnVersion, setColumnVersion] = useState(0);
+
+  // Order of all log-row columns. Persisted via the Column Settings modal.
+  // Falls back to the default order and merges in any new column ids added
+  // in future versions.
+  const DEFAULT_COLUMN_ORDER = [
+    'timestamp',
+    'lineNumber',
+    'logLevel',
+    'message',
+    'module',
+    'sourceFile',
+    'timeGap',
+    'processThread',
+  ];
+  const [rightColumnOrder, setRightColumnOrder] = useState(() => {
+    try {
+      const saved = localStorage.getItem('logViewerColumnOrder');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const known = parsed.filter((id) => DEFAULT_COLUMN_ORDER.includes(id));
+          DEFAULT_COLUMN_ORDER.forEach((id) => {
+            if (!known.includes(id)) known.push(id);
+          });
+          return known;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    return DEFAULT_COLUMN_ORDER.slice();
+  });
+
+  const handleRightColumnOrderChange = useCallback((newOrder: string[]) => {
+    setRightColumnOrder(newOrder);
+    try {
+      localStorage.setItem('logViewerColumnOrder', JSON.stringify(newOrder));
+    } catch {
+      /* ignore */
+    }
+    setColumnVersion((prev) => prev + 1);
+  }, []);
+
+  // Handler that updates columns and increments version
+  const handleColumnsChange = useCallback((newColumns: ColumnVisibility) => {
+    setVisibleColumns(newColumns);
+    setColumnVersion((prev) => prev + 1);
+  }, []);
+
+  // Bumped only when the user clicks "Reset to Default" so the log list
+  // remounts and re-initialises column-sizing state from (now empty) storage.
+  const [columnResetKey, setColumnResetKey] = useState(0);
+
+  // Reset column order and per-column widths to defaults. Visibility is reset
+  // by ColumnSettings itself (it owns the temp checkbox state).
+  const handleResetColumnDefaults = useCallback(() => {
+    setRightColumnOrder(DEFAULT_COLUMN_ORDER.slice());
+    try {
+      localStorage.removeItem('logViewerColumnOrder');
+      localStorage.removeItem('logViewerColumnSizing');
+      localStorage.removeItem('logViewerCollapsedColumns');
+    } catch {
+      /* ignore */
+    }
+    setColumnResetKey((prev) => prev + 1);
+    setColumnVersion((prev) => prev + 1);
+  }, []);
+
+  // Update lastHoveredLog whenever hoveredLog changes to a non-null value
+  useEffect(() => {
+    if (hoveredLog) {
+      setLastHoveredLog(hoveredLog);
+    }
+  }, [hoveredLog]);
+
+  // Calculate pivot time gap in DD Days, HH:MM:SS format (or just HH:MM:SS if no days)
+  const calculatePivotGap = useCallback(
+    (pivotLog: LogRecord | null, currentLog: LogRecord | null) => {
+      const pivotMs = pivotLog?.timestampMs;
+      const currentMs = currentLog?.timestampMs;
+
+      if (!pivotMs || !currentMs) return null;
+
+      const diffMs = Math.abs(currentMs - pivotMs);
+      const totalSeconds = Math.floor(diffMs / 1000);
+
+      const days = Math.floor(totalSeconds / (24 * 3600));
+      const hours = Math.floor((totalSeconds % (24 * 3600)) / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      const milliseconds = diffMs % 1000;
+
+      // Always show with milliseconds precision
+      if (days > 0) {
+        return `${String(days).padStart(2, '0')} Days, ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`;
+      } else {
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`;
+      }
+    },
+    [],
+  );
+
+  // Calculate current pivot gap for display
+  const currentPivotGap = useMemo(() => {
+    if (!pivotLog) return null;
+
+    // Use current hovered log if available, otherwise use last hovered log
+    const logToCompare = hoveredLog || lastHoveredLog;
+
+    if (logToCompare) {
+      // Show gap to hovered or last hovered log (pass entire log objects)
+      return calculatePivotGap(pivotLog, logToCompare);
+    } else {
+      // Show that pivot is set (no specific gap)
+      return 'Set';
+    }
+  }, [pivotLog, hoveredLog, lastHoveredLog, calculatePivotGap]);
+
+  // Pivot control functions
+  const setPivotTime = useCallback((log: LogRecord) => {
+    setPivotLog(log);
+    // Save to localStorage for persistence
+    localStorage.setItem(
+      'logViewer_pivotLog',
+      JSON.stringify({
+        id: log.id,
+        timestamp: log.timestamp,
+        lineNumber: log.lineNumber,
+      }),
+    );
+  }, []);
+
+  const clearPivotTime = useCallback(() => {
+    setPivotLog(null);
+    localStorage.removeItem('logViewer_pivotLog');
+  }, []);
+
+  // Restore pivot from localStorage on mount
+  useEffect(() => {
+    const savedPivot = localStorage.getItem('logViewer_pivotLog');
+    if (savedPivot) {
+      try {
+        const pivotData = JSON.parse(savedPivot);
+        // Verify the pivot log still exists in current logs
+        const foundLog = filteredLogs.find((log) => log.id === pivotData.id);
+        if (foundLog) {
+          setPivotLog(foundLog);
+        } else {
+          // Clear invalid pivot
+          localStorage.removeItem('logViewer_pivotLog');
+        }
+      } catch {
+        localStorage.removeItem('logViewer_pivotLog');
+      }
+    }
+  }, [filteredLogs]);
+
+  // Notification listener for sticky log messages
+  useEffect(() => {
+    const handleLogNotVisible = (event: WindowEventMap['showLogNotVisible']) => {
+      const { lineNumber, message } = event.detail;
+      setNotification({ lineNumber, message });
+
+      // Auto-hide notification after 3 seconds
+      setTimeout(() => {
+        setNotification(null);
+      }, 3000);
+    };
+
+    window.addEventListener('showLogNotVisible', handleLogNotVisible);
+    return () => window.removeEventListener('showLogNotVisible', handleLogNotVisible);
+  }, []);
+
+  // ===== UI STATE MANAGEMENT =====
+  const [isFileDropActive, setIsFileDropActive] = useState(false);
+  const [searchPos, setSearchPos] = useState(0);
+  const [searchTotal, setSearchTotal] = useState(0);
+  const [hasUserInteracted, setHasUserInteracted] = useState(false);
+  const [headerState, setHeaderState] = useState<LogHeaders | null>(null);
+  const [logDuration, setLogDuration] = useState<string | null>(null);
+  const [notification, setNotification] = useState<{ lineNumber: number; message: string } | null>(
+    null,
+  );
+  // Counter of in-flight "prepare files" operations (archive expand, grouping,
+  // dispatching loads). The loading overlay stays visible while > 0 OR while
+  // any single file is still being parsed by the model.
+  const [prepareFilesCount, setPrepareFilesCount] = useState(0);
+  const beginPreparingFiles = useCallback(() => setPrepareFilesCount((c) => c + 1), []);
+  const endPreparingFiles = useCallback(() => setPrepareFilesCount((c) => Math.max(0, c - 1)), []);
+  const [isDownloadingMerged, setIsDownloadingMerged] = useState(false);
+  const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
+
+  // Multi-file support
+  const [files, setFiles] = useState<ViewerFile[]>([]);
+  const lastSelectedFileCount = useRef(0);
+  const [activeFileIndex, setActiveFileIndex] = useState(0);
+  const [showingCombinedView, setShowingCombinedView] = useState(false);
+  const [isRestoringSession, setIsRestoringSession] = useState(false);
+  const [pendingActiveFileId, setPendingActiveFileId] = useState<string | null>(null);
+
+  // Watch for when logs are restored and switch to the pending active file
+  useEffect(() => {
+    if (pendingActiveFileId && allFileLogs[pendingActiveFileId]) {
+      switchToFile(pendingActiveFileId);
+      const index = files.findIndex((file) => file.id === pendingActiveFileId);
+      if (index >= 0) setActiveFileIndex(index);
+      setPendingActiveFileId(null);
+      setIsRestoringSession(false);
+    }
+  }, [allFileLogs, pendingActiveFileId, switchToFile, files]);
+
+  // Restore session on mount
+  useEffect(() => {
+    const restoreSession = async () => {
+      setIsRestoringSession(true);
+      const session = await loadSession();
+
+      if (session && session.files && session.files.length > 0) {
+        // Restore UI state first
+        const restoredActiveIndex = session.activeFileIndex || 0;
+        lastSelectedFileCount.current = session.files.length;
+        setFiles(session.files);
+        setActiveFileIndex(restoredActiveIndex);
+        setShowingCombinedView(session.showingCombinedView || false);
+        setHasUserInteracted(true); // Mark as interacted so saves will work
+
+        // Restore all logs for all files
+        if (session.allFileLogs) {
+          // First, restore all logs
+          Object.entries(session.allFileLogs).forEach(([fileId, logs]) => {
+            setLogsForFile(fileId, logs);
+          });
+
+          // Restore log file headers if available
+          if (session.logFileHeaders) {
+            setLogFileHeaders(session.logFileHeaders);
+          }
+
+          // Set the pending active file - the useEffect above will switch to it once logs are available
+          const activeFile = session.files[restoredActiveIndex];
+          if (activeFile) {
+            setPendingActiveFileId(activeFile.id);
+          } else {
+            setIsRestoringSession(false);
+          }
+        } else {
+          setIsRestoringSession(false);
+        }
+      } else {
+        setIsRestoringSession(false);
+      }
+    };
+
+    restoreSession();
+  }, []); // Run only once on mount
+
+  // Save session when state changes
+  useEffect(() => {
+    // Don't save during restoration or if no user interaction yet
+    if (isRestoringSession || !hasUserInteracted) return;
+
+    // Debounce saves to avoid too frequent writes
+    const timeoutId = setTimeout(() => {
+      if (files.length > 0) {
+        // Only save files that are currently open (in files array)
+        // This ensures closed tabs don't get restored
+        const filesToSave = files.map((f) => ({ name: f.name, id: f.id }));
+
+        // Only save logs for currently open files
+        const logsToSave: Record<string, LogRecord[]> = {};
+        files.forEach((f) => {
+          if (allFileLogs[f.id]) {
+            logsToSave[f.id] = allFileLogs[f.id];
+          }
+        });
+
+        saveSession({
+          files: filesToSave,
+          activeFileIndex,
+          showingCombinedView,
+          allFileLogs: logsToSave,
+          logFileHeaders,
+        });
+      }
+    }, 1000); // Save after 1 second of inactivity
+
+    return () => clearTimeout(timeoutId);
+  }, [
+    files,
+    activeFileIndex,
+    showingCombinedView,
+    allFileLogs,
+    hasUserInteracted,
+    isRestoringSession,
+    logFileHeaders,
+  ]);
+
+  // Clear existing tabs before loading a new folder
+  const handleClearTabs = useCallback(() => {
+    resetModel();
+    setFiles([]);
+    setActiveFileIndex(0);
+    setShowingCombinedView(false);
+    setHasUserInteracted(false);
+    setHeaderState(null); // Clear header details
+    setLogDuration(null); // Clear time range
+  }, [resetModel]);
+
+  // ── Live / Online mode ────────────────────────────────────────────────────
+  const [isLiveMode, setIsLiveMode] = useState(false);
+  const liveTabIdsRef = useRef(new Set<string>());
+
+  const handleLiveSourceUpdate = useCallback(
+    ({ sourceKey, label, logs: parsedLogs, isInitial }: LiveSourceUpdate) => {
+      const tabId = `live:${sourceKey}`;
+
+      if (isInitial) {
+        // 'initial' creates the tab; 'reset' (after a rotation) also arrives here.
+        const isFirstLiveTab = liveTabIdsRef.current.size === 0;
+
+        if (!liveTabIdsRef.current.has(tabId)) {
+          liveTabIdsRef.current.add(tabId);
+          setFiles((prev) =>
+            prev.some((f) => f.id === tabId)
+              ? prev
+              : [...prev, { name: label, id: tabId, isLive: true }],
+          );
+          if (isFirstLiveTab) {
+            // Tabs are cleared when the live connection opens, so this is index 0.
+            setActiveFileIndex(0);
+            setShowingCombinedView(false);
+          }
+        }
+
+        // Only the very first live tab may take over the visible list. Every
+        // later source — and every rotation reset — must update in the
+        // background, or whichever file rotated last would replace whatever tab
+        // the user is actually looking at. updateLogsBackground refreshes the
+        // visible rows only when the update belongs to the active tab.
+        if (isFirstLiveTab) {
+          setLogsForFile(tabId, parsedLogs);
+        } else {
+          updateLogsBackground(tabId, parsedLogs);
+        }
+      } else {
+        updateLogsBackground(tabId, parsedLogs);
+      }
+
+      setHasUserInteracted(true);
+    },
+    [setLogsForFile, updateLogsBackground],
+  );
+
+  const [showServerDialog, setShowServerDialog] = useState(false);
+  // Windows streams through the local server; everywhere else uses folder mode.
+  const setupOnWindows = isWindows();
+
+  const handleLiveConnected = useCallback(() => {
+    handleClearTabs();
+    liveTabIdsRef.current = new Set();
+    setIsLiveMode(true);
+  }, [handleClearTabs]);
+
+  const {
+    isConnected: isWsConnected,
+    connect: liveConnect,
+    disconnect: liveDisconnect,
+  } = useLiveLogs({
+    onSourceUpdate: handleLiveSourceUpdate,
+    onConnected: handleLiveConnected,
+    onError: () => setShowServerDialog(true),
+  });
+
+  // Folder mode: reads the folder the sync script mirrors the logs into, so no
+  // server (and no Node) is needed. Failures are surfaced by the toggle, which
+  // can still fall back to the server, so only a mid-session loss reports here.
+  const [fsProblem, setFsProblem] = useState<LiveFolderError | null>(null);
+  const {
+    isConnected: isFsConnected,
+    connect: fsConnect,
+    disconnect: fsDisconnect,
+  } = useLiveLogsFs({
+    onSourceUpdate: handleLiveSourceUpdate,
+    onConnected: handleLiveConnected,
+    onError: (reason) => {
+      setFsProblem(reason);
+      if (reason === 'lost') {
+        setIsLiveMode(false);
+        setShowServerDialog(true);
+      }
+    },
+  });
+  const isLiveConnected = isWsConnected || isFsConnected;
+
+  const [isLiveChecking, setIsLiveChecking] = useState(false);
+  const [showLiveSettings, setShowLiveSettings] = useState(false);
+
+  const handleLiveToggle = useCallback(async () => {
+    if (isLiveConnected) {
+      liveDisconnect();
+      fsDisconnect();
+      setIsLiveMode(false);
+      return;
+    }
+    setIsLiveChecking(true);
+    try {
+      // A folder chosen earlier needs no install, so try it before the server.
+      setFsProblem(null);
+      if (isFsAccessSupported()) {
+        const saved = await loadSavedHandle();
+        if (saved && (await fsConnect(saved))) return;
+      }
+
+      // macOS has no server: without a usable folder, show the folder setup.
+      if (!isWindows() || !(await checkLiveHealth())) {
+        setShowServerDialog(true);
+        return;
+      }
+      // A Windows server with no (or an empty) log folder would connect and
+      // then show nothing — send the user to the folder picker instead.
+      let config = await fetchLiveConfig();
+      if (!config) {
+        setShowLiveSettings(true);
+        return;
+      }
+      // A folder configured before the server existed gets applied here.
+      if (config?.needsConfig) {
+        config = (await applySavedLogDir()) || config;
+      }
+      if (config?.configurable && (config.needsConfig || config.matchCount === 0)) {
+        setShowLiveSettings(true);
+        return;
+      }
+      liveConnect();
+    } finally {
+      setIsLiveChecking(false);
+    }
+  }, [isLiveConnected, liveConnect, liveDisconnect, fsConnect, fsDisconnect]);
+
+  // "Choose folder" in the setup dialog — a click, so the picker and the
+  // permission prompt are both allowed.
+  const handleChooseMirrorFolder = useCallback(async () => {
+    try {
+      const handle = await pickMirrorFolder();
+      if (!handle) return;
+      setFsProblem(null);
+      if (await fsConnect(handle)) setShowServerDialog(false);
+    } catch (e) {
+      console.error('[live-logs] Could not open folder:', e);
+      setFsProblem('denied');
+    }
+  }, [fsConnect]);
+
+  const handleFileLoad = useCallback(
+    (fileOrFiles: File | File[], clearTabsFirst = false, groupPrefix: string | null = null) => {
+      // Support both single file and array of files (for grouped Windows logs)
+      const isFileArray = Array.isArray(fileOrFiles);
+      const firstFile = isFileArray ? fileOrFiles[0] : fileOrFiles;
+      if (!firstFile) return;
+
+      // Only load .txt, .log, or .ips files
+      // For file groups, check if AT LEAST ONE file has a valid extension
+      if (isFileArray) {
+        // For groups, check if at least one file is valid
+        const hasValidFile = fileOrFiles.some(hasValidLogExtension);
+        if (!hasValidFile) {
+          return;
+        }
+      } else {
+        // For single file, check the file itself
+        if (!hasValidLogExtension(fileOrFiles)) {
+          return;
+        }
+      }
+
+      // Optionally clear all tabs before loading (for new folder)
+      if (clearTabsFirst) {
+        handleClearTabs();
+      }
+
+      // For grouped files, use the prefix with file count as the identifier
+      // (only append the count when there is more than one file in the group)
+      const fileId =
+        isFileArray && groupPrefix
+          ? fileOrFiles.length > 1
+            ? `${groupPrefix} (${fileOrFiles.length})`
+            : groupPrefix
+          : getFileIdentifier(firstFile);
+
+      // Check if file/group already exists
+      const existingIndex = files.findIndex((f) => f.id === fileId);
+      if (existingIndex >= 0) {
+        setActiveFileIndex(existingIndex);
+        setShowingCombinedView(false);
+        switchToFile(fileId);
+        return;
+      }
+
+      const displayName =
+        isFileArray && groupPrefix
+          ? fileOrFiles.length > 1
+            ? `${groupPrefix} (${fileOrFiles.length})`
+            : groupPrefix
+          : firstFile.name;
+      setFiles((previous) =>
+        previous.some((file) => file.id === fileId)
+          ? previous
+          : [
+              ...previous,
+              {
+                name: displayName,
+                id: fileId,
+                fileObj: fileOrFiles,
+                isGroup: isFileArray,
+                groupPrefix,
+              },
+            ],
+      );
+      setShowingCombinedView(false);
+      requestFileLoad(fileId, fileOrFiles);
+      switchToFile(fileId);
+      setPendingActiveFileId(fileId);
+      setHasUserInteracted(true);
+    },
+    [files, switchToFile, requestFileLoad, handleClearTabs],
+  );
+
+  // Watch for logs changes to update header
+  useEffect(() => {
+    setHeaderState(null);
+    if (logs && logs.length > 0) {
+      // First try to get headers from file headers using file ID instead of name
+      const currentFile = files[activeFileIndex];
+      if (currentFile) {
+        const fileHeaders = getCurrentFileHeaders(currentFile.id);
+        if (
+          fileHeaders &&
+          (fileHeaders.user ||
+            fileHeaders.account ||
+            fileHeaders.clientVersion ||
+            fileHeaders.osVersion)
+        ) {
+          setHeaderState(fileHeaders);
+          return;
+        }
+      }
+
+      // If no file headers, try to find header details from first few logs
+      const headerInfo: LogHeaders = {};
+      for (let i = 0; i < Math.min(logs.length, 10); i++) {
+        const log = logs[i];
+        if (log.user && !headerInfo.user) headerInfo.user = log.user;
+        if (log.account && !headerInfo.account) headerInfo.account = log.account;
+        if (log.clientVersion && !headerInfo.clientVersion)
+          headerInfo.clientVersion = log.clientVersion;
+        if (log.osVersion && !headerInfo.osVersion) headerInfo.osVersion = log.osVersion;
+      }
+      if (Object.keys(headerInfo).length > 0) {
+        setHeaderState(headerInfo);
+      }
+    }
+  }, [logs, files, activeFileIndex, getCurrentFileHeaders]);
+
+  // Get folder name from current file
+  const currentFolderName = useMemo(() => {
+    if (!files || files.length === 0) return null;
+
+    // Walk every loaded tab and every underlying File to collect the parent
+    // path of each file. We then pick the first non-empty parent path that
+    // contains a separator (i.e. has a real folder, not a bare filename).
+    const collectPaths = () => {
+      const paths: string[] = [];
+      const visit = (obj: File | File[] | undefined) => {
+        if (!obj) return;
+        if (Array.isArray(obj)) {
+          obj.forEach(visit);
+          return;
+        }
+        if (obj.webkitRelativePath) paths.push(obj.webkitRelativePath);
+      };
+      files.forEach((file) => {
+        visit(file && file.fileObj);
+        if (file && file.id && typeof file.id === 'string' && file.id.includes('/')) {
+          paths.push(file.id);
+        }
+      });
+      return paths;
+    };
+
+    const paths = collectPaths();
+    for (const p of paths) {
+      const parts = p.split('/').filter(Boolean);
+      if (parts.length > 1) return parts.slice(0, -1).join('/');
+    }
+    // Fallback: a bare folder name with no children (rare).
+    for (const p of paths) {
+      const parts = p.split('/').filter(Boolean);
+      if (parts.length === 1) return parts[0];
+    }
+    return null;
+  }, [files]);
+
+  // Update the document title based on what's loaded:
+  //   - Folder load (multiple files OR a single file whose webkitRelativePath
+  //     contains a parent folder)  -> "Log Viewer - <folder leaf>"
+  //   - Single file load and nothing previously loaded -> "Log Viewer - <file>"
+  //   - Single file added on top of existing content   -> leave title alone
+  //   - No files loaded                                -> reset to default
+  const DEFAULT_TITLE = 'Cato Client Log Viewer';
+  const previousFilesCountRef = React.useRef(0);
+  useEffect(() => {
+    const count = files ? files.length : 0;
+
+    if (count === 0) {
+      document.title = DEFAULT_TITLE;
+      previousFilesCountRef.current = 0;
+      return;
+    }
+
+    const folderLeaf = currentFolderName
+      ? cleanFolderLabel(currentFolderName.split('/').filter(Boolean)[0])
+      : null;
+
+    if (folderLeaf) {
+      document.title = `Log Viewer-${folderLeaf}`;
+    } else if (previousFilesCountRef.current === 0) {
+      // First load and it's a single file with no folder context.
+      const first = files[0];
+      const fileLabel = first ? getFileDisplayName(first.id) : 'file';
+      document.title = `Log Viewer-${fileLabel}`;
+    }
+    // else: file added while content was already loaded -> keep current title
+
+    previousFilesCountRef.current = count;
+  }, [files, currentFolderName]);
+
+  // Calculate log time range (start - end)
+  useEffect(() => {
+    if (logs && logs.length > 0) {
+      const firstLog = logs[0];
+      const lastLog = logs[logs.length - 1];
+
+      if (
+        firstLog.displayDate &&
+        firstLog.displayTime &&
+        lastLog.displayDate &&
+        lastLog.displayTime
+      ) {
+        setLogDuration(
+          `${firstLog.displayDate} ${firstLog.displayTime} → ${lastLog.displayDate} ${lastLog.displayTime}`,
+        );
+      } else if (firstLog.timestamp && lastLog.timestamp) {
+        // Fallback if display fields are not available
+        const startTime = firstLog.timestamp.replace(/[:.](\d{3})$/, '.$1');
+        const endTime = lastLog.timestamp.replace(/[:.](\d{3})$/, '.$1');
+        setLogDuration(`${startTime} → ${endTime}`);
+      } else {
+        setLogDuration(null);
+      }
+    } else {
+      setLogDuration(null);
+    }
+  }, [logs]);
+
+  const handleFileSelect = useCallback(
+    (index: number) => {
+      setActiveFileIndex(index);
+      setShowingCombinedView(false);
+
+      // Lazy load: If logs for this file/group are not loaded, load them now
+      const file = files[index];
+      if (file) {
+        if (!allFileLogs[file.id] && file.fileObj) {
+          requestFileLoad(file.id, file.fileObj);
+        }
+        // Switch to file works for both single files and groups (logs already combined)
+        switchToFile(file.id);
+      }
+    },
+    [files, allFileLogs, requestFileLoad, switchToFile],
+  );
+
+  // After all files finish loading + sorting, auto-select the first tab
+  // (alphabetically by display title — same order as the sorted tab strip).
+  useEffect(() => {
+    if (files.length === 0) {
+      lastSelectedFileCount.current = 0;
+      return;
+    }
+    if (
+      isAnyFileLoading ||
+      prepareFilesCount > 0 ||
+      isRestoringSession ||
+      showingCombinedView ||
+      isLiveMode
+    )
+      return;
+    if (lastSelectedFileCount.current === files.length) return;
+    lastSelectedFileCount.current = files.length;
+    const sorted = files
+      .map((file, index) => ({ index, label: getFileDisplayName(file.id) }))
+      .sort((left, right) =>
+        left.label.localeCompare(right.label, undefined, { numeric: true, sensitivity: 'base' }),
+      );
+    setPendingActiveFileId(null);
+    handleFileSelect(sorted[0].index);
+  }, [
+    files,
+    isAnyFileLoading,
+    prepareFilesCount,
+    isRestoringSession,
+    showingCombinedView,
+    isLiveMode,
+    handleFileSelect,
+  ]);
+
+  const handleFileClose = useCallback(
+    (index: number) => {
+      const closing = files[index];
+      if (!closing) return;
+      const remaining = files.filter((_, position) => position !== index);
+      lastSelectedFileCount.current = remaining.length;
+      removeLogsForFile(closing.id);
+      setFiles(remaining);
+      if (!remaining.length) {
+        resetModel();
+        setHasUserInteracted(false);
+        setActiveFileIndex(0);
+        setShowingCombinedView(false);
+        setHeaderState(null);
+        setLogDuration(null);
+        clearSession();
+        return;
+      }
+      const nextIndex = Math.max(
+        0,
+        Math.min(
+          activeFileIndex > index ? activeFileIndex - 1 : activeFileIndex,
+          remaining.length - 1,
+        ),
+      );
+      setActiveFileIndex(nextIndex);
+      if (remaining.length < 2) {
+        setShowingCombinedView(false);
+      }
+      if (!showingCombinedView || remaining.length < 2) switchToFile(remaining[nextIndex].id);
+    },
+    [files, activeFileIndex, showingCombinedView, removeLogsForFile, resetModel, switchToFile],
+  );
+
+  const handleCloseAll = useCallback(() => {
+    liveDisconnect();
+    fsDisconnect();
+    setIsLiveMode(false);
+    liveTabIdsRef.current.clear();
+    // Wipe the entire model (logs, sticky notes, headers, current file, etc.)
+    resetModel();
+    resetModel();
+
+    // Clear all UI state in this component
+    setFiles([]);
+    setHasUserInteracted(false);
+    setActiveFileIndex(0);
+    setShowingCombinedView(false);
+    setHeaderState(null);
+    setLogDuration(null);
+    setPivotLog(null);
+    setHoveredLog(null);
+    setLastHoveredLog(null);
+
+    // Clear session storage
+    clearSession();
+  }, [resetModel, liveDisconnect, fsDisconnect]);
+
+  // Export visible records of the active tab. Uses filteredLogs which already
+  // reflects all active filters (text/regex search, level, module, date range,
+  // line ranges, etc.) and works for both single-file tabs and the combined
+  // "All Files" view.
+  const handleExportActive = useCallback(() => {
+    let suggestedName;
+    let tagSourceFile = false;
+    if (showingCombinedView) {
+      suggestedName = 'AllFiles_filtered';
+      tagSourceFile = true;
+    } else if (files[activeFileIndex]) {
+      suggestedName = `${files[activeFileIndex].name}_filtered`;
+    } else {
+      suggestedName = 'logs_filtered';
+    }
+    exportLogsToFile(filteredLogs, suggestedName, { tagSourceFile, header: headerState });
+  }, [showingCombinedView, files, activeFileIndex, filteredLogs, headerState]);
+
+  // Build (or rebuild) the combined "All Files" model from currently-loaded
+  // per-tab logs. Wrapped in useCallback so a useEffect can re-invoke it
+  // whenever a previously-unloaded tab finishes loading.
+  const buildCombinedView = useCallback(() => {
+    if (files.length === 0) return;
+
+    const combinedLogs = combineLogs(
+      files.map((file) => ({ id: file.id, logs: allFileLogs[file.id] || [] })),
+    );
+
+    setLogsForFile('Combined Files', combinedLogs);
+  }, [files, allFileLogs, setLogsForFile]);
+
+  const handleCombinedViewSelect = useCallback(() => {
+    setShowingCombinedView(true);
+    // Force a rebuild on (re)entry — the dedupe ref below would otherwise
+    // skip the build if the source signature happens to match the last one.
+    lastCombinedSourcesRef.current = [];
+
+    // Force-load any tabs whose logs aren't in memory yet so the combined
+    // view will include records from every tab, not just the previously
+    // visited ones.
+    files.forEach((file) => {
+      if (!allFileLogs[file.id] && file.fileObj) {
+        requestFileLoad(file.id, file.fileObj);
+      }
+    });
+
+    if (files.length > 0) {
+      buildCombinedView();
+    }
+    switchToFile('Combined Files');
+  }, [files, allFileLogs, requestFileLoad, buildCombinedView, switchToFile]);
+
+  // While the combined view is active, rebuild it whenever a tab finishes
+  // loading (one of its per-file log arrays appears/changes) or the set of
+  // tabs changes. We deliberately key off the per-file entries only —
+  // `allFileLogs['Combined Files']` is written *by* this rebuild, so
+  // depending on the whole `allFileLogs` object would create an infinite
+  // loop (and tank scroll performance).
+  const combinedSources = useMemo(
+    () => files.map((file) => allFileLogs[file.id]),
+    [files, allFileLogs],
+  );
+  const lastCombinedSourcesRef = useRef<(LogRecord[] | undefined)[]>([]);
+  useEffect(() => {
+    if (!showingCombinedView || files.length === 0) return;
+    const previous = lastCombinedSourcesRef.current;
+    if (
+      previous.length === combinedSources.length &&
+      previous.every((logs, index) => logs === combinedSources[index])
+    )
+      return;
+    lastCombinedSourcesRef.current = combinedSources;
+    buildCombinedView();
+  }, [showingCombinedView, files.length, combinedSources, buildCombinedView]);
+
+  // Only treat a drag as a file-drop when the OS is actually dragging files.
+  // Internal drags (e.g. column reorder in the Column Settings modal) use
+  // the 'text/plain' type and must not trigger the file-drop overlay.
+  const isFileDrag = (e: DragEvent) => {
+    const types = e.dataTransfer && e.dataTransfer.types;
+    if (!types) return false;
+    // DataTransferItemList vs DOMStringList — both support contains/includes via Array.from
+    return Array.from(types).includes('Files');
+  };
+
+  // Recursively walk DataTransferItem entries (FileSystemEntry) and collect
+  // every File. Sets webkitRelativePath on each file so directory-based
+  // grouping works the same as the <input type="file" webkitdirectory> path.
+  const collectFilesFromEntries = collectDroppedFiles;
+
+  const handleDragOver = useCallback((e: DragEvent<HTMLDivElement>) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    setIsFileDropActive(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: DragEvent<HTMLDivElement>) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    setIsFileDropActive(false);
+  }, []);
+
+  // Shared ingestion path for files that arrive from outside the file pickers:
+  // drag & drop and the PWA file handler ("Open With" in Finder/Explorer).
+  const ingestExternalFiles = useCallback(
+    async (incomingFiles: File[]) => {
+      if (!incomingFiles || !incomingFiles.length) return;
+
+      beginPreparingFiles();
+      try {
+        // Expand any incoming .zip / .tar.xz archives in place.
+        const hasArchive = incomingFiles.some(isArchiveFile);
+        let allFiles;
+        try {
+          allFiles = hasArchive ? await expandArchivesInList(incomingFiles) : incomingFiles;
+        } catch (err) {
+          alert(`Failed to extract archive: ${errorMessage(err)}`);
+          return;
+        }
+
+        const textFiles = allFiles.filter(hasValidLogExtension);
+
+        // Sort files by name before grouping (natural sort for numbered files)
+        const sortedTextFiles = textFiles.sort((a, b) => naturalSort(a.name, b.name));
+
+        // Group files by subdirectory + prefix, then split by detected log format
+        // so only files sharing the same pattern end up in the same tab.
+        const groupedFiles = await groupFilesByDirectoryAndFormat(sortedTextFiles);
+
+        // If an archive came in, treat it like a folder load (clear tabs first).
+        if (hasArchive) handleClearTabs();
+
+        // Load each group
+        groupedFiles.forEach((filesInGroup, groupKey) => {
+          // Load as merged group with the groupKey as identifier
+          handleFileLoad(filesInGroup, false, groupKey);
+        });
+      } finally {
+        endPreparingFiles();
+      }
+    },
+    [handleFileLoad, handleClearTabs, beginPreparingFiles, endPreparingFiles],
+  );
+
+  const handleDrop = useCallback(
+    async (e: DragEvent<HTMLDivElement>) => {
+      if (!isFileDrag(e)) return;
+      e.preventDefault();
+      setIsFileDropActive(false);
+
+      // If folders were dropped, walk their entries so we get every file with
+      // a webkitRelativePath set (matches the folder-picker code path).
+      const items = e.dataTransfer.items ? Array.from(e.dataTransfer.items) : [];
+      const entries = items
+        .filter((it) => it.kind === 'file')
+        .map((it) => (typeof it.webkitGetAsEntry === 'function' ? it.webkitGetAsEntry() : null))
+        .filter(Boolean);
+
+      const droppedFiles = entries.length
+        ? await collectFilesFromEntries(entries)
+        : Array.from(e.dataTransfer.files);
+
+      await ingestExternalFiles(droppedFiles);
+    },
+    [ingestExternalFiles],
+  );
+
+  // PWA file handling: when the installed app is launched by opening a log file
+  // from the OS (Finder "Open With", Explorer double-click), the file handles
+  // arrive through the launch queue. Requires the app to be installed as a PWA;
+  // in a normal browser tab `launchQueue` is simply absent.
+  useEffect(() => {
+    if (!('launchQueue' in window) || !window.launchQueue) return;
+
+    window.launchQueue.setConsumer(async (launchParams) => {
+      const handles = launchParams?.files || [];
+      if (!handles.length) return;
+
+      const launchedFiles = [];
+      for (const handle of handles) {
+        try {
+          launchedFiles.push(await handle.getFile());
+        } catch (err) {
+          console.error('Could not read launched file:', err);
+        }
+      }
+
+      await ingestExternalFiles(launchedFiles);
+    });
+  }, [ingestExternalFiles]);
+
+  // Open the tab-selection dialog
+  const handleExportFile = useCallback(
+    (fileId: string, label: string) => {
+      const logs = allFileLogs[fileId] || [];
+      exportLogsToFile(logs, label || fileId);
+    },
+    [allFileLogs],
+  );
+
+  const handleDownloadMerged = useCallback(() => {
+    if (!files || files.length === 0) return;
+    if (isLiveMode) {
+      // For live logs: merge all live tabs in-memory sorted by timestamp
+      const liveLogs = files.filter((f) => f.isLive).flatMap((f) => allFileLogs[f.id] || []);
+      liveLogs.sort((a, b) =>
+        (a.timestamp || '') < (b.timestamp || '')
+          ? -1
+          : (a.timestamp || '') > (b.timestamp || '')
+            ? 1
+            : 0,
+      );
+      exportLogsToFile(liveLogs, 'live_logs_merged', { tagSourceFile: true });
+      return;
+    }
+    setIsMergeDialogOpen(true);
+  }, [files, isLiveMode, allFileLogs]);
+
+  // Run the JS port of mergeLogs.py against the selected tabs
+  const handleConfirmMerge = useCallback(
+    async (selectedIds: string[]) => {
+      setIsMergeDialogOpen(false);
+
+      // Collect raw File objects only from selected tabs
+      const rawFiles: File[] = [];
+      const seen = new Set();
+      files.forEach((entry) => {
+        if (!selectedIds.includes(entry.id)) return;
+        const obj = entry && entry.fileObj;
+        if (!obj) return;
+        const list = Array.isArray(obj) ? obj : [obj];
+        list.forEach((f) => {
+          if (f && !seen.has(f)) {
+            seen.add(f);
+            rawFiles.push(f);
+          }
+        });
+      });
+
+      if (!rawFiles.length) {
+        alert('No source files available to merge. Try re-loading the folder.');
+        return;
+      }
+
+      setIsDownloadingMerged(true);
+      try {
+        const { mergeLogsToZip } = await import('./utils/mergeLogsScript');
+        const folderLeaf = (currentFolderName || '').split('/').pop();
+        const outputFolderName = folderLeaf ? `${folderLeaf}_merged` : undefined;
+        const { blob, fileName, log } = await mergeLogsToZip(rawFiles, { outputFolderName });
+        if (log && log.length) console.log('[merge-logs]\n' + log.join('\n'));
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        console.error('Download Merged failed:', err);
+        alert(`Download Merged failed: ${errorMessage(err)}`);
+      } finally {
+        setIsDownloadingMerged(false);
+      }
+    },
+    [files, currentFolderName],
+  );
+
+  // Toggle log selection - if same log is clicked, close it; if different log, open it
+  const handleLogClick = useCallback(
+    (log: LogRecord) => {
+      if (selectedLog && selectedLog.id === log.id) {
+        // Same log clicked - close the modal
+        setSelectedLog(null);
+      } else {
+        // Different log clicked - open the modal
+        setSelectedLog(log);
+      }
+    },
+    [selectedLog, setSelectedLog],
+  );
+
+  // Navigation functions for modal
+  const navigateToNextLog = useCallback(() => {
+    if (!selectedLog || !filteredLogs.length) return;
+
+    const currentIndex = filteredLogs.findIndex((log) => log.id === selectedLog.id);
+    if (currentIndex >= 0 && currentIndex < filteredLogs.length - 1) {
+      const nextLog = filteredLogs[currentIndex + 1];
+      setSelectedLog({ ...nextLog, lineIndex: currentIndex + 2 }); // Keep lineIndex for modal navigation, lineNumber is preserved from original log
+    }
+  }, [selectedLog, filteredLogs, setSelectedLog]);
+
+  const navigateToPrevLog = useCallback(() => {
+    if (!selectedLog || !filteredLogs.length) return;
+
+    const currentIndex = filteredLogs.findIndex((log) => log.id === selectedLog.id);
+    if (currentIndex > 0) {
+      const prevLog = filteredLogs[currentIndex - 1];
+      setSelectedLog({ ...prevLog, lineIndex: currentIndex }); // Keep lineIndex for modal navigation, lineNumber is preserved from original log
+    }
+  }, [selectedLog, filteredLogs, setSelectedLog]);
+
+  // Check if next/prev navigation is available
+  const hasNextLog = useMemo(() => {
+    if (!selectedLog || !filteredLogs.length) return false;
+    const currentIndex = filteredLogs.findIndex((log) => log.id === selectedLog.id);
+    return currentIndex >= 0 && currentIndex < filteredLogs.length - 1;
+  }, [selectedLog, filteredLogs]);
+
+  const hasPrevLog = useMemo(() => {
+    if (!selectedLog || !filteredLogs.length) return false;
+    const currentIndex = filteredLogs.findIndex((log) => log.id === selectedLog.id);
+    return currentIndex > 0;
+  }, [selectedLog, filteredLogs]);
+
+  const memoizedContent = useMemo(() => {
+    if (!hasUserInteracted) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <div
+            style={{ width: '50vw', height: '50vh' }}
+            className={`flex flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-colors
+              ${
+                isFileDropActive
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
+                  : 'border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400'
+              }`}
+          >
+            {/* Cloud / upload icon */}
+            <svg
+              className="w-16 h-16 mb-4 opacity-40"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+              />
+            </svg>
+            <p className="text-2xl font-semibold mb-2">Drop log files here</p>
+            <p className="text-sm mb-1">
+              or click <span className="font-medium">"Open Files"</span> in the toolbar to get
+              started
+            </p>
+            <p className="text-xs mt-3 opacity-60">
+              Supports .log, .txt, .ips — single files, folders, or archives
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    if (files.length === 0) {
+      return (
+        <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
+          <p>No logs to display</p>
+        </div>
+      );
+    }
+
+    // Only render the list; filters toolbar is rendered above
+    return (
+      <LogListView
+        key={columnResetKey}
+        logs={filteredLogs}
+        allLogs={logs}
+        onLogClick={handleLogClick}
+        highlightedLogId={highlightedLogId}
+        selectedLogId={selectedLog?.id || null}
+        filters={filters}
+        onFiltersChange={updateFilters}
+        onSearchMatchUpdate={(pos, total) => {
+          setSearchPos(pos);
+          setSearchTotal(total);
+        }}
+        onHover={setHoveredLog}
+        pivotLog={pivotLog}
+        onSetPivot={setPivotTime}
+        onClearPivot={clearPivotTime}
+        stickyLogs={stickyLogs}
+        onAddStickyLog={addStickyLog}
+        highlightLog={highlightLog}
+        visibleColumns={visibleColumns}
+        columnOrder={rightColumnOrder}
+        onColumnOrderChange={handleRightColumnOrderChange}
+        viewKey={
+          showingCombinedView
+            ? 'combined'
+            : `file:${files[activeFileIndex]?.name || activeFileIndex}`
+        }
+        isLiveMode={isLiveMode}
+      />
+    );
+  }, [
+    hasUserInteracted,
+    files,
+    activeFileIndex,
+    showingCombinedView,
+    filteredLogs,
+    handleLogClick,
+    highlightedLogId,
+    filters,
+    pivotLog,
+    setPivotTime,
+    clearPivotTime,
+    stickyLogs,
+    addStickyLog,
+    highlightLog,
+    setSearchPos,
+    setSearchTotal,
+    updateFilters,
+    setHoveredLog,
+    visibleColumns,
+    columnVersion,
+    rightColumnOrder,
+    handleRightColumnOrderChange,
+    columnResetKey,
+    isLiveMode,
+  ]);
+
+  // Remove old currentFileHeaders logic - now using headerState
+
+  return (
+    <div
+      className={`h-screen flex flex-col bg-gray-50 dark:bg-gray-900 ${isFileDropActive ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <SelectionFilesDialog
+        isOpen={isMergeDialogOpen}
+        onClose={() => setIsMergeDialogOpen(false)}
+        files={files}
+        onConfirm={handleConfirmMerge}
+      />
+      {loadError && (
+        <p role="alert" className="p-2 text-sm text-red-600">
+          {loadError}
+        </p>
+      )}
+      <LogViewerHeader
+        onClearTabs={handleClearTabs}
+        onFileLoad={handleFileLoad}
+        onPrepareFilesStart={beginPreparingFiles}
+        onPrepareFilesEnd={endPreparingFiles}
+        hasLogs={files.length > 0}
+        currentFileHeaders={headerState}
+        visibleColumns={visibleColumns}
+        onColumnsChange={handleColumnsChange}
+        onResetColumnDefaults={handleResetColumnDefaults}
+        logDuration={logDuration}
+        folderName={currentFolderName}
+        onDownloadMerged={handleDownloadMerged}
+        isDownloadingMerged={isDownloadingMerged}
+        onClearFilters={() =>
+          updateFilters({
+            searchText: '',
+            searchQuery: '',
+            logLevel: ['all'],
+            selectedModule: 'all',
+            contextLines: 0,
+          })
+        }
+        isLiveMode={isLiveMode}
+        isLiveConnected={isLiveConnected}
+        isLiveChecking={isLiveChecking}
+        onLiveToggle={handleLiveToggle}
+        onOpenLiveSettings={() => setShowLiveSettings(true)}
+      />
+
+      {/* Main content area */}
+      <div className="flex-1 overflow-hidden flex">
+        <div className="overflow-hidden flex flex-col w-full">
+          {/* Tabs - now inside left panel */}
+          {files.length > 0 && (
+            <LogTabs
+              files={files}
+              activeFileIndex={activeFileIndex}
+              onFileSelect={handleFileSelect}
+              onFileClose={handleFileClose}
+              showingCombinedView={showingCombinedView}
+              onCombinedViewSelect={handleCombinedViewSelect}
+              isFileLoading={isFileLoading}
+              onCloseAll={handleCloseAll}
+              onExportActive={handleExportActive}
+              onExportFile={handleExportFile}
+              isLiveMode={isLiveMode}
+              onFromNow={() => {
+                const now = new Date();
+                const pad = (n: number, len = 2) => String(n).padStart(len, '0');
+                const yy = String(now.getFullYear());
+                const mm = pad(now.getMonth() + 1);
+                const dd = pad(now.getDate());
+                const HH = pad(now.getHours());
+                const MM = pad(now.getMinutes());
+                const SS = pad(now.getSeconds());
+                const ms = pad(now.getMilliseconds(), 3);
+                const dateStr = `${yy}-${mm}-${dd} ${HH}:${MM}:${SS}.${ms}`;
+                const clause = `#${dateStr} ::`;
+                updateFiltersForAllFiles({ searchText: clause });
+              }}
+            />
+          )}
+
+          {/* Log viewing container with filters and content */}
+          {hasUserInteracted && logs.length > 0 ? (
+            <div className="flex-1 mt-2 mb-2 ml-2 mr-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex flex-col pb-0">
+              <LogViewerFilters
+                filters={filters}
+                onFiltersChange={updateFilters}
+                moduleOptions={moduleOptions}
+                logsCount={logs.length}
+                filteredLogsCount={filteredLogs.length}
+                searchMatchCount={searchTotal}
+                searchMatchPos={searchPos}
+                pivotGap={currentPivotGap}
+                pivotLineNumber={pivotLog?.lineNumber}
+                stickyLogs={stickyLogs}
+                onRemoveStickyLog={removeStickyLog}
+                onClearAllStickyLogs={clearAllStickyLogs}
+                onUpdateStickyLogTitle={updateStickyLogTitle}
+                onScrollToLog={scrollToLog}
+                activeFileIndex={activeFileIndex}
+              />
+              <div className="flex-1 overflow-hidden">{memoizedContent}</div>
+            </div>
+          ) : (
+            <div className="flex-1 flex items-center justify-center ml-2 mr-2">
+              {memoizedContent}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {selectedLog && (
+        <LogModal
+          log={selectedLog}
+          onClose={() => setSelectedLog(null)}
+          onAddStickyLog={addStickyLog}
+          onNext={navigateToNextLog}
+          onPrev={navigateToPrevLog}
+          hasNext={hasNextLog}
+          hasPrev={hasPrevLog}
+        />
+      )}
+
+      {/* Loading overlay shown while any file is being parsed or prepared */}
+      {(isAnyFileLoading || prepareFilesCount > 0) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/60">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl px-6 py-5 flex items-center gap-3 border border-gray-200 dark:border-gray-700">
+            <svg
+              className="animate-spin h-6 w-6 text-blue-500"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              ></circle>
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+              ></path>
+            </svg>
+            <div className="text-sm text-gray-800 dark:text-gray-100">Loading log files…</div>
+          </div>
+        </div>
+      )}
+
+      {/* Sticky Log Notification */}
+      {notification && (
+        <div className="fixed top-4 right-4 z-50 animate-fade-in">
+          <div className="bg-yellow-100 dark:bg-yellow-900 border border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-200 px-4 py-3 rounded-lg shadow-lg max-w-sm">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path
+                    fillRule="evenodd"
+                    d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium">{notification.message}</p>
+              </div>
+              <div className="ml-auto pl-3">
+                <button
+                  onClick={() => setNotification(null)}
+                  className="inline-flex text-yellow-400 hover:text-yellow-600 focus:outline-none focus:text-yellow-600"
+                >
+                  <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path
+                      fillRule="evenodd"
+                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isFileDropActive && (
+        <div className="fixed inset-0 bg-blue-500 bg-opacity-20 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-lg">
+            <p className="text-xl text-blue-600 dark:text-blue-400">Drop your log files here</p>
+          </div>
+        </div>
+      )}
+
+      {/* Live logs folder configuration */}
+      <LiveLogsSettings isOpen={showLiveSettings} onClose={() => setShowLiveSettings(false)} />
+
+      {/* Live server not running dialog */}
+      {showServerDialog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70"
+          onClick={() => setShowServerDialog(false)}
+        >
+          <div
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 max-w-lg w-full mx-4 border border-gray-200 dark:border-gray-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3 mb-4">
+              <div className="flex-shrink-0 w-9 h-9 rounded-full bg-yellow-100 dark:bg-yellow-900 flex items-center justify-center">
+                <svg
+                  className="w-5 h-5 text-yellow-600 dark:text-yellow-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+                  />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                  Set Up Live Logs
+                </h3>
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                  {setupOnWindows
+                    ? 'A small local server must run on your machine to stream logs. Paste this into PowerShell:'
+                    : 'Mirror the Cato logs into a folder the viewer can read — nothing to install.'}
+                </p>
+              </div>
+            </div>
+
+            {/* macOS: mirror the logs, then read the folder */}
+            {!setupOnWindows &&
+              isFsAccessSupported() &&
+              (() => {
+                const mirrorCmd = buildMirrorCommand(window.location.origin);
+                return (
+                  <div className="mb-4 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30 px-4 py-3">
+                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                      Two steps
+                    </div>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+                      1. Run this in a terminal and leave it running. It copies every Cato log,
+                      including the root-only ones, into{' '}
+                      <code className="bg-white dark:bg-gray-700 px-1 rounded">
+                        ~/{MIRROR_DIR_NAME}
+                      </code>
+                      :
+                    </p>
+                    <div className="font-mono text-xs text-green-400 bg-gray-900 dark:bg-gray-950 rounded px-3 py-2 break-all select-all mb-2">
+                      {mirrorCmd}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => navigator.clipboard.writeText(mirrorCmd)}
+                        className="px-3 py-1.5 rounded text-xs bg-gray-700 hover:bg-gray-600 text-white font-medium transition-colors"
+                      >
+                        Copy command
+                      </button>
+                      <span className="text-xs text-gray-600 dark:text-gray-400">2.</span>
+                      <button
+                        onClick={handleChooseMirrorFolder}
+                        className="px-3 py-1.5 rounded text-xs bg-green-600 hover:bg-green-700 text-white font-medium transition-colors"
+                      >
+                        Choose {MIRROR_DIR_NAME} folder
+                      </button>
+                    </div>
+                    <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+                      In the folder picker, press Cmd+Shift+G and enter ~/.cato_live_logs to open
+                      the hidden folder. Starting Live Logs clears the previous mirror and waits for
+                      a fresh copy.
+                    </p>
+                    {fsProblem === 'empty' && (
+                      <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+                        That folder has no logs yet. Is the command above still running?
+                      </p>
+                    )}
+                    {fsProblem === 'denied' && (
+                      <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+                        Access to the folder wasn't granted. Choose it again and allow read and
+                        write access.
+                      </p>
+                    )}
+                    {fsProblem === 'sync' && (
+                      <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+                        The sync script did not respond or the mirror could not be cleared. Run the
+                        updated command above and choose ~/.cato_live_logs with read and write
+                        access.
+                      </p>
+                    )}
+                    {fsProblem === 'lost' && (
+                      <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+                        Access to the folder was lost. Choose it again.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+
+            {!setupOnWindows && !isFsAccessSupported() && (
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">
+                Reading the logs folder needs Chrome or Edge. Open the viewer in one of them.
+              </p>
+            )}
+
+            {/* Windows: single combined server command */}
+            {setupOnWindows &&
+              (() => {
+                const cmd = buildSetupCommand(window.location.origin, getSavedLogDir());
+                return (
+                  <div className="bg-gray-900 dark:bg-gray-950 rounded-lg px-4 py-3 mb-5">
+                    <div className="font-mono text-sm text-green-400 break-all mb-3 select-all leading-relaxed">
+                      {cmd}
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => navigator.clipboard.writeText(cmd)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors font-medium"
+                      >
+                        <svg
+                          className="w-3.5 h-3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                          />
+                        </svg>
+                        Copy command
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+
+            {setupOnWindows && (
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-5">
+                Downloads the script, installs the{' '}
+                <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">ws</code> dependency,
+                and starts the server. Installs Node.js first if it's missing (via winget — accept
+                the UAC prompt), then starts the server. Running it needs no administrator rights.
+                On first run, set your build folder from{' '}
+                <span className="font-medium">Settings ▸ Live Logs Settings</span>.
+              </p>
+            )}
+
+            <div className="flex justify-end">
+              <button
+                onClick={() => setShowServerDialog(false)}
+                className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default LogViewer;
