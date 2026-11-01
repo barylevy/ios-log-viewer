@@ -11,6 +11,7 @@ import {
 import { createDefaultFilters } from '../domain/logRecord';
 import { parseTimestamp } from '../domain/timestamps';
 import { combineLogs } from '../domain/combineLogs';
+import { findNearestLogIndex } from '../domain/logNavigation';
 
 function record(message: string, seconds = 0, id = 0) {
   return parseLogLine(
@@ -219,6 +220,19 @@ describe('timestamps', () => {
 });
 
 describe('combined views', () => {
+  it('navigates to the nearest displayed source line with deterministic ties', () => {
+    const logs = [10, 30, 20].map((lineNumber, index) => ({
+      ...record('message', 0, index),
+      lineNumber,
+      sourceFile: index === 2 ? 'other.log' : 'app.log',
+    }));
+    expect(findNearestLogIndex(logs, 20)).toBe(2);
+    expect(findNearestLogIndex(logs, 20, 'app.log')).toBe(0);
+    expect(findNearestLogIndex(logs, 29, 'app.log')).toBe(1);
+    expect(findNearestLogIndex(logs, 10, 'other.log')).toBe(2);
+    expect(findNearestLogIndex(logs, 10, 'missing.log')).toBe(-1);
+    expect(findNearestLogIndex([], 10)).toBe(-1);
+  });
   it('keeps source identity stable when sorting inserts an earlier record', () => {
     const source = { id: 'app', logs: [record('later', 5, 0)] };
     const original = combineLogs([source]);

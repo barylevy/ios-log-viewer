@@ -1,5 +1,4 @@
 import ViewerDialog from './components/ViewerDialog';
-import React from 'react';
 
 const AboutModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
   if (!isOpen) return null;

@@ -9,7 +9,7 @@ import {
 } from './domain/viewerTypes';
 import { collectDroppedFiles } from './services/dropFiles';
 import { combineLogs } from './domain/combineLogs';
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import LogListView from './LogListView';
 import LogModal from './LogModal';
 import LogViewerHeader from './LogViewerHeader';
@@ -26,7 +26,7 @@ import {
 } from './utils/fileGrouping';
 import { isArchiveFile, expandArchivesInList } from './utils/archiveExtractor';
 import { exportLogsToFile } from './utils/exportLogs';
-import { AVAILABLE_COLUMNS } from './ColumnSettings';
+import { DEFAULT_COLUMN_ORDER, DEFAULT_VISIBLE_COLUMNS } from './constants';
 import useLiveLogs from './utils/useLiveLogs';
 import useLiveLogsFs from './utils/useLiveLogsFs';
 import {
@@ -116,30 +116,9 @@ const LogViewer = () => {
     if (saved) {
       return JSON.parse(saved);
     }
-    // Default columns
-    const defaultColumns: ColumnVisibility = {};
-    AVAILABLE_COLUMNS.forEach((col) => {
-      defaultColumns[col.id] = col.defaultVisible;
-    });
-    return defaultColumns;
+    return { ...DEFAULT_VISIBLE_COLUMNS };
   });
 
-  // Column change version to force re-render
-  const [columnVersion, setColumnVersion] = useState(0);
-
-  // Order of all log-row columns. Persisted via the Column Settings modal.
-  // Falls back to the default order and merges in any new column ids added
-  // in future versions.
-  const DEFAULT_COLUMN_ORDER = [
-    'timestamp',
-    'lineNumber',
-    'logLevel',
-    'message',
-    'module',
-    'sourceFile',
-    'timeGap',
-    'processThread',
-  ];
   const [rightColumnOrder, setRightColumnOrder] = useState(() => {
     try {
       const saved = localStorage.getItem('logViewerColumnOrder');
@@ -166,13 +145,6 @@ const LogViewer = () => {
     } catch {
       /* ignore */
     }
-    setColumnVersion((prev) => prev + 1);
-  }, []);
-
-  // Handler that updates columns and increments version
-  const handleColumnsChange = useCallback((newColumns: ColumnVisibility) => {
-    setVisibleColumns(newColumns);
-    setColumnVersion((prev) => prev + 1);
   }, []);
 
   // Bumped only when the user clicks "Reset to Default" so the log list
@@ -191,7 +163,6 @@ const LogViewer = () => {
       /* ignore */
     }
     setColumnResetKey((prev) => prev + 1);
-    setColumnVersion((prev) => prev + 1);
   }, []);
 
   // Update lastHoveredLog whenever hoveredLog changes to a non-null value
@@ -304,8 +275,6 @@ const LogViewer = () => {
   const [searchPos, setSearchPos] = useState(0);
   const [searchTotal, setSearchTotal] = useState(0);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
-  const [headerState, setHeaderState] = useState<LogHeaders | null>(null);
-  const [logDuration, setLogDuration] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ lineNumber: number; message: string } | null>(
     null,
   );
@@ -430,8 +399,6 @@ const LogViewer = () => {
     setActiveFileIndex(0);
     setShowingCombinedView(false);
     setHasUserInteracted(false);
-    setHeaderState(null); // Clear header details
-    setLogDuration(null); // Clear time range
   }, [resetModel]);
 
   // ── Live / Online mode ────────────────────────────────────────────────────
@@ -581,39 +548,18 @@ const LogViewer = () => {
 
   const handleFileLoad = useCallback(
     (fileOrFiles: File | File[], clearTabsFirst = false, groupPrefix: string | null = null) => {
-      // Support both single file and array of files (for grouped Windows logs)
       const isFileArray = Array.isArray(fileOrFiles);
-      const firstFile = isFileArray ? fileOrFiles[0] : fileOrFiles;
-      if (!firstFile) return;
+      const inputFiles = isFileArray ? fileOrFiles : [fileOrFiles];
+      const firstFile = inputFiles[0];
+      if (!firstFile || !inputFiles.some(hasValidLogExtension)) return;
+      if (clearTabsFirst) handleClearTabs();
 
-      // Only load .txt, .log, or .ips files
-      // For file groups, check if AT LEAST ONE file has a valid extension
-      if (isFileArray) {
-        // For groups, check if at least one file is valid
-        const hasValidFile = fileOrFiles.some(hasValidLogExtension);
-        if (!hasValidFile) {
-          return;
-        }
-      } else {
-        // For single file, check the file itself
-        if (!hasValidLogExtension(fileOrFiles)) {
-          return;
-        }
+      let groupName: string | null = null;
+      if (isFileArray && groupPrefix) {
+        groupName = inputFiles.length > 1 ? `${groupPrefix} (${inputFiles.length})` : groupPrefix;
       }
-
-      // Optionally clear all tabs before loading (for new folder)
-      if (clearTabsFirst) {
-        handleClearTabs();
-      }
-
-      // For grouped files, use the prefix with file count as the identifier
-      // (only append the count when there is more than one file in the group)
-      const fileId =
-        isFileArray && groupPrefix
-          ? fileOrFiles.length > 1
-            ? `${groupPrefix} (${fileOrFiles.length})`
-            : groupPrefix
-          : getFileIdentifier(firstFile);
+      const fileId = groupName ?? getFileIdentifier(firstFile);
+      const displayName = groupName ?? firstFile.name;
 
       // Check if file/group already exists
       const existingIndex = files.findIndex((f) => f.id === fileId);
@@ -624,12 +570,6 @@ const LogViewer = () => {
         return;
       }
 
-      const displayName =
-        isFileArray && groupPrefix
-          ? fileOrFiles.length > 1
-            ? `${groupPrefix} (${fileOrFiles.length})`
-            : groupPrefix
-          : firstFile.name;
       setFiles((previous) =>
         previous.some((file) => file.id === fileId)
           ? previous
@@ -653,79 +593,41 @@ const LogViewer = () => {
     [files, switchToFile, requestFileLoad, handleClearTabs],
   );
 
-  // Watch for logs changes to update header
-  useEffect(() => {
-    setHeaderState(null);
-    if (logs && logs.length > 0) {
-      // First try to get headers from file headers using file ID instead of name
-      const currentFile = files[activeFileIndex];
-      if (currentFile) {
-        const fileHeaders = getCurrentFileHeaders(currentFile.id);
-        if (
-          fileHeaders &&
-          (fileHeaders.user ||
-            fileHeaders.account ||
-            fileHeaders.clientVersion ||
-            fileHeaders.osVersion)
-        ) {
-          setHeaderState(fileHeaders);
-          return;
-        }
-      }
+  const headerState = useMemo((): LogHeaders | null => {
+    if (!logs.length) return null;
+    const file = files[activeFileIndex];
+    const headers = file ? getCurrentFileHeaders(file.id) : null;
+    const keys = ['user', 'account', 'clientVersion', 'osVersion'] as const;
+    if (headers && keys.some((key) => headers[key])) return headers;
 
-      // If no file headers, try to find header details from first few logs
-      const headerInfo: LogHeaders = {};
-      for (let i = 0; i < Math.min(logs.length, 10); i++) {
-        const log = logs[i];
-        if (log.user && !headerInfo.user) headerInfo.user = log.user;
-        if (log.account && !headerInfo.account) headerInfo.account = log.account;
-        if (log.clientVersion && !headerInfo.clientVersion)
-          headerInfo.clientVersion = log.clientVersion;
-        if (log.osVersion && !headerInfo.osVersion) headerInfo.osVersion = log.osVersion;
-      }
-      if (Object.keys(headerInfo).length > 0) {
-        setHeaderState(headerInfo);
+    const metadata: LogHeaders = {};
+    for (const log of logs.slice(0, 10)) {
+      for (const key of keys) {
+        if (log[key] && !metadata[key]) metadata[key] = log[key];
       }
     }
+    return Object.keys(metadata).length ? metadata : null;
   }, [logs, files, activeFileIndex, getCurrentFileHeaders]);
 
-  // Get folder name from current file
   const currentFolderName = useMemo(() => {
-    if (!files || files.length === 0) return null;
-
-    // Walk every loaded tab and every underlying File to collect the parent
-    // path of each file. We then pick the first non-empty parent path that
-    // contains a separator (i.e. has a real folder, not a bare filename).
-    const collectPaths = () => {
-      const paths: string[] = [];
-      const visit = (obj: File | File[] | undefined) => {
-        if (!obj) return;
-        if (Array.isArray(obj)) {
-          obj.forEach(visit);
-          return;
-        }
-        if (obj.webkitRelativePath) paths.push(obj.webkitRelativePath);
-      };
-      files.forEach((file) => {
-        visit(file && file.fileObj);
-        if (file && file.id && typeof file.id === 'string' && file.id.includes('/')) {
-          paths.push(file.id);
-        }
-      });
-      return paths;
-    };
-
-    const paths = collectPaths();
-    for (const p of paths) {
-      const parts = p.split('/').filter(Boolean);
+    const paths: string[] = [];
+    for (const file of files) {
+      const sourceFiles = Array.isArray(file.fileObj)
+        ? file.fileObj
+        : file.fileObj
+          ? [file.fileObj]
+          : [];
+      for (const source of sourceFiles) {
+        if (source.webkitRelativePath) paths.push(source.webkitRelativePath);
+      }
+      if (file.id.includes('/')) paths.push(file.id);
+    }
+    // Prefer a real parent directory to the bare name of an individually dropped file.
+    for (const path of paths) {
+      const parts = path.split('/').filter(Boolean);
       if (parts.length > 1) return parts.slice(0, -1).join('/');
     }
-    // Fallback: a bare folder name with no children (rare).
-    for (const p of paths) {
-      const parts = p.split('/').filter(Boolean);
-      if (parts.length === 1) return parts[0];
-    }
-    return null;
+    return paths.map((path) => path.split('/').filter(Boolean)[0]).find(Boolean) ?? null;
   }, [files]);
 
   // Update the document title based on what's loaded:
@@ -735,7 +637,7 @@ const LogViewer = () => {
   //   - Single file added on top of existing content   -> leave title alone
   //   - No files loaded                                -> reset to default
   const DEFAULT_TITLE = 'Cato Client Log Viewer';
-  const previousFilesCountRef = React.useRef(0);
+  const previousFilesCountRef = useRef(0);
   useEffect(() => {
     const count = files ? files.length : 0;
 
@@ -762,32 +664,17 @@ const LogViewer = () => {
     previousFilesCountRef.current = count;
   }, [files, currentFolderName]);
 
-  // Calculate log time range (start - end)
-  useEffect(() => {
-    if (logs && logs.length > 0) {
-      const firstLog = logs[0];
-      const lastLog = logs[logs.length - 1];
-
-      if (
-        firstLog.displayDate &&
-        firstLog.displayTime &&
-        lastLog.displayDate &&
-        lastLog.displayTime
-      ) {
-        setLogDuration(
-          `${firstLog.displayDate} ${firstLog.displayTime} → ${lastLog.displayDate} ${lastLog.displayTime}`,
-        );
-      } else if (firstLog.timestamp && lastLog.timestamp) {
-        // Fallback if display fields are not available
-        const startTime = firstLog.timestamp.replace(/[:.](\d{3})$/, '.$1');
-        const endTime = lastLog.timestamp.replace(/[:.](\d{3})$/, '.$1');
-        setLogDuration(`${startTime} → ${endTime}`);
-      } else {
-        setLogDuration(null);
-      }
-    } else {
-      setLogDuration(null);
+  const logDuration = useMemo(() => {
+    if (!logs.length) return null;
+    const first = logs[0];
+    const last = logs[logs.length - 1];
+    if (first.displayDate && first.displayTime && last.displayDate && last.displayTime) {
+      return `${first.displayDate} ${first.displayTime} → ${last.displayDate} ${last.displayTime}`;
     }
+    if (!first.timestamp || !last.timestamp) return null;
+    const start = first.timestamp.replace(/[:.](\d{3})$/, '.$1');
+    const end = last.timestamp.replace(/[:.](\d{3})$/, '.$1');
+    return `${start} → ${end}`;
   }, [logs]);
 
   const handleFileSelect = useCallback(
@@ -855,8 +742,6 @@ const LogViewer = () => {
         setHasUserInteracted(false);
         setActiveFileIndex(0);
         setShowingCombinedView(false);
-        setHeaderState(null);
-        setLogDuration(null);
         clearSession();
         return;
       }
@@ -889,8 +774,6 @@ const LogViewer = () => {
     setHasUserInteracted(false);
     setActiveFileIndex(0);
     setShowingCombinedView(false);
-    setHeaderState(null);
-    setLogDuration(null);
     setPivotLog(null);
     setHoveredLog(null);
     setLastHoveredLog(null);
@@ -1297,14 +1180,11 @@ const LogViewer = () => {
     updateFilters,
     setHoveredLog,
     visibleColumns,
-    columnVersion,
     rightColumnOrder,
     handleRightColumnOrderChange,
     columnResetKey,
     isLiveMode,
   ]);
-
-  // Remove old currentFileHeaders logic - now using headerState
 
   return (
     <div
@@ -1332,7 +1212,7 @@ const LogViewer = () => {
         hasLogs={files.length > 0}
         currentFileHeaders={headerState}
         visibleColumns={visibleColumns}
-        onColumnsChange={handleColumnsChange}
+        onColumnsChange={setVisibleColumns}
         onResetColumnDefaults={handleResetColumnDefaults}
         logDuration={logDuration}
         folderName={currentFolderName}
@@ -1347,7 +1227,6 @@ const LogViewer = () => {
             contextLines: 0,
           })
         }
-        isLiveMode={isLiveMode}
         isLiveConnected={isLiveConnected}
         isLiveChecking={isLiveChecking}
         onLiveToggle={handleLiveToggle}
@@ -1406,7 +1285,7 @@ const LogViewer = () => {
                 onClearAllStickyLogs={clearAllStickyLogs}
                 onUpdateStickyLogTitle={updateStickyLogTitle}
                 onScrollToLog={scrollToLog}
-                activeFileIndex={activeFileIndex}
+                activeFileId={showingCombinedView ? 'Combined Files' : files[activeFileIndex]?.id}
               />
               <div className="flex-1 overflow-hidden">{memoizedContent}</div>
             </div>

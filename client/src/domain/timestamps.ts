@@ -74,8 +74,3 @@ function validComponents([year, month, day, hour, minute, second]: number[]): bo
     second < 60
   );
 }
-
-export function normalizeTimestamp(value: string): Date | null {
-  const milliseconds = parseTimestamp(value);
-  return milliseconds === null ? null : new Date(milliseconds);
-}

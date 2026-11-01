@@ -1,288 +1,118 @@
-/**
- * Utility functions for grouping log files by prefix
- * Used for Windows logs which are divided into multiple groups with prefixes
- */
-
 import { parseLogFormat } from '../LogParser';
+import { readFileText } from './readFileText';
 
-/**
- * Check if a file has a valid log extension
- * @param {File} file - The file object
- * @returns {boolean} True if file has .txt, .log, or .ips extension
- */
-export function hasValidLogExtension(file: File) {
+export function hasValidLogExtension(file: File): boolean {
   const name = file.name.toLowerCase();
   return name.endsWith('.txt') || name.endsWith('.log') || name.endsWith('.ips');
 }
 
-/**
- * Natural sort comparison for filenames with numbers
- * Correctly sorts files like: cato_dem.1.log, cato_dem.2.log, ... cato_dem.10.log
- * @param {string} a - First filename
- * @param {string} b - Second filename
- * @returns {number} Comparison result
- */
-export function naturalSort(a: string, b: string) {
-  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+/** Sort app.2.log before app.10.log. */
+export function naturalSort(left: string, right: string): number {
+  return left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' });
 }
 
-/**
- * Extract the prefix from a filename
- * For Windows logs, the prefix is everything before the first number or date pattern
- * Examples:
- *   "cato_vpn_5.17.3.8236_20250901075818.log" -> "cato_vpn"
- *   "cato_dem.1.log" -> "cato_dem"
- *   "CatoClient.Trace.5.16.5_2025-08-07.log" -> "CatoClient.Trace"
- *   "MSI1b377.LOG" -> "MSI"
- *   "cato_dem_5.11.18.3314.1.log" -> "cato_dem"
- *
- * @param {string} fileName - The file name
- * @returns {string} The prefix (everything before first digit)
- */
-export function extractFilePrefix(fileName: string) {
-  // Remove extension
-  const nameWithoutExt = fileName.replace(/\.(txt|log|json|etl|evtx)$/i, '');
-
-  // Match everything up to (but not including) the first digit
-  // This allows letters, underscores, dots, and hyphens in the prefix
-  const match = nameWithoutExt.match(/^([^0-9]+)/);
-
-  if (match) {
-    let prefix = match[1];
-    // Remove trailing underscores, dots, or hyphens
-    prefix = prefix.replace(/[_.-]+$/, '');
-    return prefix;
-  }
-
-  // If no match (starts with digit), return the whole name
-  return nameWithoutExt;
+/** Example: cato_vpn_5.17_20250901.log becomes cato_vpn. */
+export function extractFilePrefix(fileName: string): string {
+  const stem = fileName.replace(/\.(txt|log|json|etl|evtx)$/i, '');
+  const prefix = stem.match(/^[^0-9]+/)?.[0];
+  return prefix === undefined ? stem : prefix.replace(/[_.-]+$/, '');
 }
 
-/**
- * Group files by their prefix
- * @param {File[]} files - Array of File objects
- * @returns {Map<string, File[]>} Map of prefix to array of files
- */
-export function groupFilesByPrefix(files: File[]) {
+export function groupFilesByPrefix(files: File[]): Map<string, File[]> {
   const groups = new Map<string, File[]>();
-
-  files.forEach((file) => {
+  for (const file of files) {
     const prefix = extractFilePrefix(file.name);
-
-    if (!groups.has(prefix)) {
-      groups.set(prefix, []);
-    }
-
-    groups.get(prefix)!.push(file);
-  });
-
-  // Sort files within each group by name (natural sort for numbered files)
-  groups.forEach((fileList) => {
-    fileList.sort((a, b) => naturalSort(a.name, b.name));
-  });
-
+    const group = groups.get(prefix) ?? [];
+    group.push(file);
+    groups.set(prefix, group);
+  }
+  for (const group of groups.values())
+    group.sort((left, right) => naturalSort(left.name, right.name));
   return groups;
 }
 
-/**
- * Get a display name for a file group
- * @param {string} prefix - The group prefix
- * @param {File[]} files - The files in the group
- * @returns {string} Display name like "AppLog (3 files)"
- */
-export function getGroupDisplayName(prefix: string, files: File[]) {
-  return `${prefix} (${files.length} file${files.length > 1 ? 's' : ''})`;
+export function extractDirectory(file: File): string {
+  return (file.webkitRelativePath || '').split('/').slice(0, -1).join('/');
 }
 
-/**
- * Extract the directory path from a file's webkitRelativePath
- * @param {File} file - The file object
- * @returns {string} The directory path (e.g., "folder1/subfolder") or empty string for root
- */
-export function extractDirectory(file: File) {
-  if (!file.webkitRelativePath) return '';
-
-  const parts = file.webkitRelativePath.split('/');
-  // Remove the filename (last part) and return the directory path
-  parts.pop();
-  return parts.join('/');
-}
-
-/**
- * Group files by subdirectory structure and prefix
- *
- * Logic:
- * - If files are in MULTIPLE subdirectories (e.g., AppLogs/, DemLogs/, SystemLogs/):
- *   Each subdirectory becomes ONE merged group (all files together)
- *
- * - If all files are in ONE directory or flat structure:
- *   Group files by prefix (e.g., cato_dem, cato_vpn, cato_ua)
- *
- * @param {File[]} files - Array of File objects
- * @returns {Map<string, File[]>} Map of group key to array of files
- */
-export function groupFilesByDirectory(files: File[]) {
-  // First, group by directory
-  const dirGroups = new Map<string, File[]>();
-
-  files.forEach((file) => {
-    const dir = extractDirectory(file);
-
-    if (!dirGroups.has(dir)) {
-      dirGroups.set(dir, []);
-    }
-
-    dirGroups.get(dir)!.push(file);
-  });
-
-  // Check if we have MULTIPLE subdirectories with valid log files
-  // Ignore subdirectories that only contain non-log files
-  const validDirectories = Array.from(dirGroups.entries())
-    .filter(([dir, files]) => {
-      if (dir === '') return false; // Skip root
-      // Only count directories that have at least one valid log file
-      return files.some(hasValidLogExtension);
-    })
-    .map(([dir]) => dir);
-
-  const hasMultipleSubdirectories = validDirectories.length > 1;
-
-  if (hasMultipleSubdirectories) {
-    // Detect a "root parent" directory: when files were picked via the folder
-    // picker, every entry's webkitRelativePath starts with the picked folder
-    // name, so root-level files have a non-empty `dir` that is also a strict
-    // ancestor of every other directory. Treat that parent as root.
-    const allDirs = Array.from(dirGroups.keys()).filter((d) => d !== '');
-    const rootParent = allDirs.find((candidate) =>
-      allDirs.every((d) => d === candidate || d.startsWith(candidate + '/')),
-    );
-
-    // If we have MULTIPLE subdirectories, each subdirectory becomes ONE group (no prefix splitting)
-    const finalGroups = new Map<string, File[]>();
-
-    dirGroups.forEach((filesInDir, dir) => {
-      if (dir && dir !== rootParent) {
-        // Only include subdirectories that have valid log files,
-        // and only include the valid log files (filter out .pcap, etc.)
-        const validFiles = filesInDir.filter(hasValidLogExtension);
-        if (validFiles.length > 0) {
-          // Sort files by name (natural sort for numbered files)
-          validFiles.sort((a, b) => naturalSort(a.name, b.name));
-          finalGroups.set(dir, validFiles);
-        }
-        // Subdirectories without valid log files are ignored
-      } else {
-        // Root directory (either empty webkitRelativePath, or the common
-        // parent folder): group by filename prefix so each root-level file
-        // becomes its own tab named after the file.
-        const validRootFiles = filesInDir.filter(hasValidLogExtension);
-        const prefixGroups = groupFilesByPrefix(validRootFiles);
-        prefixGroups.forEach((groupedFiles, prefix) => {
-          finalGroups.set(prefix, groupedFiles);
-        });
-      }
-    });
-
-    return finalGroups;
-  } else {
-    // No subdirectories OR only one directory: use prefix-based grouping for all files
-    // Combine all files from all directory groups and apply prefix grouping
-    const allFiles: File[] = [];
-    dirGroups.forEach((filesInDir) => {
-      allFiles.push(...filesInDir);
-    });
-
-    return groupFilesByPrefix(allFiles.filter(hasValidLogExtension));
+/** Multiple log directories become separate groups; a single directory uses file prefixes. */
+export function groupFilesByDirectory(files: File[]): Map<string, File[]> {
+  const directories = new Map<string, File[]>();
+  for (const file of files) {
+    const path = extractDirectory(file);
+    const group = directories.get(path) ?? [];
+    group.push(file);
+    directories.set(path, group);
   }
+  const logDirectories = [...directories].filter(
+    ([path, group]) => path && group.some(hasValidLogExtension),
+  );
+  if (logDirectories.length <= 1) {
+    return groupFilesByPrefix([...directories.values()].flat().filter(hasValidLogExtension));
+  }
+
+  // Folder pickers include the selected folder name in every relative path.
+  const paths = [...directories.keys()].filter(Boolean);
+  const root = paths.find((candidate) =>
+    paths.every((path) => path === candidate || path.startsWith(`${candidate}/`)),
+  );
+  const groups = new Map<string, File[]>();
+  for (const [path, group] of directories) {
+    const logs = group.filter(hasValidLogExtension);
+    if (!path || path === root) {
+      for (const [prefix, files] of groupFilesByPrefix(logs)) groups.set(prefix, files);
+    } else if (logs.length) {
+      groups.set(
+        path,
+        logs.sort((left, right) => naturalSort(left.name, right.name)),
+      );
+    }
+  }
+  return groups;
 }
 
-/**
- * Detect the log format of a single file by reading the first chunk
- * and trying parseLogFormat on each non-empty line.
- * Returns a format string (e.g. 'ios-macos', 'windows-unified', 'linux'…)
- * or 'unknown' when no known pattern matches.
- *
- * @param {File} file
- * @returns {Promise<string>}
- */
-export async function detectFileFormat(file: File) {
+/** Inspect at most 16 KB; unreadable and unrecognized files remain independent. */
+export async function detectFileFormat(file: File): Promise<string> {
   try {
-    // Read up to ~16KB — plenty for header noise + several real log lines
-    const blob = file.slice(0, 16384);
-    const text = await blob.text();
-    const lines = text.split(/\r?\n/);
-
-    for (const line of lines) {
+    const text = await readFileText(file.slice(0, 16384));
+    for (const line of text.split(/\r?\n/)) {
       if (!line.trim()) continue;
       const parsed = parseLogFormat(line);
-      if (parsed && parsed.format) {
-        return parsed.format;
-      }
+      if (parsed?.format) return parsed.format;
     }
   } catch {
-    // Ignore read errors and fall through to 'unknown'
+    // Keep the file as an unknown source so opening it can report the read error.
   }
   return 'unknown';
 }
 
-/**
- * Like groupFilesByDirectory, but additionally splits each multi-file group
- * by detected log format so files only share a tab if they share a pattern.
- *
- * Behavior:
- * - Single-file groups are returned as-is.
- * - Multi-file groups where every file has the same format are kept merged.
- * - Multi-file groups with mixed formats are split:
- *   - Files of the same known format are merged into one sub-group, key
- *     becomes `${groupKey} [${format}]`.
- *   - Files of unknown format each get their own tab keyed by file path so
- *     unrelated free-form text files aren't merged together.
- *
- * @param {File[]} files
- * @returns {Promise<Map<string, File[]>>}
- */
-export async function groupFilesByDirectoryAndFormat(files: File[]) {
-  const baseGroups = groupFilesByDirectory(files);
-  const finalGroups = new Map<string, File[]>();
-
-  for (const [groupKey, groupFiles] of baseGroups.entries()) {
-    if (groupFiles.length <= 1) {
-      finalGroups.set(groupKey, groupFiles);
+/** Only files sharing a known format may share a merged tab. */
+export async function groupFilesByDirectoryAndFormat(files: File[]): Promise<Map<string, File[]>> {
+  const groups = new Map<string, File[]>();
+  for (const [key, group] of groupFilesByDirectory(files)) {
+    if (group.length <= 1) {
+      groups.set(key, group);
       continue;
     }
-
-    const formats = await Promise.all(groupFiles.map(detectFileFormat));
-
+    const formats = await Promise.all(group.map(detectFileFormat));
     const byFormat = new Map<string, File[]>();
-    groupFiles.forEach((file, i) => {
-      const fmt = formats[i];
-      if (!byFormat.has(fmt)) byFormat.set(fmt, []);
-      byFormat.get(fmt)!.push(file);
-    });
-
-    // Single known format -> keep merged.
-    // Single unknown format or mixed -> split (unknown files get one tab each).
+    for (let index = 0; index < group.length; index++) {
+      const format = formats[index];
+      const matching = byFormat.get(format) ?? [];
+      matching.push(group[index]);
+      byFormat.set(format, matching);
+    }
     if (byFormat.size === 1 && !byFormat.has('unknown')) {
-      finalGroups.set(groupKey, groupFiles);
+      groups.set(key, group);
       continue;
     }
-
-    byFormat.forEach((filesOfFormat, fmt) => {
-      if (fmt === 'unknown') {
-        // Unrelated free-form files: one tab per file
-        filesOfFormat.forEach((file) => {
-          const key = `${groupKey}/${file.name}`;
-          finalGroups.set(key, [file]);
-        });
-      } else if (byFormat.size === 1) {
-        // Only one (known) format present alongside no others -> keep groupKey
-        finalGroups.set(groupKey, filesOfFormat);
+    for (const [format, matching] of byFormat) {
+      if (format === 'unknown') {
+        for (const file of matching) groups.set(`${key}/${file.name}`, [file]);
       } else {
-        const key = `${groupKey} [${fmt}]`;
-        finalGroups.set(key, filesOfFormat);
+        groups.set(`${key} [${format}]`, matching);
       }
-    });
+    }
   }
-
-  return finalGroups;
+  return groups;
 }

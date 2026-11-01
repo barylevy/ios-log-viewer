@@ -1,140 +1,102 @@
-/**
- * Live mode shows today's records only. These drive trimToToday with output
- * from the real parser, so a parser change that alters timestampMs or
- * lineNumber breaks these rather than silently changing what users see.
- */
+import { describe, expect, it } from 'vitest';
+import { LiveLogBuffer, MIN_LIVE_RECORDS } from '../domain/liveLogBuffer';
 
-import { describe, it, expect } from 'vitest';
-import { trimLiveBuffer, MIN_LIVE_RECORDS } from '../utils/useLiveLogs';
-import { parseLogContent } from '../LogParser';
+const cutoff = new Date(2026, 7, 13).getTime();
+const line = (day: string, time: string, message: string) =>
+  `[${day}/08/26 ${time}] [I] [Mod] [0x1:0x2] [f:1] ${message}`;
+const build = (count: number, day: string) =>
+  Array.from({ length: count }, (_, index) => {
+    const hour = String(Math.floor(index / 60) % 24).padStart(2, '0');
+    const minute = String(index % 60).padStart(2, '0');
+    return line(day, `${hour}:${minute}:00.000`, `d${day}-record-${index}`);
+  }).join('\n');
+const retain = (text: string) => new LiveLogBuffer(cutoff).reset(text);
 
-// Windows bracket-hex format: [DD/MM/YY HH:MM:SS.mmm] [level] [module] ...
-const line = (d: string, m: string, t: string, msg: string) =>
-  `[${d}/${m}/26 ${t}] [I] [Mod] [0x1:0x2] [f:1] ${msg}`;
-
-const startOfDay = (day: number, month: number) =>
-  new Date(2026, month - 1, day, 0, 0, 0, 0).getTime();
-
-const parse = (raw: string | null) => parseLogContent(raw || '', [], 'DD/MM/YY');
-
-describe('trimLiveBuffer', () => {
-  it('drops records from previous days and keeps today onward', () => {
-    const raw = [
-      line('11', '08', '09:00:00.000', 'two days ago'),
-      line('12', '08', '09:00:00.000', 'yesterday'),
-      line('13', '08', '08:00:00.000', 'today first'),
-      line('13', '08', '09:00:00.000', 'today second'),
-    ].join('\n');
-
-    // floor of 1 so this isolates the day boundary; the floor has its own suite
-    const trimmed = trimLiveBuffer(raw, parse(raw), startOfDay(13, 8), 1);
-
-    expect(trimmed).not.toBeNull();
-    expect(trimmed).not.toContain('two days ago');
-    expect(trimmed).not.toContain('yesterday');
-    expect(trimmed).toContain('today first');
-    expect(trimmed).toContain('today second');
-    expect(parse(trimmed)).toHaveLength(2);
+describe('live buffer retention on the real parsing path', () => {
+  it('drops previous days when today has enough records', () => {
+    const kept = retain([build(2, '11'), build(2, '12'), build(201, '13')].join('\n'));
+    expect(kept).toHaveLength(201);
+    expect(kept.every((log) => log.message.includes('d13-'))).toBe(true);
   });
 
-  it('returns null when the buffer already starts today, leaving it untouched', () => {
-    const raw = [
-      line('13', '08', '08:00:00.000', 'today first'),
-      line('13', '08', '09:00:00.000', 'today second'),
-    ].join('\n');
-
-    expect(trimLiveBuffer(raw, parse(raw), startOfDay(13, 8), 1)).toBeNull();
+  it('leaves records that already start today unchanged', () => {
+    const raw = build(2, '13');
+    expect(
+      retain(raw)
+        .map((log) => log.raw)
+        .join('\n'),
+    ).toBe(raw);
   });
 
   it('keeps a quiet source visible even when nothing is from today', () => {
-    // AntiTamper can go days without writing; a strict day filter blanked it.
-    const raw = [
-      line('11', '08', '09:00:00.000', 'old one'),
-      line('12', '08', '09:00:00.000', 'old two'),
-    ].join('\n');
-
-    expect(trimLiveBuffer(raw, parse(raw), startOfDay(13, 8))).toBeNull();
+    const raw = [line('11', '09:00:00.000', 'old one'), line('12', '09:00:00.000', 'old two')].join(
+      '\n',
+    );
+    expect(
+      retain(raw)
+        .map((log) => log.raw)
+        .join('\n'),
+    ).toBe(raw);
   });
 
-  it('keeps everything when no record carries a timestamp', () => {
-    // A format we cannot date must never be silently emptied.
-    const raw = 'some free-form text\nanother line with no date\n';
-    const logs = parse(raw);
-
-    expect(logs.every((l) => l.timestampMs == null)).toBe(true);
-    expect(trimLiveBuffer(raw, logs, startOfDay(13, 8))).toBeNull();
+  it('preserves text when no record has a timestamp', () => {
+    const raw = 'some free-form text\nanother line with no date';
+    const logs = retain(raw);
+    expect(logs.every((log) => log.timestampMs === null)).toBe(true);
+    expect(logs.map((log) => log.raw).join('\n')).toBe(raw);
   });
 
-  it('keeps a multi-line record whole, including its indented continuation', () => {
+  it('keeps multiline payloads attached when removing older records', () => {
     const raw = [
-      line('12', '08', '09:00:00.000', 'yesterday'),
-      line('13', '08', '08:00:00.000', 'today with payload'),
+      line('12', '09:00:00.000', 'yesterday'),
+      line('13', '00:00:00.000', 'today with payload'),
       '    { "key": "value" }',
       '    more indented detail',
+      build(200, '13'),
     ].join('\n');
-
-    const trimmed = trimLiveBuffer(raw, parse(raw), startOfDay(13, 8), 1);
-
-    expect(trimmed).not.toContain('yesterday');
-    expect(trimmed).toContain('today with payload');
-    expect(trimmed).toContain('"key": "value"');
-    // The continuation stays attached to its parent rather than becoming a row.
-    expect(parse(trimmed)).toHaveLength(1);
+    const kept = retain(raw);
+    expect(kept).toHaveLength(201);
+    expect(kept[0].raw).toContain('"key": "value"');
+    expect(kept[0].message).toContain('more indented detail');
+    expect(kept.some((log) => log.message.includes('yesterday'))).toBe(false);
   });
 
   it('handles empty input', () => {
-    expect(trimLiveBuffer('', [], startOfDay(13, 8))).toBeNull();
-    expect(trimLiveBuffer('anything', [], startOfDay(13, 8))).toBeNull();
+    expect(retain('')).toEqual([]);
   });
-});
 
-describe('trimLiveBuffer — recent-records floor', () => {
-  // One record per minute on a given day, tagged with the day so assertions
-  // can't accidentally match a same-clock-time record from another day.
-  const build = (count: number, day: string) =>
-    Array.from({ length: count }, (_, i) => {
-      const hh = String(Math.floor(i / 60) % 24).padStart(2, '0');
-      const mm = String(i % 60).padStart(2, '0');
-      return line(day, '08', `${hh}:${mm}:00.000`, `d${day}-record-${i}`);
-    }).join('\n');
-
-  const messages = (text: string | null) => parse(text).map((l) => (l.message || '').trim());
-
-  it('keeps the last N when every record predates today', () => {
-    const raw = build(500, '12'); // all yesterday
-    const kept = messages(trimLiveBuffer(raw, parse(raw), startOfDay(13, 8), 200));
-
+  it('keeps the newest records when every record predates today', () => {
+    const kept = retain(build(500, '12'));
     expect(kept).toHaveLength(200);
-    expect(kept.at(-1)).toContain('d12-record-499'); // newest kept
-    expect(kept[0]).toContain('d12-record-300'); // exactly 200 back
+    expect(kept[0].message).toContain('d12-record-300');
+    expect(kept.at(-1)?.message).toContain('d12-record-499');
   });
 
   it('leaves a short buffer completely alone', () => {
-    const raw = build(24, '12'); // fewer than the floor
-    expect(trimLiveBuffer(raw, parse(raw), startOfDay(13, 8), 200)).toBeNull();
+    const raw = build(24, '12');
+    expect(
+      retain(raw)
+        .map((log) => log.raw)
+        .join('\n'),
+    ).toBe(raw);
   });
 
-  it('lets the day filter win when today has more than the floor', () => {
-    const raw = [build(100, '12'), build(300, '13')].join('\n');
-    const kept = messages(trimLiveBuffer(raw, parse(raw), startOfDay(13, 8), 200));
-
-    // 300 from today beats the 200 floor — yesterday is dropped entirely.
+  it('keeps all of today when it exceeds the recent-record floor', () => {
+    const kept = retain([build(100, '12'), build(300, '13')].join('\n'));
     expect(kept).toHaveLength(300);
-    expect(kept.some((m) => m.includes('d12-'))).toBe(false);
-    expect(kept[0]).toContain('d13-record-0');
+    expect(kept.every((log) => log.message.includes('d13-'))).toBe(true);
   });
 
-  it('reaches past midnight when today has fewer than the floor', () => {
-    const raw = [build(300, '12'), build(50, '13')].join('\n');
-    const kept = messages(trimLiveBuffer(raw, parse(raw), startOfDay(13, 8), 200));
-
-    // Only 50 today, so it reaches back into yesterday to make up 200.
+  it('reaches past midnight when today has fewer records than the floor', () => {
+    const kept = retain([build(300, '12'), build(50, '13')].join('\n'));
     expect(kept).toHaveLength(200);
-    expect(kept.filter((m) => m.includes('d13-'))).toHaveLength(50);
-    expect(kept.filter((m) => m.includes('d12-'))).toHaveLength(150);
+    expect(kept.filter((log) => log.message.includes('d13-'))).toHaveLength(50);
+    expect(kept.filter((log) => log.message.includes('d12-'))).toHaveLength(150);
   });
 
-  it('defaults to a sensible floor', () => {
-    expect(MIN_LIVE_RECORDS).toBe(200);
+  it('applies the floor at its exact boundary', () => {
+    const kept = retain(build(MIN_LIVE_RECORDS + 1, '12'));
+    expect(kept).toHaveLength(MIN_LIVE_RECORDS);
+    expect(kept[0].message).toContain('d12-record-1');
   });
 });

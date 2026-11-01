@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import { getFileIdentifier, loadLogFile } from './utils/fileLoader';
 import { combineLogs } from './domain/combineLogs';
+import { findNearestLogIndex } from './domain/logNavigation';
 import { filterLogs } from './domain/logQuery';
 import {
   createDefaultFilters,
@@ -404,20 +405,8 @@ export default function useLogsModel() {
   }, [state.activeFileId, state.bookmarksByFile]);
   const scrollToLog = useCallback(
     (lineNumber: number, sourceFile: string | null = null) => {
-      let index = filteredLogs.findIndex(
-        (record) =>
-          record.lineNumber === lineNumber && (!sourceFile || record.sourceFile === sourceFile),
-      );
-      if (index < 0) {
-        let distance = Infinity;
-        filteredLogs.forEach((record, position) => {
-          if (sourceFile && record.sourceFile !== sourceFile) return;
-          const candidate = Math.abs(record.lineNumber - lineNumber);
-          if (candidate < distance) {
-            distance = candidate;
-            index = position;
-          }
-        });
+      const index = findNearestLogIndex(filteredLogs, lineNumber, sourceFile);
+      if (index < 0 || filteredLogs[index].lineNumber !== lineNumber) {
         window.dispatchEvent(
           new CustomEvent('showLogNotVisible', {
             detail: {

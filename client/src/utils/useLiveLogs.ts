@@ -1,4 +1,3 @@
-import type { LogRecord } from '../domain/logRecord';
 import type { LiveCallbacks } from '../domain/viewerTypes';
 interface Options extends LiveCallbacks {
   onError?: () => void;
@@ -20,62 +19,6 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { LiveLogBuffer } from '../domain/liveLogBuffer';
 import { LIVE_SERVER_WS, liveWebSocketProtocols } from './liveLogsServer';
 
-/** Quiet sources keep at least this many records, even if older than today. */
-export const MIN_LIVE_RECORDS = 200;
-
-/**
- * Cut a raw log buffer down to what live mode should show: records from today,
- * but never fewer than `minRecords`.
- *
- * The floor matters for sources that are written rarely — AntiTamper may log a
- * handful of lines a week, and a strict day filter would leave its tab blank.
- * Busy sources are unaffected: when today already has more than the floor, the
- * day boundary is what applies.
- *
- * Returns the trimmed text, or null to leave the buffer untouched — which is
- * what happens when nothing can be dated. A source whose format we can't parse
- * timestamps for must not be silently emptied.
- *
- * @param {string} raw    accumulated text
- * @param {any[]} logs    that text already parsed
- * @param {number} cutoff epoch ms for the start of today
- * @param {number} [minRecords]
- */
-export function trimLiveBuffer(
-  raw: string,
-  logs: LogRecord[],
-  cutoff: number,
-  minRecords = MIN_LIVE_RECORDS,
-) {
-  if (!raw || !logs.length) return null;
-
-  // Nothing datable — can't tell old from new, so keep everything.
-  if (!logs.some((l) => l.timestampMs != null)) return null;
-
-  let firstToday = logs.findIndex((l) => l.timestampMs != null && l.timestampMs >= cutoff);
-  if (firstToday === -1) firstToday = logs.length; // nothing from today at all
-
-  // Whichever keeps more: today's records, or the last `minRecords`.
-  const floorIndex = Math.max(0, logs.length - minRecords);
-  const startIndex = Math.min(firstToday, floorIndex);
-
-  if (startIndex <= 0) return null; // already starts where we want it to
-
-  const startLine = logs[startIndex].lineNumber; // 1-based
-  return raw
-    .split('\n')
-    .slice(startLine - 1)
-    .join('\n');
-}
-
-/**
- * @param {object} opts
- * @param {(update: {sourceKey:string, label:string, logs:any[], isInitial:boolean}) => void} opts.onSourceUpdate
- *   Called each time a source's log list changes.
- * @param {() => void} [opts.onConnected]
- * @param {() => void} [opts.onDisconnected]
- * @param {() => void} [opts.onError]  Called when the WebSocket fails to connect.
- */
 export default function useLiveLogs({
   onSourceUpdate,
   onConnected,
@@ -85,7 +28,7 @@ export default function useLiveLogs({
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   // Each source owns an incremental parser and a bounded record buffer.
-  const accRef = useRef<Record<string, LiveLogBuffer>>({}); // { [sourceKey]: LiveLogBuffer }
+  const buffers = useRef(new Map<string, LiveLogBuffer>());
   // Live mode shows today's activity only. Fixed when the connection opens so
   // records don't disappear mid-session if it runs past midnight.
   const cutoffRef = useRef(0);
@@ -96,7 +39,7 @@ export default function useLiveLogs({
 
   const connect = useCallback(() => {
     if (wsRef.current) return; // Already open
-    accRef.current = {};
+    buffers.current.clear();
 
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
@@ -107,26 +50,29 @@ export default function useLiveLogs({
     let didOpen = false;
 
     ws.onopen = () => {
+      if (wsRef.current !== ws) return;
       didOpen = true;
       setIsConnected(true);
       cbRef.current.onConnected?.();
     };
 
     ws.onmessage = (event) => {
+      if (wsRef.current !== ws) return;
       try {
-        const msg = JSON.parse(event.data);
-        const { type, sourceKey, label, content = '' } = msg;
+        const message: unknown = JSON.parse(event.data);
+        if (!message || typeof message !== 'object' || Array.isArray(message)) return;
+        const { type, sourceKey, label, content = '' } = message as Record<string, unknown>;
 
         if (
-          !['initial', 'reset', 'append'].includes(type) ||
+          (type !== 'initial' && type !== 'reset' && type !== 'append') ||
           typeof sourceKey !== 'string' ||
           !/^[a-z]+$/.test(sourceKey) ||
           typeof content !== 'string' ||
           typeof label !== 'string'
         )
           return;
-        const buffer = accRef.current[sourceKey] || new LiveLogBuffer(cutoffRef.current);
-        accRef.current[sourceKey] = buffer;
+        const buffer = buffers.current.get(sourceKey) ?? new LiveLogBuffer(cutoffRef.current);
+        buffers.current.set(sourceKey, buffer);
         const logs = type === 'append' ? buffer.append(content) : buffer.reset(content);
 
         cbRef.current.onSourceUpdate?.({
@@ -141,6 +87,7 @@ export default function useLiveLogs({
     };
 
     ws.onerror = () => {
+      if (wsRef.current !== ws) return;
       console.error('[useLiveLogs] Cannot connect — is live-logs-server.js running?');
       cbRef.current.onError?.();
     };
@@ -162,7 +109,7 @@ export default function useLiveLogs({
     wsRef.current?.close();
     wsRef.current = null;
     setIsConnected(false);
-    accRef.current = {};
+    buffers.current.clear();
   }, []);
 
   useEffect(() => disconnect, [disconnect]);

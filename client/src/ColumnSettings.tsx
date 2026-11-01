@@ -1,23 +1,6 @@
 import ViewerDialog from './components/ViewerDialog';
-import React, { useState, useEffect } from 'react';
-
-interface ColumnOption {
-  id: string;
-  label: string;
-  defaultVisible: boolean;
-  disabled?: boolean;
-}
-
-const AVAILABLE_COLUMNS: ColumnOption[] = [
-  { id: 'timestamp', label: 'Timestamp', defaultVisible: true },
-  { id: 'lineNumber', label: 'Line Number', defaultVisible: true },
-  { id: 'logLevel', label: 'Log Level', defaultVisible: true },
-  { id: 'message', label: 'Message', defaultVisible: true, disabled: true }, // Message is always visible
-  { id: 'module', label: 'Module', defaultVisible: false },
-  { id: 'sourceFile', label: 'Source File', defaultVisible: false },
-  { id: 'processThread', label: 'Process:Thread', defaultVisible: true },
-  { id: 'timeGap', label: 'Time Gap', defaultVisible: false },
-];
+import { AVAILABLE_COLUMNS, DEFAULT_VISIBLE_COLUMNS } from './constants';
+import { useState, useEffect } from 'react';
 
 interface Props {
   isOpen: boolean;
@@ -53,11 +36,7 @@ const ColumnSettings = ({
   };
 
   const handleReset = () => {
-    const defaultColumns: Record<string, boolean> = {};
-    AVAILABLE_COLUMNS.forEach((col) => {
-      defaultColumns[col.id] = col.defaultVisible;
-    });
-    setTempColumns(defaultColumns);
+    setTempColumns({ ...DEFAULT_VISIBLE_COLUMNS });
     if (typeof onResetDefaults === 'function') onResetDefaults();
   };
 
@@ -150,5 +129,4 @@ const ColumnSettings = ({
   );
 };
 
-export { AVAILABLE_COLUMNS };
 export default ColumnSettings;

@@ -33,11 +33,6 @@ export const FS_SOURCES = [
   { key: 'install', label: 'Install' },
 ];
 
-/** Natural sort so log.1 < log.2 < log.10. */
-export function naturalCompare(a: string, b: string) {
-  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
-}
-
 /**
  * Decide how to bring a source up to date.
  *

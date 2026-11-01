@@ -61,14 +61,6 @@ export async function saveHandle(handle: FileSystemDirectoryHandle) {
   }
 }
 
-export async function forgetHandle() {
-  try {
-    await withStore('readwrite', (s) => s.delete(KEY));
-  } catch {
-    /* ignore */
-  }
-}
-
 /** Ask the user to pick the mirrored folder. Returns null if they cancel. */
 export async function pickMirrorFolder() {
   try {

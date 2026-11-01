@@ -8,6 +8,7 @@
 // Logic mirrors mergeLogs.py 1:1 — keep them in sync.
 
 import JSZip from 'jszip';
+import { readFileText } from './readFileText';
 interface FileTree {
   dirs: Map<string, FileTree>;
   files: Map<string, File>;
@@ -243,18 +244,6 @@ function discoverSources(base: FileTree) {
 // ---------------------------------------------------------------------------
 // Parsing
 // ---------------------------------------------------------------------------
-
-async function readFileText(file: File): Promise<string> {
-  // Some File-like objects (extracted from archives) may lack .text(); fall
-  // back to FileReader.
-  if (typeof file.text === 'function') return file.text();
-  return new Promise<string>((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result || ''));
-    r.onerror = () => reject(r.error);
-    r.readAsText(file);
-  });
-}
 
 async function parseLogFile(
   file: File,

@@ -34,6 +34,7 @@ Start with these files:
 | `client/src/domain/logQuery.ts` | One grammar for filtering, search navigation, and highlights |
 | `client/src/domain/timestamps.ts` | Validated timestamp conversion, including source offsets |
 | `client/src/domain/combineLogs.ts` | Sorting and merging without changing source identities |
+| `client/src/domain/logNavigation.ts` | Shared nearest-line navigation for bookmarks and the line dialog |
 | `client/src/domain/liveLogBuffer.ts` | Incremental parsing and bounded live retention |
 | `client/src/domain/parseFile.ts` | File/header parsing shared by the worker and fallback |
 | `client/src/services/logParserClient.ts` | Queued background parsing for large files |
@@ -48,7 +49,7 @@ For a Swift/C++/Java developer:
 - Domain functions are ordinary typed functions. They do not depend on React, browser rendering, or component lifecycle.
 - Hooks connect those functions to the UI. `useMemo` caches derived data; `useEffect` manages external resources or persistence.
 
-All application source and tests under `client/src` use strict TypeScript. `allowJs` is disabled. React components declare their props, DOM references, and state types; external file/HTTP data is validated before use. The standalone downloadable Node server, service worker, and Node tool configurations remain JavaScript because their runtimes consume them directly.
+All application source and tests under `client/src` use strict TypeScript. `allowJs` is disabled, and unused local variables and parameters fail the type check. React components declare their props, DOM references, and state types; external file/HTTP data is validated before use. The standalone downloadable Node server, service worker, and Node tool configurations remain JavaScript because their runtimes consume them directly.
 
 ## UI
 

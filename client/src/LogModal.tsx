@@ -1,6 +1,6 @@
 import type { LogRecord } from './domain/logRecord';
 import ViewerDialog from './components/ViewerDialog';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { getLevelButtonColor, getLevelTextColor, cleanMessage } from './utils/logLevelColors';
 import JsonTreeViewer from './components/JsonTreeViewer';
 

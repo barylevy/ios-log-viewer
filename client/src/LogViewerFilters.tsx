@@ -12,9 +12,10 @@ import {
 } from './domain/filterPresets';
 import { errorName } from './domain/viewerTypes';
 import { compileQuery } from './domain/logQuery';
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { getLevelBackgroundColor } from './utils/logLevelColors';
+import { readFileText } from './utils/readFileText';
 
 // Extract tooltip text to avoid inline strings
 const FILTER_TOOLTIP = `Advanced Filtering Guide:
@@ -64,7 +65,7 @@ interface Props {
   onClearAllStickyLogs: () => void;
   onScrollToLog: (line: number, source?: string | null) => void;
   onUpdateStickyLogTitle: (id: LogId, title: string) => void;
-  activeFileIndex?: number;
+  activeFileId?: string;
 }
 
 const LogViewerFilters = ({
@@ -82,7 +83,7 @@ const LogViewerFilters = ({
   onClearAllStickyLogs,
   onScrollToLog,
   onUpdateStickyLogTitle,
-  activeFileIndex = 0,
+  activeFileId = 'default',
 }: Props) => {
   const [isLevelDropdownOpen, setIsLevelDropdownOpen] = useState(false);
   const [isFilterHistoryOpen, setIsFilterHistoryOpen] = useState(false);
@@ -109,13 +110,12 @@ const LogViewerFilters = ({
       return [];
     }
   });
-  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
-  const [isLoadDialogOpen, setIsLoadDialogOpen] = useState(false);
+  const [presetDialog, setPresetDialog] = useState<'save' | 'load' | null>(null);
   const [saveInputName, setSaveInputName] = useState('');
-  const [perTabPreset, setPerTabPreset] = useState<Record<number, string | null>>({}); // { [tabIndex]: filterName | null }
-  const activeFilterName = perTabPreset[activeFileIndex] ?? null;
+  const [presetNamesByFile, setPresetNamesByFile] = useState<Record<string, string | null>>({});
+  const activeFilterName = presetNamesByFile[activeFileId] ?? null;
   const setActiveFilterName = (name: string | null) =>
-    setPerTabPreset((prev) => ({ ...prev, [activeFileIndex]: name ?? null }));
+    setPresetNamesByFile((previous) => ({ ...previous, [activeFileId]: name }));
   const [fileFilters, setFileFilters] = useState<FilterPreset[]>([]); // array of presets from the open .json file
   const saveInputRef = useRef<HTMLInputElement | null>(null);
   const fileHandleRef = useRef<FileSystemFileHandle | null>(null);
@@ -817,24 +817,27 @@ const LogViewerFilters = ({
     URL.revokeObjectURL(url);
   };
 
-  const parseFileToArray = parsePresetFile;
-
-  // Save — update active entry in the array and write file
-  const handleSave = async () => {
-    if (!activeFilterName) return;
-    const updatedEntry = {
-      id: fileFilters.find((f) => f.name === activeFilterName)?.id || Date.now().toString(),
-      name: activeFilterName,
+  const updateFilePreset = (name: string): FilterPreset[] => {
+    const existing = fileFilters.find((entry) => entry.name === name);
+    const entry: FilterPreset = {
+      id: existing?.id || Date.now().toString(),
+      name,
       savedAt: new Date().toISOString(),
       data: getFilterSnapshot(),
     };
-    const newArray = fileFilters.some((f) => f.name === activeFilterName)
-      ? fileFilters.map((f) => (f.name === activeFilterName ? updatedEntry : f))
-      : [...fileFilters, updatedEntry];
-    setFileFilters(newArray);
+    const updated = existing
+      ? fileFilters.map((preset) => (preset.name === name ? entry : preset))
+      : [...fileFilters, entry];
+    setFileFilters(updated);
+    return updated;
+  };
+
+  const handleSave = async () => {
+    if (!activeFilterName) return;
+    const updated = updateFilePreset(activeFilterName);
     if (fileHandleRef.current) {
       try {
-        await writeFiltersArray(fileHandleRef.current, newArray);
+        await writeFiltersArray(fileHandleRef.current, updated);
         return;
       } catch {
         /* Keep the in-memory preset if storage or a file is unavailable. */
@@ -846,7 +849,15 @@ const LogViewerFilters = ({
   // Save As — always shows name dialog; adds entry to existing file (or creates new)
   const handleSaveAs = () => {
     setSaveInputName('');
-    setIsSaveDialogOpen(true);
+    setPresetDialog('save');
+  };
+
+  const loadPresetFile = async (file: File, handle: FileSystemFileHandle | null) => {
+    const name = (handle?.name ?? file.name).replace(/\.json$/i, '');
+    const presets = parsePresetFile(JSON.parse(await readFileText(file)), name);
+    fileHandleRef.current = handle;
+    setFileFilters(presets);
+    if (presets.length) applyFilterData(presets[0].data, presets[0].name, handle);
   };
 
   // Load — file picker; reads array from file
@@ -856,17 +867,12 @@ const LogViewerFilters = ({
         const [handle] = await window.showOpenFilePicker({
           types: [{ description: 'Filter JSON', accept: { 'application/json': ['.json'] } }],
         });
-        const file = await handle.getFile();
-        const parsed = JSON.parse(await file.text());
-        const arr = parseFileToArray(parsed, handle.name.replace(/\.json$/i, ''));
-        fileHandleRef.current = handle;
-        setFileFilters(arr);
-        if (arr.length > 0) applyFilterData(arr[0].data, arr[0].name, handle);
+        await loadPresetFile(await handle.getFile(), handle);
       } catch (e) {
         if (errorName(e) !== 'AbortError') console.error(e);
       }
     } else {
-      setIsLoadDialogOpen(true);
+      setPresetDialog('load');
     }
   };
 
@@ -874,11 +880,7 @@ const LogViewerFilters = ({
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const parsed = JSON.parse(await file.text());
-      const arr = parseFileToArray(parsed, file.name.replace(/\.json$/i, ''));
-      fileHandleRef.current = null;
-      setFileFilters(arr);
-      if (arr.length > 0) applyFilterData(arr[0].data, arr[0].name, null);
+      await loadPresetFile(file, null);
     } catch {
       /* Keep the in-memory preset if storage or a file is unavailable. */
     }
@@ -889,23 +891,14 @@ const LogViewerFilters = ({
   const handleSaveCurrentFilter = async () => {
     const name = saveInputName.trim();
     if (!name) return;
-    const newEntry = {
-      id: fileFilters.find((f) => f.name === name)?.id || Date.now().toString(),
-      name,
-      savedAt: new Date().toISOString(),
-      data: getFilterSnapshot(),
-    };
-    const newArray = fileFilters.some((f) => f.name === name)
-      ? fileFilters.map((f) => (f.name === name ? newEntry : f))
-      : [...fileFilters, newEntry];
-    setFileFilters(newArray);
+    const updated = updateFilePreset(name);
     setActiveFilterName(name);
     saveFilterWithName(name);
     if (fileHandleRef.current) {
       try {
-        await writeFiltersArray(fileHandleRef.current, newArray);
+        await writeFiltersArray(fileHandleRef.current, updated);
       } catch {
-        downloadFiltersArray(newArray);
+        downloadFiltersArray(updated);
       }
     } else if (window.showSaveFilePicker) {
       try {
@@ -913,21 +906,21 @@ const LogViewerFilters = ({
           suggestedName: 'filters.json',
           types: [{ description: 'Filter JSON', accept: { 'application/json': ['.json'] } }],
         });
-        await writeFiltersArray(handle, newArray);
+        await writeFiltersArray(handle, updated);
         fileHandleRef.current = handle;
       } catch (e) {
-        if (errorName(e) !== 'AbortError') downloadFiltersArray(newArray);
+        if (errorName(e) !== 'AbortError') downloadFiltersArray(updated);
       }
     } else {
-      downloadFiltersArray(newArray);
+      downloadFiltersArray(updated);
     }
     setSaveInputName('');
-    setIsSaveDialogOpen(false);
+    setPresetDialog(null);
   };
 
   const handleApplySavedFilter = (entry: FilterPreset) => {
     applyFilterData(entry.data, entry.name, null);
-    setIsLoadDialogOpen(false);
+    setPresetDialog(null);
   };
 
   const handleDeleteSavedFilter = (id: string, e: ReactMouseEvent<HTMLButtonElement>) => {
@@ -951,6 +944,17 @@ const LogViewerFilters = ({
     }
   };
 
+  const clearFilterValues = () => {
+    onFiltersChange({
+      searchText: '',
+      searchQuery: '',
+      logLevel: ['all'],
+      selectedModule: 'all',
+      contextLines: 0,
+    });
+    setActiveFilterName(null);
+  };
+
   const renderPresetRow = () => {
     const canSave = !!(fileHandleRef.current || activeFilterName);
     const tipCls =
@@ -965,14 +969,7 @@ const LogViewerFilters = ({
               onChange={(e) => {
                 const val = e.target.value;
                 if (!val) {
-                  onFiltersChange({
-                    searchText: '',
-                    searchQuery: '',
-                    logLevel: ['all'],
-                    selectedModule: 'all',
-                    contextLines: 0,
-                  });
-                  setActiveFilterName(null);
+                  clearFilterValues();
                   return;
                 }
                 const entry = fileFilters.find((f) => f.name === val);
@@ -1047,15 +1044,8 @@ const LogViewerFilters = ({
           {/* Clear */}
           <button
             onClick={() => {
-              onFiltersChange({
-                searchText: '',
-                searchQuery: '',
-                logLevel: ['all'],
-                selectedModule: 'all',
-                contextLines: 0,
-              });
+              clearFilterValues();
               fileHandleRef.current = null;
-              setActiveFilterName(null);
               setFileFilters([]);
             }}
             className="relative group w-6 h-6 rounded-md transition-colors flex items-center justify-center text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -1202,6 +1192,8 @@ const LogViewerFilters = ({
     </div>
   );
 
+  const isOverwrite = savedFilters.some((preset) => preset.name === saveInputName.trim());
+
   return (
     <div className="overflow-visible bg-white/50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700 px-2 py-2">
       {[
@@ -1255,70 +1247,65 @@ const LogViewerFilters = ({
       />
 
       {/* Save As Fallback Dialog — shown when showSaveFilePicker is unavailable */}
-      {isSaveDialogOpen &&
-        (() => {
-          const isOverwrite =
-            saveInputName.trim() && savedFilters.some((f) => f.name === saveInputName.trim());
-          return (
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-              onClick={() => setIsSaveDialogOpen(false)}
-            >
-              <div
-                className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 p-4 w-80"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">
-                  Add Filter to File
-                </h3>
-                <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-3">
-                  {fileFilters.length > 0
-                    ? 'Enter a name for this filter. It will be added to the open file.'
-                    : "Enter a name. You'll be asked where to save the file."}
-                </p>
-                <input
-                  ref={saveInputRef}
-                  autoFocus
-                  type="text"
-                  value={saveInputName}
-                  onChange={(e) => setSaveInputName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSaveCurrentFilter();
-                    if (e.key === 'Escape') setIsSaveDialogOpen(false);
-                  }}
-                  placeholder="Filter preset name…"
-                  className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                {isOverwrite && (
-                  <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1.5">
-                    This will overwrite the existing "{saveInputName.trim()}" preset.
-                  </p>
-                )}
-                <div className="flex justify-end gap-2 mt-3">
-                  <button
-                    onClick={() => setIsSaveDialogOpen(false)}
-                    className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSaveCurrentFilter}
-                    disabled={!saveInputName.trim()}
-                    className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {isOverwrite ? 'Update' : 'Save'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-
-      {/* Load Filters Dialog */}
-      {isLoadDialogOpen && (
+      {presetDialog === 'save' && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-          onClick={() => setIsLoadDialogOpen(false)}
+          onClick={() => setPresetDialog(null)}
+        >
+          <div
+            className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 p-4 w-80"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">
+              Add Filter to File
+            </h3>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-3">
+              {fileFilters.length > 0
+                ? 'Enter a name for this filter. It will be added to the open file.'
+                : "Enter a name. You'll be asked where to save the file."}
+            </p>
+            <input
+              ref={saveInputRef}
+              autoFocus
+              type="text"
+              value={saveInputName}
+              onChange={(e) => setSaveInputName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSaveCurrentFilter();
+                if (e.key === 'Escape') setPresetDialog(null);
+              }}
+              placeholder="Filter preset name…"
+              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {isOverwrite && (
+              <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1.5">
+                This will overwrite the existing "{saveInputName.trim()}" preset.
+              </p>
+            )}
+            <div className="flex justify-end gap-2 mt-3">
+              <button
+                onClick={() => setPresetDialog(null)}
+                className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveCurrentFilter}
+                disabled={!saveInputName.trim()}
+                className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {isOverwrite ? 'Update' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Load Filters Dialog */}
+      {presetDialog === 'load' && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => setPresetDialog(null)}
         >
           <div
             className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 w-96 max-h-[70vh] flex flex-col"
@@ -1331,7 +1318,7 @@ const LogViewerFilters = ({
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => {
-                    setIsLoadDialogOpen(false);
+                    setPresetDialog(null);
                     loadFileInputRef.current?.click();
                   }}
                   className="px-2 py-1 text-[10px] rounded bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
@@ -1340,7 +1327,7 @@ const LogViewerFilters = ({
                   Browse file…
                 </button>
                 <button
-                  onClick={() => setIsLoadDialogOpen(false)}
+                  onClick={() => setPresetDialog(null)}
                   className="w-6 h-6 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

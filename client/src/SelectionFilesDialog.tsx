@@ -1,30 +1,25 @@
-interface FileItem {
-  id: string;
-  name: string;
-  fileObj?: File | File[];
-}
+import type { ViewerFile } from './domain/viewerTypes';
+import { DEFAULT_LOG_GROUP_PREFIXES } from './constants';
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  files: FileItem[];
+  files: ViewerFile[];
   onConfirm: (ids: string[]) => void;
   title?: string;
   description?: string;
   confirmLabel?: string;
-  getDefaultChecked?: ((file: FileItem) => boolean) | null;
+  getDefaultChecked?: ((file: ViewerFile) => boolean) | null;
 }
 
 import ViewerDialog from './components/ViewerDialog';
 import React, { useEffect, useState } from 'react';
 
-const DEFAULT_CHECKED_PREFIXES = ['applogs', 'appextensionlogs'];
-
-const hasFileObj = (f: FileItem) => {
+const hasFileObj = (f: ViewerFile) => {
   const obj = Array.isArray(f.fileObj) ? f.fileObj[0] : f.fileObj;
   return !!obj;
 };
 
-const getRootFolder = (f: FileItem) => {
+const getRootFolder = (f: ViewerFile) => {
   const obj = f.fileObj;
   const first = Array.isArray(obj) ? obj[0] : obj;
   if (!first) return null;
@@ -59,9 +54,7 @@ const SelectionFilesDialog = ({
       } else {
         const fullName = (f.name || '').replace(/\s*\(\d+\)\s*$/, '').trim();
         const lastSegment = (fullName.split('/').pop() || '').toLowerCase();
-        initial[f.id] = DEFAULT_CHECKED_PREFIXES.some(
-          (p) => lastSegment === p || lastSegment.startsWith(p),
-        );
+        initial[f.id] = DEFAULT_LOG_GROUP_PREFIXES.some((prefix) => lastSegment.startsWith(prefix));
       }
     });
     setSelected(initial);
@@ -69,13 +62,16 @@ const SelectionFilesDialog = ({
 
   const toggle = (id: string) => setSelected((prev) => ({ ...prev, [id]: !prev[id] }));
 
+  const selectedIds = Object.keys(selected).filter((id) => selected[id]);
+  const selectedCount = selectedIds.length;
   const handleMerge = () => {
-    const selectedIds = Object.keys(selected).filter((id) => selected[id]);
-    if (!selectedIds.length) return;
-    onConfirm(selectedIds);
+    if (selectedCount) onConfirm(selectedIds);
   };
-
-  const selectedCount = Object.values(selected).filter(Boolean).length;
+  const selectAll = (checked: boolean) => {
+    const next: Record<string, boolean> = {};
+    for (const file of files) next[file.id] = checked && hasFileObj(file);
+    setSelected(next);
+  };
 
   // Sort: by root folder, then by type (name without count suffix), then by full name
   const sortedFiles = [...files].sort((a, b) => {
@@ -95,7 +91,7 @@ const SelectionFilesDialog = ({
   });
 
   // Group by root folder for section headers
-  const groupedByFolder: { folder: string | null; items: FileItem[] }[] = [];
+  const groupedByFolder: { folder: string | null; items: ViewerFile[] }[] = [];
   sortedFiles.forEach((f) => {
     const folder = getRootFolder(f);
     const last = groupedByFolder[groupedByFolder.length - 1];
@@ -137,25 +133,13 @@ const SelectionFilesDialog = ({
           <p className="text-sm text-gray-500 dark:text-gray-400">{description}</p>
           <div className="flex gap-2 ml-4">
             <button
-              onClick={() => {
-                const next: Record<string, boolean> = {};
-                files.forEach((f) => {
-                  if (hasFileObj(f)) next[f.id] = true;
-                });
-                setSelected((prev) => ({ ...prev, ...next }));
-              }}
+              onClick={() => selectAll(true)}
               className="text-xs px-2 py-1 rounded border border-emerald-500 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors"
             >
               Select All
             </button>
             <button
-              onClick={() => {
-                const next: Record<string, boolean> = {};
-                files.forEach((f) => {
-                  next[f.id] = false;
-                });
-                setSelected((prev) => ({ ...prev, ...next }));
-              }}
+              onClick={() => selectAll(false)}
               className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
               Deselect All

@@ -5,7 +5,7 @@ interface Props {
   searchTerm?: string;
   onSearchChange?: (value: string) => void;
 }
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 
 const JsonTreeViewer = ({ data, searchTerm = '', onSearchChange }: Props) => {
   const [searchQuery, setSearchQuery] = useState(searchTerm);

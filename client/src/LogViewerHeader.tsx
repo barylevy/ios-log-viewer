@@ -2,10 +2,11 @@ import type { ChangeEvent } from 'react';
 import type { LogHeaders } from './domain/logRecord';
 import { errorMessage, type ViewerFile, type ColumnVisibility } from './domain/viewerTypes';
 import Switch from '@mui/material/Switch';
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import AboutModal from './AboutModal';
 import ColumnSettings from './ColumnSettings';
 import SelectionFilesDialog from './SelectionFilesDialog';
+import { DEFAULT_LOG_GROUP_PREFIXES } from './constants';
 import {
   clearSession,
   isSessionPersistenceEnabled,
@@ -29,8 +30,6 @@ interface Props {
   visibleColumns: ColumnVisibility;
   onColumnsChange: (columns: ColumnVisibility) => void;
   onResetColumnDefaults: () => void;
-  rightColumnOrder?: string[];
-  onRightColumnOrderChange?: (order: string[]) => void;
   logDuration: string | null;
   folderName: string | null;
   onPrepareFilesStart: () => void;
@@ -38,7 +37,6 @@ interface Props {
   onDownloadMerged: () => void;
   isDownloadingMerged: boolean;
   onClearFilters: () => void;
-  isLiveMode?: boolean;
   isLiveConnected?: boolean;
   isLiveChecking?: boolean;
   onLiveToggle: () => void;
@@ -72,11 +70,7 @@ const LogViewerHeader = ({
   const [showAbout, setShowAbout] = useState(false);
   const [showColumnSettings, setShowColumnSettings] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
-  // State for the folder-file-selection dialog
-  const [pendingFolderItems, setPendingFolderItems] = useState<ViewerFile[] | null>(null); // null | array of { id, name, fileObj }
-  const [pendingFolderGroupMap, setPendingFolderGroupMap] = useState<Map<string, File[]> | null>(
-    null,
-  ); // null | Map<id, File[]>
+  const [pendingFolderItems, setPendingFolderItems] = useState<ViewerFile[] | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(
     () =>
       localStorage.getItem('theme') === 'dark' ||
@@ -137,24 +131,12 @@ const LogViewerHeader = ({
         return;
       }
 
-      // If the picked input contained an archive, treat it like a folder load:
-      // clear current tabs and use the directory+format grouper so each
-      // subdirectory becomes its own tab.
-      if (hasArchive) {
-        if (onClearTabs) onClearTabs();
-        const fileGroups = await groupFilesByDirectoryAndFormat(files);
-        fileGroups.forEach((groupFiles, groupKey) => {
-          onFileLoad(groupFiles, false, groupKey);
-        });
-        return;
-      }
-
-      // Otherwise: standard "individual files" flow — group by name prefix.
-      const sortedFiles = files.sort((a, b) => naturalSort(a.name, b.name));
-      const fileGroups = groupFilesByPrefix(sortedFiles);
-      fileGroups.forEach((groupFiles, prefix) => {
-        onFileLoad(groupFiles, false, prefix);
-      });
+      // Archives replace the open folder; individual files are grouped by prefix.
+      if (hasArchive) onClearTabs();
+      const groups = hasArchive
+        ? await groupFilesByDirectoryAndFormat(files)
+        : groupFilesByPrefix(files.sort((left, right) => naturalSort(left.name, right.name)));
+      for (const [key, group] of groups) onFileLoad(group, false, key);
     } finally {
       onPrepareFilesEnd();
     }
@@ -198,32 +180,35 @@ const LogViewerHeader = ({
       fileObj: groupFiles,
     }));
 
-    setPendingFolderGroupMap(fileGroups);
     setPendingFolderItems(items);
   };
 
-  // Load saved folder group names from localStorage
-  const getSavedGroupNames = () => {
+  // Capture defaults once for each folder selection; parent renders must not reset checkboxes.
+  const getFolderDefaultChecked = useMemo(() => {
+    let savedNames: Set<string> | null = null;
     try {
-      const saved = localStorage.getItem(FOLDER_SELECTION_KEY);
-      return saved ? new Set(JSON.parse(saved)) : null;
+      const saved: unknown = JSON.parse(localStorage.getItem(FOLDER_SELECTION_KEY) || 'null');
+      if (Array.isArray(saved)) {
+        savedNames = new Set(saved.filter((name): name is string => typeof name === 'string'));
+      }
     } catch {
-      return null;
+      // Use the standard groups if the saved preference is unreadable.
     }
-  };
+    return (file: ViewerFile): boolean => {
+      const name = file.name.toLowerCase();
+      return savedNames
+        ? savedNames.has(name)
+        : DEFAULT_LOG_GROUP_PREFIXES.some((prefix) => name.startsWith(prefix));
+    };
+  }, [pendingFolderItems]);
 
   // Called when user confirms the folder-file-selection dialog
   const handleFolderSelectionConfirm = useCallback(
     (selectedIds: string[]) => {
-      if (!pendingFolderGroupMap) return;
+      if (!pendingFolderItems) return;
+      const itemsById = new Map(pendingFolderItems.map((file) => [file.id, file]));
 
-      // Persist chosen names (last segment of each selected groupKey, lowercase)
-      const chosenNames = selectedIds.map((id) =>
-        (id.split('/').pop() || id)
-          .replace(/\s*\[.*?\]\s*$/, '')
-          .trim()
-          .toLowerCase(),
-      );
+      const chosenNames = selectedIds.map((id) => itemsById.get(id)?.name.toLowerCase() || '');
       try {
         localStorage.setItem(FOLDER_SELECTION_KEY, JSON.stringify(chosenNames));
       } catch {
@@ -235,27 +220,20 @@ const LogViewerHeader = ({
       onPrepareFilesStart();
       try {
         selectedIds.forEach((id) => {
-          const groupFiles = pendingFolderGroupMap.get(id);
-          if (groupFiles) onFileLoad(groupFiles, false, id);
+          const group = itemsById.get(id);
+          if (group?.fileObj) onFileLoad(group.fileObj, false, id);
         });
       } finally {
         onPrepareFilesEnd();
       }
 
       setPendingFolderItems(null);
-      setPendingFolderGroupMap(null);
     },
-    [pendingFolderGroupMap, onFileLoad, onClearTabs, onPrepareFilesStart, onPrepareFilesEnd],
+    [pendingFolderItems, onFileLoad, onClearTabs, onPrepareFilesStart, onPrepareFilesEnd],
   );
 
   const handleFolderSelectionClose = () => {
     setPendingFolderItems(null);
-    setPendingFolderGroupMap(null);
-  };
-
-  const handleLoadFilesClick = () => {
-    // Default action: open file picker
-    handleChooseFiles();
   };
 
   const handleFileDropdownToggle = () => {
@@ -312,13 +290,7 @@ const LogViewerHeader = ({
           title="Select Files to Load"
           description="Choose which log groups from this folder to open:"
           confirmLabel="Open"
-          getDefaultChecked={(f) => {
-            const savedNames = getSavedGroupNames();
-            const nameLower = (f.name || '').toLowerCase();
-            if (savedNames) return savedNames.has(nameLower);
-            const DEFAULT_PREFIXES = ['applogs', 'appextensionlogs'];
-            return DEFAULT_PREFIXES.some((p) => nameLower === p || nameLower.startsWith(p));
-          }}
+          getDefaultChecked={getFolderDefaultChecked}
         />
       )}
       <div className="flex items-center justify-between flex-nowrap gap-4">
@@ -476,7 +448,7 @@ const LogViewerHeader = ({
             <div className="flex">
               {/* Main Button */}
               <button
-                onClick={handleLoadFilesClick}
+                onClick={handleChooseFiles}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-l-md text-sm font-medium transition-colors"
               >
                 Open Files

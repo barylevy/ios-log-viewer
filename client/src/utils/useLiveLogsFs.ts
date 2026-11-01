@@ -1,3 +1,4 @@
+import { naturalSort } from './fileGrouping';
 import { errorName, type LiveCallbacks, type LiveFolderError } from '../domain/viewerTypes';
 import type { FileSize } from './liveLogsFsCore';
 interface Options extends LiveCallbacks {
@@ -29,7 +30,6 @@ import {
   LOG_FILE_PATTERN,
   INITIAL_TAIL_LINES,
   MAX_INITIAL_BYTES,
-  naturalCompare,
   planRead,
   tailLines,
 } from './liveLogsFsCore';
@@ -45,7 +45,7 @@ async function listLogFiles(dirHandle: FileSystemDirectoryHandle) {
     if (entry.kind === 'file' && LOG_FILE_PATTERN.test(name))
       out.push({ name, handle: entry as FileSystemFileHandle });
   }
-  return out.sort((a, b) => naturalCompare(a.name, b.name));
+  return out.sort((a, b) => naturalSort(a.name, b.name));
 }
 
 /** Join file texts, making sure each ends on a newline so records don't fuse. */
@@ -96,13 +96,6 @@ async function readFresh(files: LogFileHandle[]) {
   return { text: joinTexts(chunks), sizes, decoder };
 }
 
-/**
- * @param {object} opts
- * @param {(update:{sourceKey:string,label:string,logs:any[],isInitial:boolean})=>void} opts.onSourceUpdate
- * @param {() => void} [opts.onConnected]
- * @param {() => void} [opts.onDisconnected]
- * @param {(reason:'empty'|'denied'|'lost'|'sync') => void} [opts.onError]
- */
 export default function useLiveLogsFs({
   onSourceUpdate,
   onConnected,

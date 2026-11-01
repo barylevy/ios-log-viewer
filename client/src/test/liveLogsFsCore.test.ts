@@ -5,7 +5,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { planRead, tailLines, naturalCompare } from '../utils/liveLogsFsCore';
+import { planRead, tailLines } from '../utils/liveLogsFsCore';
+import { naturalSort } from '../utils/fileGrouping';
 
 const f = (name: string, size: number) => ({ name, size });
 
@@ -65,8 +66,8 @@ describe('tailLines', () => {
   });
 });
 
-describe('naturalCompare', () => {
+describe('naturalSort', () => {
   it('orders numbered rotations numerically', () => {
-    expect(['log.10', 'log.2', 'log.1'].sort(naturalCompare)).toEqual(['log.1', 'log.2', 'log.10']);
+    expect(['log.10', 'log.2', 'log.1'].sort(naturalSort)).toEqual(['log.1', 'log.2', 'log.10']);
   });
 });

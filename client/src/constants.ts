@@ -21,3 +21,39 @@ export const CATO_COLORS = {
   DARK_BG: '#006356',
   DARK_HIGHLIGHT_BG: '#004d42',
 };
+
+interface ColumnOption {
+  id: string;
+  label: string;
+  defaultVisible: boolean;
+  disabled?: boolean;
+}
+
+export const AVAILABLE_COLUMNS: ColumnOption[] = [
+  { id: 'timestamp', label: 'Timestamp', defaultVisible: true },
+  { id: 'lineNumber', label: 'Line Number', defaultVisible: true },
+  { id: 'logLevel', label: 'Log Level', defaultVisible: true },
+  { id: 'message', label: 'Message', defaultVisible: true, disabled: true }, // Message is always visible
+  { id: 'module', label: 'Module', defaultVisible: false },
+  { id: 'sourceFile', label: 'Source File', defaultVisible: false },
+  { id: 'processThread', label: 'Process:Thread', defaultVisible: true },
+  { id: 'timeGap', label: 'Time Gap', defaultVisible: false },
+];
+
+export const DEFAULT_VISIBLE_COLUMNS: Record<string, boolean> = Object.fromEntries(
+  AVAILABLE_COLUMNS.map((column) => [column.id, column.defaultVisible]),
+);
+
+// Row order is independent of the order of checkboxes in Column Settings.
+export const DEFAULT_COLUMN_ORDER = [
+  'timestamp',
+  'lineNumber',
+  'logLevel',
+  'message',
+  'module',
+  'sourceFile',
+  'timeGap',
+  'processThread',
+];
+
+export const DEFAULT_LOG_GROUP_PREFIXES = ['applogs', 'appextensionlogs'];

@@ -1,7 +1,6 @@
 /* eslint-disable no-control-regex -- Socket logs contain ANSI terminal escape sequences. */
 import type { DateFormat, LogRecord } from './domain/logRecord';
 import { parseTimestamp } from './domain/timestamps';
-export { normalizeTimestamp } from './domain/timestamps';
 import { extractTimestamp, detectDateFormat, formatDateWithMonthName } from './dateTimeUtils';
 import { getProcessTypeFromModule } from './utils/processTypeMapper';
 
@@ -396,12 +395,6 @@ export const extractProcess = (line: string) => {
   return '';
 };
 
-/**
- * Normalize timestamps for comparison
- * Handles multiple timestamp formats and converts them to Date objects
- * @param {string} timestamp - The timestamp string to normalize
- * @returns {Date|null} - The normalized Date object or null if invalid
- */
 /**
  * Parse a single log line and extract all relevant information
  * @param {string} line - The log line to parse
@@ -965,15 +958,4 @@ export const parseLogFormat = (line: string): ParsedLogFormat | null => {
   }
 
   return null;
-};
-
-/**
- * Parse Windows log format variations for detailed component extraction
- * @param {string} line - The Windows log line to parse
- * @returns {Object|null} - Parsed components or null if not a valid Windows format
- * @deprecated Use parseLogFormat instead
- */
-export const parseWindowsLogFormat = (line: string): ParsedLogFormat | null => {
-  const result = parseLogFormat(line);
-  return result && result.format.startsWith('windows') ? result : null;
 };

@@ -13,8 +13,8 @@
     "test:ui": "vitest --ui",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
-    "format": "prettier --write \"src/**/*.{ts,tsx}\" \"*.{ts,json}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"*.{ts,json}\"",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\" \"*.{ts,tsx,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"*.{ts,tsx,json}\"",
     "check": "npm run typecheck && npm run lint && npm run test:run && npm run build"
   },
   "dependencies": {

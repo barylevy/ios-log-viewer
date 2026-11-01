@@ -2,6 +2,8 @@ import { parseLogContent } from '../LogParser';
 import { detectDateFormat } from '../dateTimeUtils';
 import type { DateFormat, LogRecord } from './logRecord';
 
+/** Quiet sources retain recent records even when they have not logged today. */
+export const MIN_LIVE_RECORDS = 200;
 export const MAX_LIVE_RECORDS = 20000;
 export const MAX_LIVE_CHARACTERS = 2 * 1024 * 1024;
 
@@ -28,7 +30,7 @@ export class LiveLogBuffer {
     if (records.some((record) => record.timestampMs !== null)) {
       const first = Math.min(
         firstToday < 0 ? records.length : firstToday,
-        Math.max(0, records.length - 200),
+        Math.max(0, records.length - MIN_LIVE_RECORDS),
       );
       if (first > 0) {
         text = text

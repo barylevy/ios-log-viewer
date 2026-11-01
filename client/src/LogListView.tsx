@@ -1,11 +1,4 @@
-import type {
-  ReactNode,
-  RefObject,
-  CSSProperties,
-  DragEvent,
-  ChangeEvent,
-  KeyboardEvent as ReactKeyboardEvent,
-} from 'react';
+import type { ReactNode, RefObject, CSSProperties, DragEvent } from 'react';
 import type { VirtuosoHandle, ListRange } from 'react-virtuoso';
 import type { ColumnSizingState } from '@tanstack/react-table';
 import type { LogRecord, LogId, LogFilters, StickyLog } from './domain/logRecord';
@@ -95,6 +88,8 @@ interface Props {
   isLiveMode?: boolean;
 }
 import HighlightedText from './components/HighlightedText';
+import GoToLineDialog from './components/GoToLineDialog';
+import { findNearestLogIndex } from './domain/logNavigation';
 import LogContextMenu, { type LogMenuTarget } from './components/LogContextMenu';
 import {
   compileQuery,
@@ -102,10 +97,10 @@ import {
   updateQueryRange,
   type RangeBoundary,
 } from './domain/logQuery';
-import React, { memo, useMemo, useState, useRef, useCallback, useEffect } from 'react';
+import { memo, useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import { Virtuoso } from 'react-virtuoso';
 import { useReactTable, getCoreRowModel } from '@tanstack/react-table';
-import { LOG_LEVEL_MATRIX, CATO_COLORS } from './constants';
+import { LOG_LEVEL_MATRIX, CATO_COLORS, DEFAULT_COLUMN_ORDER } from './constants';
 import { extractTimeGapFromSearch } from './dateTimeUtils';
 import { cleanMessage } from './utils/logLevelColors';
 import { replaceProcessIdWithType } from './utils/processTypeMapper';
@@ -275,7 +270,7 @@ const COLUMN_DEFS: Record<string, ColumnDefinition> = {
     size: 80,
     minSize: 50,
     headerClass: 'text-xs font-semibold text-gray-700 dark:text-gray-300 text-center',
-    renderBody: (log, ctx) =>
+    renderBody: (_log, ctx) =>
       ctx.timeGapInfo && ctx.timeGapInfo.hasGap ? (
         <div className="text-xs text-orange-600 dark:text-orange-400 font-mono bg-orange-100 dark:bg-orange-900/30 px-1 rounded text-center">
           +
@@ -293,7 +288,7 @@ const COLUMN_DEFS: Record<string, ColumnDefinition> = {
     size: 120,
     minSize: 40,
     headerClass: 'text-xs font-semibold text-gray-700 dark:text-gray-300 text-center pr-2',
-    renderBody: (log, ctx) =>
+    renderBody: (_log, ctx) =>
       ctx.fileInfo ? (
         <div className="text-xs text-gray-400 dark:text-gray-500 font-mono pr-2 text-center">
           {ctx.fileInfo.content}
@@ -301,17 +296,6 @@ const COLUMN_DEFS: Record<string, ColumnDefinition> = {
       ) : null,
   },
 };
-
-export const DEFAULT_COLUMN_ORDER = [
-  'timestamp',
-  'lineNumber',
-  'logLevel',
-  'message',
-  'module',
-  'sourceFile',
-  'timeGap',
-  'processThread',
-];
 
 // Stable empty array reference for the TanStack table — it's only used for
 // column state management, not row data (rows are rendered via Virtuoso).
@@ -918,8 +902,6 @@ const LogListView = ({
   const [visibleRange, setVisibleRange] = useState<ListRange | null>(null);
   // Go to line dialog state
   const [showGoToLineDialog, setShowGoToLineDialog] = useState(false);
-  const [goToLineValue, setGoToLineValue] = useState('');
-  const [isGoToLineValid, setIsGoToLineValid] = useState(true);
 
   // Handle hover with both internal ID tracking and parent callback
   const handleHover = useCallback(
@@ -1095,7 +1077,6 @@ const LogListView = ({
       if ((e.metaKey || e.ctrlKey) && e.key === 'l') {
         e.preventDefault();
         setShowGoToLineDialog(true);
-        setIsGoToLineValid(true); // Reset validation state when opening dialog
         return;
       }
 
@@ -1137,31 +1118,21 @@ const LogListView = ({
     scrollRestoredRef.current = false;
   }, [viewKey]);
 
-  // Save scroll position continuously as user scrolls (with debounce via useEffect dependencies)
-  useEffect(() => {
-    if (visibleRange && flatLogs.length > 0 && scrollRestoredRef.current) {
-      const scrollData = {
-        startIndex: visibleRange.startIndex,
-        endIndex: visibleRange.endIndex,
-        timestamp: Date.now(),
-      };
-      localStorage.setItem(scrollStorageKey, JSON.stringify(scrollData));
-    }
-  }, [visibleRange, flatLogs, scrollStorageKey]);
-
-  // Also save on page unload to catch any last-minute changes
+  // Save after scrolling and before unloading, using the same snapshot format.
   useEffect(() => {
     const saveScrollPosition = () => {
       if (visibleRange && flatLogs.length > 0 && scrollRestoredRef.current) {
-        const scrollData = {
-          startIndex: visibleRange.startIndex,
-          endIndex: visibleRange.endIndex,
-          timestamp: Date.now(),
-        };
-        localStorage.setItem(scrollStorageKey, JSON.stringify(scrollData));
+        localStorage.setItem(
+          scrollStorageKey,
+          JSON.stringify({
+            startIndex: visibleRange.startIndex,
+            endIndex: visibleRange.endIndex,
+            timestamp: Date.now(),
+          }),
+        );
       }
     };
-
+    saveScrollPosition();
     window.addEventListener('beforeunload', saveScrollPosition);
     return () => window.removeEventListener('beforeunload', saveScrollPosition);
   }, [visibleRange, flatLogs, scrollStorageKey]);
@@ -1258,91 +1229,16 @@ const LogListView = ({
   };
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
-  // Validate go to line input
-  const validateGoToLineInput = useCallback(
-    (value: string) => {
-      if (value === '') return true; // Empty input is considered valid (not an error state)
-
-      const lineNumber = parseInt(value.trim());
-      const maxLineNumber =
-        flatLogs.length > 0
-          ? flatLogs.reduce((maximum, log) => Math.max(maximum, log.lineNumber), 1)
-          : 1;
-
-      return !isNaN(lineNumber) && lineNumber >= 1 && lineNumber <= maxLineNumber;
-    },
+  const maximumLine = useMemo(
+    () => flatLogs.reduce((maximum, log) => Math.max(maximum, log.lineNumber), 1),
     [flatLogs],
   );
-
-  // Handle go to line input change with validation
-  const handleGoToLineChange = useCallback(
-    (e: ChangeEvent<HTMLInputElement>) => {
-      const value = e.target.value;
-      setGoToLineValue(value);
-      setIsGoToLineValid(validateGoToLineInput(value));
-    },
-    [validateGoToLineInput],
-  );
-
-  // Go to line functionality
-  const handleGoToLine = useCallback(() => {
-    const lineNumber = parseInt(goToLineValue.trim());
-    const maxLineNumber =
-      flatLogs.length > 0
-        ? flatLogs.reduce((maximum, log) => Math.max(maximum, log.lineNumber), 1)
-        : 1;
-
-    if (isNaN(lineNumber) || lineNumber < 1 || lineNumber > maxLineNumber) {
-      setIsGoToLineValid(false);
-      return; // Invalid line number - out of range
-    }
-
-    // Find the exact log with this line number in flatLogs (displayed logs)
-    let targetIndex = flatLogs.findIndex((log) => log.lineNumber === lineNumber);
-
-    // If exact line not found, find the closest one
-    if (targetIndex === -1) {
-      // Find the closest line number
-      let closestDistance = Infinity;
-      flatLogs.forEach((log, index) => {
-        const distance = Math.abs(log.lineNumber - lineNumber);
-        if (distance < closestDistance) {
-          closestDistance = distance;
-          targetIndex = index;
-        }
-      });
-    }
-
-    // Scroll to the target index if found
-    if (targetIndex !== -1 && virtuosoRef.current) {
-      virtuosoRef.current.scrollToIndex({
-        index: targetIndex,
-        align: 'center',
-        behavior: 'auto',
-      });
-    }
-
-    // Close dialog and reset value
+  const goToLine = (lineNumber: number) => {
+    const index = findNearestLogIndex(flatLogs, lineNumber);
+    if (index >= 0)
+      virtuosoRef.current?.scrollToIndex({ index, align: 'center', behavior: 'auto' });
     setShowGoToLineDialog(false);
-    setGoToLineValue('');
-    setIsGoToLineValid(true);
-  }, [goToLineValue, flatLogs]);
-
-  // Handle dialog keyboard events
-  const handleGoToLineKeyDown = useCallback(
-    (e: ReactKeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        handleGoToLine();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        setShowGoToLineDialog(false);
-        setGoToLineValue('');
-        setIsGoToLineValid(true);
-      }
-    },
-    [handleGoToLine],
-  );
+  };
 
   // Order source dates by their first timestamp, independently of the active filter.
   const allDates = useMemo(() => {
@@ -1662,54 +1558,12 @@ const LogListView = ({
         />
       )}
 
-      {/* Go to Line Dialog */}
       {showGoToLineDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg p-4 w-48">
-            <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">
-              Go to Line
-            </h3>
-            <div className="space-y-3">
-              <input
-                type="number"
-                min="1"
-                max={
-                  flatLogs.length > 0
-                    ? flatLogs.reduce((maximum, log) => Math.max(maximum, log.lineNumber), 1)
-                    : 1
-                }
-                value={goToLineValue}
-                onChange={handleGoToLineChange}
-                onKeyDown={handleGoToLineKeyDown}
-                placeholder="Enter line number"
-                className={`w-full px-3 py-2 text-sm rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 ${
-                  isGoToLineValid
-                    ? 'border border-gray-300 dark:border-gray-600 focus:ring-blue-500 dark:focus:ring-blue-400'
-                    : 'border-2 border-red-500 dark:border-red-400 focus:ring-red-500 dark:focus:ring-red-400'
-                }`}
-                autoFocus
-              />
-              <div className="flex items-center gap-2 justify-center">
-                <button
-                  onClick={() => {
-                    setShowGoToLineDialog(false);
-                    setGoToLineValue('');
-                    setIsGoToLineValid(true);
-                  }}
-                  className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-500"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleGoToLine}
-                  className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  OK
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <GoToLineDialog
+          maximumLine={maximumLine}
+          onSelect={goToLine}
+          onClose={() => setShowGoToLineDialog(false)}
+        />
       )}
     </div>
   );

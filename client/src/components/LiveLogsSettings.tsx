@@ -1,6 +1,6 @@
 import type { LiveServerConfig } from '../domain/viewerTypes';
 import ViewerDialog from './ViewerDialog';
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   fetchLiveConfig,
   checkLiveHealth,
