@@ -1,3 +1,6 @@
+import Button from '@mui/material/Button';
+import Stack from '@mui/material/Stack';
+import TextField from '@mui/material/TextField';
 import type { ChangeEvent, ReactNode } from 'react';
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 interface Props {
@@ -104,27 +107,22 @@ const JsonTreeViewer = ({ data, searchTerm = '', onSearchChange }: Props) => {
 
   return (
     <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded border">
-      {/* Controls */}
-      <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-200 dark:border-gray-600">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={toggleExpandCollapse}
-            className="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
-          >
-            {isAllExpanded ? 'Collapse All' : 'Expand All'}
-          </button>
-        </div>
-
-        <div className="flex-1 max-w-xs">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={handleSearchChange}
-            placeholder="Search in JSON..."
-            className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
-      </div>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 2 }}
+      >
+        <Button variant="outlined" onClick={toggleExpandCollapse}>
+          {isAllExpanded ? 'Collapse All' : 'Expand All'}
+        </Button>
+        <TextField
+          label="Search JSON"
+          placeholder="Search in JSON..."
+          value={searchQuery}
+          onChange={handleSearchChange}
+          sx={{ flex: 1, minWidth: 160, maxWidth: 320 }}
+        />
+      </Stack>
 
       {/* JSON Tree */}
       <div className="font-mono text-xs max-h-96 overflow-auto">
@@ -205,6 +203,7 @@ const JsonNode = ({ data, path, level, expandedPaths, onToggle, matchesSearch }:
       return (
         <div>
           <button
+            aria-expanded={isCurrentExpanded}
             onClick={() => onToggle(currentPath)}
             className="flex items-center gap-1 text-orange-600 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-200"
           >
@@ -251,6 +250,7 @@ const JsonNode = ({ data, path, level, expandedPaths, onToggle, matchesSearch }:
       return (
         <div>
           <button
+            aria-expanded={isCurrentExpanded}
             onClick={() => onToggle(currentPath)}
             className="flex items-center gap-1 text-orange-600 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-200"
           >

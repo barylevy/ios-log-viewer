@@ -6,15 +6,20 @@ import { createDefaultFilters, type LogFilters } from '../domain/logRecord';
 beforeEach(() => localStorage.clear());
 afterEach(() => Reflect.deleteProperty(window, 'showOpenFilePicker'));
 
-function controls(filters: LogFilters, onChange = vi.fn(), activeFileId = 'default') {
+function controls(
+  filters: LogFilters,
+  onChange = vi.fn(),
+  activeFileId = 'default',
+  matches = { position: 0, total: 0 },
+) {
   return (
     <LogViewerFilters
       filters={filters}
       onFiltersChange={onChange}
       logsCount={0}
       filteredLogsCount={0}
-      searchMatchCount={0}
-      searchMatchPos={0}
+      searchMatchCount={matches.total}
+      searchMatchPos={matches.position}
       pivotGap={null}
       stickyLogs={[]}
       onRemoveStickyLog={vi.fn()}
@@ -40,7 +45,7 @@ it('reflects model preferences and sends one change for each user action', () =>
   rerender(controls({ ...filters, filterMode: 'regex', filterCaseSensitive: true }, onChange));
   expect(filterControls.getByRole('combobox')).toHaveValue('regex');
   expect(localStorage.getItem('logViewer_filterMode')).toBe('regex');
-  fireEvent.click(filterControls.getByRole('button', { name: 'Aa' }));
+  fireEvent.click(filterControls.getByRole('button', { name: 'Filter case sensitive' }));
   expect(onChange).toHaveBeenLastCalledWith({ filterCaseSensitive: false });
   expect(onChange).toHaveBeenCalledTimes(2);
 });
@@ -65,7 +70,7 @@ it('keeps separate histories, newest phrases first, without duplicates', () => {
   ]);
 
   fireEvent.click(screen.getByTitle('Filter history'));
-  fireEvent.click(screen.getByRole('button', { name: 'Clear History' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Clear History' }));
   expect(localStorage.getItem('logViewer_filterHistory')).toBeNull();
   expect(localStorage.getItem('logViewer_searchHistory')).not.toBeNull();
 });
@@ -138,8 +143,65 @@ it('imports legacy JSON through the fallback input and saves the active preset l
   });
   await waitFor(() => expect(onChange).toHaveBeenCalledWith({ searchText: 'timeout' }));
   rerender(controls({ ...createDefaultFilters(), searchText: 'timeout' }, onChange));
-  fireEvent.click(screen.getByRole('button', { name: 'Save "Legacy"' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Save "Legacy"' }));
   const saved = JSON.parse(localStorage.getItem('logViewer_savedFilters')!);
   expect(saved).toHaveLength(1);
   expect(saved[0]).toMatchObject({ name: 'Legacy', data: { searchText: 'timeout' } });
+});
+
+it('keeps level toggles, module selection, and context controls connected to the model', () => {
+  const onChange = vi.fn();
+  const filters = { ...createDefaultFilters(), contextLines: 3 };
+  const { rerender } = render(controls(filters, onChange));
+  fireEvent.change(screen.getByLabelText('Module'), { target: { value: 'all' } });
+  expect(onChange).toHaveBeenLastCalledWith({ selectedModule: 'all' });
+  fireEvent.change(screen.getByLabelText('Context'), { target: { value: '5' } });
+  expect(onChange).toHaveBeenLastCalledWith({ contextLines: 5 });
+  fireEvent.click(screen.getByRole('button', { name: 'Log levels' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Error' }));
+  expect(onChange).toHaveBeenLastCalledWith({ logLevel: ['error'] });
+  rerender(controls({ ...filters, logLevel: ['error'] }, onChange));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Error' }));
+  expect(onChange).toHaveBeenLastCalledWith({ logLevel: ['all'], contextLines: 0 });
+  fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+  expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+});
+
+it('retains the filter shortcut and dispatches search navigation at the correct boundaries', () => {
+  const dispatch = vi.spyOn(window, 'dispatchEvent');
+  const filters = { ...createDefaultFilters(), searchQuery: 'error' };
+  const { rerender } = render(controls(filters, vi.fn(), 'default', { position: 1, total: 2 }));
+  fireEvent.keyDown(document, { key: 'f', metaKey: true });
+  expect(screen.getByRole('textbox', { name: 'Filter' })).toHaveFocus();
+  expect(screen.getByRole('button', { name: 'Previous match' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Next match' }));
+  expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'nextSearchMatch' }));
+  rerender(controls(filters, vi.fn(), 'default', { position: 2, total: 2 }));
+  expect(screen.getByRole('button', { name: 'Next match' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Previous match' }));
+  expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'prevSearchMatch' }));
+});
+
+it('deletes a saved preset without applying it and can apply the remaining preset', async () => {
+  localStorage.setItem(
+    'logViewer_savedFilters',
+    JSON.stringify([
+      { id: 'errors', name: 'Errors', data: { searchText: 'error' } },
+      { id: 'warnings', name: 'Warnings', data: { searchText: 'warning' } },
+    ]),
+  );
+  const onChange = vi.fn();
+  render(controls(createDefaultFilters(), onChange));
+  fireEvent.click(screen.getByRole('button', { name: 'Load file' }));
+  const dialog = screen.getByRole('dialog', { name: /load filters/i });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Delete Errors' }));
+  expect(onChange).not.toHaveBeenCalled();
+  expect(
+    JSON.parse(localStorage.getItem('logViewer_savedFilters')!).map(
+      (entry: { name: string }) => entry.name,
+    ),
+  ).toEqual(['Warnings']);
+  fireEvent.click(within(dialog).getByRole('button', { name: /^Warnings/ }));
+  expect(onChange).toHaveBeenCalledWith({ searchText: 'warning' });
+  await screen.findByRole('button', { name: 'Save "Warnings"' });
 });

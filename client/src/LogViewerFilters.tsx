@@ -1,9 +1,32 @@
+import ButtonBase from '@mui/material/ButtonBase';
+import Alert from '@mui/material/Alert';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import Checkbox from '@mui/material/Checkbox';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle';
+import IconButton from '@mui/material/IconButton';
+import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
+import ListItemButton from '@mui/material/ListItemButton';
+import ListItemText from '@mui/material/ListItemText';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
+import Popover from '@mui/material/Popover';
+import Stack from '@mui/material/Stack';
+import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
+import Typography from '@mui/material/Typography';
+import QueryField from './components/QueryField';
+import ToolbarIcon from './components/ToolbarIcon';
+import ViewerDialog from './components/ViewerDialog';
 import type {
   ChangeEvent,
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
 } from 'react';
-import type { LogFilters, LogId, MatchMode, StickyLog } from './domain/logRecord';
+import type { LogFilters, LogId, StickyLog } from './domain/logRecord';
 import {
   parsePresetFile,
   readFilterData,
@@ -12,8 +35,7 @@ import {
 } from './domain/filterPresets';
 import { errorName } from './domain/viewerTypes';
 import { compileQuery } from './domain/logQuery';
-import { useState, useRef, useEffect } from 'react';
-import ReactDOM from 'react-dom';
+import { memo, useState, useRef, useEffect } from 'react';
 import { getLevelBackgroundColor } from './utils/logLevelColors';
 import { readFileText } from './utils/readFileText';
 
@@ -85,9 +107,8 @@ const LogViewerFilters = ({
   onUpdateStickyLogTitle,
   activeFileId = 'default',
 }: Props) => {
-  const [isLevelDropdownOpen, setIsLevelDropdownOpen] = useState(false);
-  const [isFilterHistoryOpen, setIsFilterHistoryOpen] = useState(false);
-  const [isSearchHistoryOpen, setIsSearchHistoryOpen] = useState(false);
+  const [levelMenuAnchor, setLevelMenuAnchor] = useState<HTMLElement | null>(null);
+  const [helpAnchor, setHelpAnchor] = useState<HTMLElement | null>(null);
   const [editingStickyId, setEditingStickyId] = useState<LogId | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const editInputRef = useRef<HTMLInputElement | null>(null);
@@ -121,19 +142,7 @@ const LogViewerFilters = ({
   const fileHandleRef = useRef<FileSystemFileHandle | null>(null);
   const loadFileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const dropdownRef = useRef<HTMLDivElement | null>(null);
-  const portalRef = useRef<HTMLDivElement | null>(null);
   const filterInputRef = useRef<HTMLInputElement | null>(null);
-  const filterHistoryRef = useRef<HTMLDivElement | null>(null);
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const searchHistoryRef = useRef<HTMLDivElement | null>(null);
-  // For portal positioning
-  const buttonRef = useRef<HTMLButtonElement | null>(null);
-  const filterChevronRef = useRef<HTMLButtonElement | null>(null);
-  const searchChevronRef = useRef<HTMLButtonElement | null>(null);
-  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
-  const [filterDropdownPos, setFilterDropdownPos] = useState({ top: 0, left: 0 });
-  const [searchDropdownPos, setSearchDropdownPos] = useState({ top: 0, left: 0 });
 
   // The model owns preferences; this view only persists them for the next visit.
   useEffect(() => {
@@ -173,76 +182,7 @@ const LogViewerFilters = ({
   const addHistoryPhrase = (field: 'searchText' | 'searchQuery', phrase: string) => {
     const current = filters[field];
     onFiltersChange({ [field]: current ? `${current} || ${phrase}` : phrase });
-    if (field === 'searchText') setIsFilterHistoryOpen(false);
-    else setIsSearchHistoryOpen(false);
   };
-
-  // Close dropdown when clicking outside (using click event to allow checkbox selection)
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (!(event.target instanceof Node)) return;
-      if (
-        (portalRef.current && portalRef.current.contains(event.target)) ||
-        (buttonRef.current && buttonRef.current.contains(event.target))
-      ) {
-        return; // Click is inside the level dropdown, do nothing
-      }
-
-      if (
-        (filterHistoryRef.current && filterHistoryRef.current.contains(event.target)) ||
-        (filterChevronRef.current && filterChevronRef.current.contains(event.target))
-      ) {
-        return; // Click is inside the filter history dropdown, do nothing
-      }
-
-      if (
-        (searchHistoryRef.current && searchHistoryRef.current.contains(event.target)) ||
-        (searchChevronRef.current && searchChevronRef.current.contains(event.target))
-      ) {
-        return; // Click is inside the search history dropdown, do nothing
-      }
-
-      // Close all dropdowns
-      setIsLevelDropdownOpen(false);
-      setIsFilterHistoryOpen(false);
-      setIsSearchHistoryOpen(false);
-    };
-
-    document.addEventListener('click', handleClickOutside);
-    return () => {
-      document.removeEventListener('click', handleClickOutside);
-    };
-  }, []);
-
-  // Compute filter dropdown position when opening
-  useEffect(() => {
-    if (isFilterHistoryOpen && filterChevronRef.current) {
-      const rect = filterChevronRef.current.getBoundingClientRect();
-      setFilterDropdownPos({
-        top: rect.bottom + window.scrollY,
-        left: rect.right + window.scrollX - 300, // Align to right edge, adjust for dropdown width
-      });
-    }
-  }, [isFilterHistoryOpen]);
-
-  // Compute log level dropdown position when opening
-  useEffect(() => {
-    if (isLevelDropdownOpen && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setDropdownPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX });
-    }
-  }, [isLevelDropdownOpen]);
-
-  // Compute search dropdown position when opening
-  useEffect(() => {
-    if (isSearchHistoryOpen && searchChevronRef.current) {
-      const rect = searchChevronRef.current.getBoundingClientRect();
-      setSearchDropdownPos({
-        top: rect.bottom + window.scrollY,
-        left: rect.right + window.scrollX - 300, // Align to right edge, adjust for dropdown width
-      });
-    }
-  }, [isSearchHistoryOpen]);
 
   // Handle Cmd+F to focus filter input
   useEffect(() => {
@@ -352,411 +292,6 @@ const LogViewerFilters = ({
     }
     return `${filters.logLevel.length} levels selected`;
   };
-
-  // Extracted UI sections as render functions
-  const renderSearchNavigationInput = () => (
-    <div className="flex-1 min-w-64 flex items-center">
-      <label className="text-xs font-medium text-gray-700 dark:text-gray-300 mr-2">Search:</label>
-      <div className="relative w-full flex border border-gray-300 dark:border-gray-600 rounded-md focus-within:ring-2 focus-within:ring-green-500 focus-within:border-green-500 bg-white dark:bg-gray-700">
-        {/* Search Mode Dropdown */}
-        <select
-          value={searchMode}
-          onChange={(e) => onFiltersChange({ searchMode: e.target.value as MatchMode })}
-          className="h-6 px-1 border-none bg-transparent text-gray-700 dark:text-gray-300 text-xs focus:outline-none cursor-pointer"
-          title="Switch between text and regex search"
-        >
-          <option value="text">Text</option>
-          <option value="regex">Regex</option>
-        </select>
-        <div className="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
-        <input
-          ref={searchInputRef}
-          type="text"
-          placeholder="Search in record logs. Add #gap=5 for time gap indicators..."
-          value={filters.searchQuery || ''}
-          onChange={(e) => onFiltersChange({ searchQuery: e.target.value })}
-          onBlur={() => rememberQuery('searchQuery')}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') rememberQuery('searchQuery');
-          }}
-          className="flex-1 min-w-0 h-6 px-2 border-none focus:outline-none bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
-          title="Search in logs. Add #gap=5 to show visual separators between records with 5+ second gaps. Combine with search terms: 'error #gap=3' shows errors with gap indicators."
-        />
-        {/* Right-side controls: prev/next match, Aa case-toggle, clear, history chevron */}
-        <div className="flex items-center flex-shrink-0">
-          {filters.searchQuery && (
-            <>
-              <button
-                onClick={() => window.dispatchEvent(new Event('prevSearchMatch'))}
-                title="Previous match"
-                className="h-6 px-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 border-none focus:outline-none bg-transparent"
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15 19l-7-7 7-7"
-                  />
-                </svg>
-              </button>
-              <span className="text-xs text-gray-400 dark:text-gray-500 px-0.5">
-                {searchMatchPos}/{searchMatchCount}
-              </span>
-              <button
-                onClick={() => window.dispatchEvent(new Event('nextSearchMatch'))}
-                title="Next match"
-                className="h-6 px-1 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 border-none focus:outline-none bg-transparent"
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 5l7 7-7 7"
-                  />
-                </svg>
-              </button>
-              <div className="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
-            </>
-          )}
-          <button
-            onClick={() => onFiltersChange({ searchCaseSensitive: !searchCaseSensitive })}
-            title={
-              searchCaseSensitive
-                ? 'Case sensitive — click to make case insensitive'
-                : 'Case insensitive — click to make case sensitive'
-            }
-            className={`h-6 px-1.5 text-xs font-bold border-none focus:outline-none rounded-sm ${
-              searchCaseSensitive
-                ? 'text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/40'
-                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 bg-transparent'
-            }`}
-          >
-            Aa
-          </button>
-          {filters.searchQuery && (
-            <>
-              <div className="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
-              <button
-                onClick={() => onFiltersChange({ searchQuery: '' })}
-                className="h-6 px-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 border-none focus:outline-none bg-transparent"
-              >
-                ×
-              </button>
-            </>
-          )}
-          <div className="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
-          <button
-            ref={searchChevronRef}
-            onClick={() => setIsSearchHistoryOpen(!isSearchHistoryOpen)}
-            className="w-8 h-6 border-none rounded-r-md bg-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none flex items-center justify-center"
-            title="Search history"
-          >
-            <svg
-              className={`w-3 h-3 transition-transform ${isSearchHistoryOpen ? 'rotate-180' : ''}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 9l-7 7-7-7"
-              />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      {/* Search History Dropdown */}
-      {isSearchHistoryOpen &&
-        searchHistory.length > 0 &&
-        ReactDOM.createPortal(
-          <div
-            ref={searchHistoryRef}
-            style={{
-              position: 'absolute',
-              top: searchDropdownPos.top,
-              left: searchDropdownPos.left,
-              zIndex: 9999,
-              width: '300px',
-            }}
-            className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg"
-          >
-            <div className="py-1 max-h-80 overflow-y-auto">
-              {/* History Items */}
-              {searchHistory.slice(0, 10).map((phrase, index) => (
-                <button
-                  key={index}
-                  onClick={() => addHistoryPhrase('searchQuery', phrase)}
-                  className="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 border-b border-gray-100 dark:border-gray-600 last:border-b-0"
-                  title={`Add "${phrase}" to search`}
-                >
-                  <div className="truncate">{phrase}</div>
-                </button>
-              ))}
-
-              {/* Clear History Button */}
-              <div className="border-t border-gray-200 dark:border-gray-600 mt-1">
-                <button
-                  onClick={() => {
-                    setSearchHistory([]);
-                    setIsSearchHistoryOpen(false);
-                  }}
-                  className="w-full px-3 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 text-center"
-                >
-                  Clear History
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
-    </div>
-  );
-
-  const renderFilterInput = () => {
-    return (
-      <div className="flex-1 min-w-64 flex flex-col items-start">
-        <div className="flex items-center w-full">
-          <label className="text-xs font-medium text-gray-700 dark:text-gray-300 mr-2">
-            Filter:
-          </label>
-          <div className="relative w-full flex border border-gray-300 dark:border-gray-600 rounded-md focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 bg-white dark:bg-gray-700">
-            {/* Filter Mode Dropdown */}
-            <select
-              value={filterMode}
-              onChange={(e) => onFiltersChange({ filterMode: e.target.value as MatchMode })}
-              className="h-6 px-1 border-none bg-transparent text-gray-700 dark:text-gray-300 text-xs focus:outline-none cursor-pointer"
-              title="Switch between text and regex search"
-            >
-              <option value="text">Text</option>
-              <option value="regex">Regex</option>
-            </select>
-            <div className="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
-            <input
-              ref={filterInputRef}
-              type="text"
-              placeholder="Filter logs: text || terms, !exclude, #gap=5, #row::, #date:: ranges. Hover for full guide."
-              value={filters.searchText}
-              onChange={(e) => onFiltersChange({ searchText: e.target.value })}
-              onBlur={() => rememberQuery('searchText')}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') rememberQuery('searchText');
-              }}
-              className="flex-1 min-w-0 h-6 px-2 border-none focus:outline-none bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-xs placeholder:font-light"
-              title={FILTER_TOOLTIP}
-            />
-            {/* Right-side controls: Aa case-toggle, clear, history chevron */}
-            <div className="flex items-center flex-shrink-0">
-              <button
-                onClick={() => onFiltersChange({ filterCaseSensitive: !filterCaseSensitive })}
-                title={
-                  filterCaseSensitive
-                    ? 'Case sensitive — click to make case insensitive'
-                    : 'Case insensitive — click to make case sensitive'
-                }
-                className={`h-6 px-1.5 text-xs font-bold border-none focus:outline-none rounded-sm ${
-                  filterCaseSensitive
-                    ? 'text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/40'
-                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 bg-transparent'
-                }`}
-              >
-                Aa
-              </button>
-              {filters.searchText && (
-                <>
-                  <div className="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
-                  <button
-                    onClick={() => onFiltersChange({ searchText: '' })}
-                    className="h-6 px-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 border-none focus:outline-none bg-transparent"
-                  >
-                    ×
-                  </button>
-                </>
-              )}
-              <div className="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
-              <button
-                ref={filterChevronRef}
-                onClick={() => setIsFilterHistoryOpen(!isFilterHistoryOpen)}
-                className="w-8 h-6 border-none rounded-r-md bg-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 focus:outline-none flex items-center justify-center"
-                title="Filter history"
-              >
-                <svg
-                  className={`w-3 h-3 transition-transform ${isFilterHistoryOpen ? 'rotate-180' : ''}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 9l-7 7-7-7"
-                  />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Filter History Dropdown */}
-        {isFilterHistoryOpen &&
-          filterHistory.length > 0 &&
-          ReactDOM.createPortal(
-            <div
-              ref={filterHistoryRef}
-              style={{
-                position: 'absolute',
-                top: filterDropdownPos.top,
-                left: filterDropdownPos.left,
-                zIndex: 9999,
-                width: '300px',
-              }}
-              className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg"
-            >
-              <div className="py-1 max-h-80 overflow-y-auto">
-                {/* History Items */}
-                {filterHistory.slice(0, 10).map((phrase, index) => (
-                  <button
-                    key={index}
-                    onClick={() => addHistoryPhrase('searchText', phrase)}
-                    className="w-full px-3 py-2 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 border-b border-gray-100 dark:border-gray-600 last:border-b-0"
-                    title={`Add "${phrase}" to filter`}
-                  >
-                    <div className="truncate">{phrase}</div>
-                  </button>
-                ))}
-
-                {/* Clear History Button */}
-                <div className="border-t border-gray-200 dark:border-gray-600 mt-1">
-                  <button
-                    onClick={() => {
-                      setFilterHistory([]);
-                      setIsFilterHistoryOpen(false);
-                    }}
-                    className="w-full px-3 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 text-center"
-                  >
-                    Clear History
-                  </button>
-                </div>
-              </div>
-            </div>,
-            document.body,
-          )}
-      </div>
-    );
-  };
-
-  const renderLogLevelFilter = () => {
-    return (
-      <div className="flex items-center gap-1" ref={dropdownRef}>
-        <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Level:</label>
-        <button
-          ref={buttonRef}
-          onClick={() => setIsLevelDropdownOpen((o) => !o)}
-          className="flex items-center justify-between px-2 h-6 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs min-w-28"
-        >
-          <span>{getSelectedLevelsText()}</span>
-          <svg
-            className={`w-3 h-3 ml-1 transition-transform ${isLevelDropdownOpen ? 'rotate-180' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-        {isLevelDropdownOpen &&
-          ReactDOM.createPortal(
-            <div
-              ref={portalRef}
-              style={{
-                position: 'absolute',
-                top: dropdownPos.top,
-                left: dropdownPos.left,
-                zIndex: 9999,
-              }}
-              className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg"
-            >
-              <div className="py-1">
-                {[
-                  { value: 'all', label: 'All Levels', color: 'text-gray-700 dark:text-gray-300' },
-                  { value: 'error', label: 'Error', color: 'text-red-600 dark:text-red-400' },
-                  {
-                    value: 'warning',
-                    label: 'Warning',
-                    color: 'text-yellow-600 dark:text-yellow-400',
-                  },
-                  { value: 'info', label: 'Info', color: 'text-blue-600 dark:text-blue-400' },
-                  { value: 'debug', label: 'Debug', color: 'text-green-600 dark:text-green-400' },
-                  {
-                    value: 'verbose',
-                    label: 'Verbose',
-                    color: 'text-purple-600 dark:text-purple-400',
-                  },
-                ].map(({ value, label, color }) => (
-                  <label
-                    key={value}
-                    className="flex items-center px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={filters.logLevel.includes(value)}
-                      onChange={() => handleLogLevelToggle(value)}
-                      className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:bg-gray-600 mr-2"
-                    />
-                    <span className={`text-sm ${color}`}>{label}</span>
-                  </label>
-                ))}
-              </div>
-            </div>,
-            document.body,
-          )}
-      </div>
-    );
-  };
-
-  const renderContextLines = () => (
-    <div className="flex items-center gap-1">
-      <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Context:</label>
-      <input
-        type="number"
-        min="0"
-        max="50"
-        value={filters.contextLines || 0}
-        onChange={(e) => onFiltersChange({ contextLines: parseInt(e.target.value) || 0 })}
-        className="w-16 px-2 h-6 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs"
-        placeholder="0"
-      />
-      <span className="text-xs text-gray-500 dark:text-gray-400">lines</span>
-    </div>
-  );
-
-  const renderModuleFilter = () => (
-    <div className="flex items-center gap-1">
-      <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Module:</label>
-      <select
-        value={filters.selectedModule || 'all'}
-        onChange={(e) => onFiltersChange({ selectedModule: e.target.value })}
-        className="px-2 h-6 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs w-28 max-w-28 truncate"
-        title={
-          filters.selectedModule && filters.selectedModule !== 'all'
-            ? `Module: ${filters.selectedModule}`
-            : 'Filter logs by module'
-        }
-      >
-        <option value="all">All Modules</option>
-        {moduleOptions.map((moduleName) => (
-          <option key={moduleName} value={moduleName}>
-            {moduleName}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
 
   // === Saved filter helpers ===
   const persistSavedFilters = (list: FilterPreset[]) => {
@@ -931,8 +466,11 @@ const LogViewerFilters = ({
   };
 
   const formatSavedDate = (iso: string | undefined) => {
+    if (!iso) return '';
     try {
-      return new Date(iso || '').toLocaleString(undefined, {
+      const date = new Date(iso);
+      if (Number.isNaN(date.getTime())) return '';
+      return date.toLocaleString(undefined, {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
@@ -955,118 +493,138 @@ const LogViewerFilters = ({
     setActiveFilterName(null);
   };
 
-  const renderPresetRow = () => {
-    const canSave = !!(fileHandleRef.current || activeFilterName);
-    const tipCls =
-      'pointer-events-none absolute top-full right-0 mt-1.5 px-2 py-1 text-[10px] leading-none text-white bg-gray-800 dark:bg-gray-700 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-[60]';
-    return (
-      <div className="flex items-center mb-1.5">
-        <div className="flex items-center gap-0.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white/70 dark:bg-gray-800/70 px-1 py-0.5">
-          {/* Filter name dropdown — shows all entries in the open file */}
-          {fileFilters.length > 0 ? (
-            <select
-              value={activeFilterName || ''}
-              onChange={(e) => {
-                const val = e.target.value;
-                if (!val) {
-                  clearFilterValues();
-                  return;
-                }
-                const entry = fileFilters.find((f) => f.name === val);
-                if (entry) applyFilterData(entry.data, entry.name, fileHandleRef.current);
-              }}
-              className="text-[10px] h-5 max-w-[120px] rounded bg-transparent text-blue-600 dark:text-blue-400 font-medium px-1 leading-none cursor-pointer focus:outline-none"
-            >
-              <option value="">— None —</option>
-              {fileFilters.map((f) => (
-                <option key={f.id} value={f.name}>
-                  {f.name}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <span className="text-[10px] max-w-[110px] truncate leading-none mr-0.5 text-gray-400 dark:text-gray-500 italic">
-              unsaved
-            </span>
-          )}
-          {/* Save */}
-          <button
+  const renderPresetRow = () => (
+    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+      <TextField
+        select
+        label="Preset"
+        size="small"
+        value={fileFilters.length ? activeFilterName || '' : ''}
+        disabled={!fileFilters.length}
+        slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
+        sx={{ flex: 1, minWidth: 95, '& .MuiInputBase-input': { fontSize: 12, py: 1 } }}
+        onChange={(event) => {
+          if (!event.target.value) {
+            clearFilterValues();
+            return;
+          }
+          const preset = fileFilters.find((entry) => entry.name === event.target.value);
+          if (preset) applyFilterData(preset.data, preset.name, fileHandleRef.current);
+        }}
+      >
+        <option value="">{fileFilters.length ? 'None' : activeFilterName || 'Unsaved'}</option>
+        {fileFilters.map((preset) => (
+          <option key={preset.id} value={preset.name}>
+            {preset.name}
+          </option>
+        ))}
+      </TextField>
+      <Tooltip
+        describeChild
+        title={
+          activeFilterName
+            ? `Update "${activeFilterName}" with the current filter settings. Log records are not saved.`
+            : 'Update the selected preset with the current filter settings. Load or name a preset first.'
+        }
+      >
+        <span>
+          <Button
+            variant="outlined"
+            disabled={!(fileHandleRef.current || activeFilterName)}
+            aria-label={activeFilterName ? `Save "${activeFilterName}"` : 'Save preset'}
             onClick={handleSave}
-            disabled={!canSave}
-            className={`relative group w-6 h-6 rounded-md transition-colors flex items-center justify-center ${
-              canSave
-                ? 'text-gray-400 hover:text-blue-600 dark:text-gray-500 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-                : 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-            }`}
+            sx={{ minWidth: 42, px: 0.75 }}
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"
-              />
-            </svg>
-            <span className={tipCls}>
-              {canSave ? `Save "${activeFilterName}"` : 'No filter loaded'}
-            </span>
-          </button>
-          {/* Save As */}
-          <button
-            onClick={handleSaveAs}
-            className="relative group w-6 h-6 rounded-md transition-colors flex items-center justify-center text-gray-400 hover:text-blue-600 dark:text-gray-500 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-              />
-            </svg>
-            <span className={tipCls}>{fileFilters.length > 0 ? 'Add to file…' : 'Save As…'}</span>
-          </button>
-          {/* Load */}
-          <button
-            onClick={handleLoad}
-            className="relative group w-6 h-6 rounded-md transition-colors flex items-center justify-center text-gray-400 hover:text-blue-600 dark:text-gray-500 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-              />
-            </svg>
-            <span className={tipCls}>Load file</span>
-          </button>
-          {/* Clear */}
-          <button
-            onClick={() => {
-              clearFilterValues();
-              fileHandleRef.current = null;
-              setFileFilters([]);
-            }}
-            className="relative group w-6 h-6 rounded-md transition-colors flex items-center justify-center text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-            <span className={tipCls}>Clear filters</span>
-          </button>
-        </div>
-      </div>
-    );
-  };
+            Save
+          </Button>
+        </span>
+      </Tooltip>
+      <Tooltip
+        describeChild
+        title="Save the current filter settings under a name. Add a preset to the open JSON file or create a new file. Log records are not saved."
+      >
+        <Button
+          variant="outlined"
+          onClick={handleSaveAs}
+          aria-label={fileFilters.length ? 'Add to file…' : 'Save As…'}
+          sx={{ minWidth: 54, px: 0.75 }}
+        >
+          Save as
+        </Button>
+      </Tooltip>
+      <Tooltip
+        describeChild
+        title="Open a saved filter preset JSON file and apply its filter settings. Use the Preset dropdown to switch between presets."
+      >
+        <Button
+          variant="outlined"
+          onClick={handleLoad}
+          aria-label="Load file"
+          sx={{ minWidth: 42, px: 0.75 }}
+        >
+          Load
+        </Button>
+      </Tooltip>
+      <Tooltip title="Clear filters">
+        <IconButton
+          size="small"
+          aria-label="Clear filters"
+          onClick={() => {
+            clearFilterValues();
+            fileHandleRef.current = null;
+            setFileFilters([]);
+          }}
+        >
+          <ToolbarIcon name="clear" />
+        </IconButton>
+      </Tooltip>
+    </Stack>
+  );
+
+  const renderExtraControls = () => (
+    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+      <Button
+        variant="outlined"
+        color="inherit"
+        aria-label="Log levels"
+        aria-haspopup="menu"
+        aria-expanded={Boolean(levelMenuAnchor)}
+        endIcon={<ToolbarIcon name="expand" />}
+        onClick={(event) => setLevelMenuAnchor(event.currentTarget)}
+        sx={{ flex: 1, whiteSpace: 'nowrap', height: 36, borderColor: 'divider', fontSize: 12 }}
+      >
+        {getSelectedLevelsText()}
+      </Button>
+      <TextField
+        select
+        label="Module"
+        size="small"
+        value={filters.selectedModule}
+        slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
+        onChange={(event) => onFiltersChange({ selectedModule: event.target.value })}
+        sx={{ flex: 1, minWidth: 100, '& .MuiInputBase-input': { fontSize: 12, py: 1 } }}
+      >
+        <option value="all">All modules</option>
+        {moduleOptions.map((module) => (
+          <option key={module} value={module}>
+            {module}
+          </option>
+        ))}
+      </TextField>
+      <TextField
+        label="Context"
+        type="number"
+        size="small"
+        value={filters.contextLines || 0}
+        onChange={(event) => onFiltersChange({ contextLines: parseInt(event.target.value) || 0 })}
+        slotProps={{ htmlInput: { min: 0, max: 50 }, inputLabel: { shrink: true } }}
+        sx={{ width: 76, '& .MuiInputBase-input': { fontSize: 12, py: 1 } }}
+      />
+    </Stack>
+  );
 
   const renderStats = () => (
-    <div className="text-[10px] text-gray-600 dark:text-gray-400 flex items-center gap-4">
+    <div className="text-xs text-gray-600 dark:text-gray-400 flex flex-wrap items-center gap-x-4 gap-y-2">
       <span>
         Showing {filteredLogsCount.toLocaleString()} of {logsCount.toLocaleString()} logs
         {filteredLogsCount !== logsCount && (
@@ -1100,94 +658,78 @@ const LogViewerFilters = ({
         </span>
       )}
 
-      {/* Sticky Logs Zone */}
-      {stickyLogs && stickyLogs.length > 0 && (
-        <div className="flex items-center gap-2">
-          <span className="text-gray-400 dark:text-gray-500 opacity-75">Sticky:</span>
-          <div className="flex flex-wrap items-center gap-1">
-            {stickyLogs
-              .slice() // Create a copy to avoid mutating the original array
-              .sort((a, b) => {
-                // Sort by timestamp, then by line number as fallback
-                if (a.timestamp && b.timestamp) {
-                  return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
-                }
-                // If timestamps are missing, sort by line number
-                return a.lineNumber - b.lineNumber;
-              })
-              .map((sticky) => (
-                <div
-                  key={sticky.id}
-                  className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded border transition-colors ${getLevelBackgroundColor(sticky.level)}`}
-                >
-                  {/* Scroll to log button - editable on double-click */}
-                  {editingStickyId === sticky.id ? (
-                    <input
-                      ref={editInputRef}
-                      type="text"
-                      value={editingTitle}
-                      onChange={(e) => setEditingTitle(e.target.value)}
-                      onBlur={handleSaveStickyTitle}
-                      onKeyDown={handleStickyEditKeyDown}
-                      className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-1 py-0 text-xs w-24"
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  ) : (
-                    <button
-                      onClick={() => onScrollToLog(sticky.lineNumber, sticky.sourceFile)}
-                      onDoubleClick={() => handleStickyDoubleClick(sticky)}
-                      className="hover:opacity-75"
-                      title={
-                        sticky.sourceFile
-                          ? `[${sticky.sourceFile}] Line ${sticky.lineNumber}${sticky.title ? ` - ${sticky.title}` : ''}\nDouble-click to edit title`
-                          : `Line ${sticky.lineNumber}${sticky.title ? ` - ${sticky.title}` : ''}\nDouble-click to edit title`
-                      }
-                    >
-                      {sticky.title || `#${sticky.lineNumber}`}
-                    </button>
-                  )}
-                  {/* Remove sticky log button */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRemoveStickyLog(sticky.id);
+      {stickyLogs.length > 0 && (
+        <Stack
+          direction="row"
+          spacing={0.75}
+          sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.75 }}
+        >
+          <Typography variant="caption" color="text.secondary">
+            Sticky:
+          </Typography>
+          {stickyLogs
+            .slice()
+            .sort((a, b) =>
+              a.timestamp && b.timestamp
+                ? new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+                : a.lineNumber - b.lineNumber,
+            )
+            .map((sticky) => (
+              <Box
+                key={sticky.id}
+                className={getLevelBackgroundColor(sticky.level)}
+                sx={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  border: '1px solid',
+                  borderRadius: 1,
+                  px: 0.5,
+                }}
+              >
+                {editingStickyId === sticky.id ? (
+                  <TextField
+                    inputRef={editInputRef}
+                    value={editingTitle}
+                    onChange={(event) => setEditingTitle(event.target.value)}
+                    onBlur={handleSaveStickyTitle}
+                    onKeyDown={handleStickyEditKeyDown}
+                    slotProps={{ htmlInput: { 'aria-label': 'Sticky log title' } }}
+                    sx={{ width: 120, '& input': { py: 0.5, px: 1, fontSize: 12 } }}
+                  />
+                ) : (
+                  <ButtonBase
+                    onClick={() => onScrollToLog(sticky.lineNumber, sticky.sourceFile)}
+                    onDoubleClick={() => handleStickyDoubleClick(sticky)}
+                    title={`${sticky.sourceFile ? `[${sticky.sourceFile}] ` : ''}Line ${sticky.lineNumber}${sticky.title ? ` - ${sticky.title}` : ''}\nDouble-click to edit title`}
+                    sx={{
+                      px: 0.75,
+                      py: 0.5,
+                      fontSize: 12,
+                      borderRadius: 0.5,
+                      '&.Mui-focusVisible': { outline: '2px solid currentColor' },
                     }}
-                    className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-                    title={`Remove sticky log${sticky.sourceFile ? ` from ${sticky.sourceFile}` : ''}`}
                   >
-                    <svg
-                      className="w-2.5 h-2.5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2.5}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              ))}
-            {/* Clear All Sticky Logs Button */}
-            <button
-              onClick={onClearAllStickyLogs}
-              className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors border border-gray-300 dark:border-gray-600"
-              title="Clear all sticky logs"
-            >
-              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2.5}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
-        </div>
+                    {sticky.title || `#${sticky.lineNumber}`}
+                  </ButtonBase>
+                )}
+                <IconButton
+                  onClick={() => onRemoveStickyLog(sticky.id)}
+                  aria-label={`Remove sticky log ${sticky.lineNumber}`}
+                  title={`Remove sticky log${sticky.sourceFile ? ` from ${sticky.sourceFile}` : ''}`}
+                  sx={{ color: 'inherit', p: 0.25, '& svg': { fontSize: 14 } }}
+                >
+                  <ToolbarIcon name="clear" />
+                </IconButton>
+              </Box>
+            ))}
+          <IconButton
+            onClick={onClearAllStickyLogs}
+            aria-label="Clear all sticky logs"
+            title="Clear all sticky logs"
+          >
+            <ToolbarIcon name="clear" />
+          </IconButton>
+        </Stack>
       )}
     </div>
   );
@@ -1195,48 +737,135 @@ const LogViewerFilters = ({
   const isOverwrite = savedFilters.some((preset) => preset.name === saveInputName.trim());
 
   return (
-    <div className="overflow-visible bg-white/50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700 px-2 py-2">
+    <Box
+      component="section"
+      aria-label="Log filters"
+      sx={{
+        px: 1.5,
+        py: 1.25,
+        borderBottom: 1,
+        borderColor: 'divider',
+        bgcolor: 'background.paper',
+      }}
+    >
       {[
         compileQuery(filters.searchText, filters.filterMode, filters.filterCaseSensitive).error,
         compileQuery(filters.searchQuery, filters.searchMode, filters.searchCaseSensitive).error,
       ]
         .filter(Boolean)
         .map((error, index) => (
-          <p key={index} role="alert" className="text-xs text-red-600 mb-1">
+          <Alert key={index} severity="error" sx={{ mb: 1, py: 0 }}>
             {error}
-          </p>
+          </Alert>
         ))}
-      {/* 2x2 Grid Layout */}
-      <div className="relative z-10 overflow-visible">
-        <div className="grid grid-cols-[1fr,auto] gap-4">
-          {/* Left side - takes remaining space */}
-          <div className="space-y-2">
-            {/* Filter Input */}
-            {renderFilterInput()}
-            {/* Search Navigation Input */}
-            {renderSearchNavigationInput()}
-          </div>
-
-          {/* Right side - auto width, aligned to right */}
-          <div className="flex flex-col items-end">
-            {/* Preset name + Save / Save As / Load / Clear */}
-            {renderPresetRow()}
-            <div className="space-y-2 flex flex-col items-end">
-              {/* Log Level Filter */}
-              {renderLogLevelFilter()}
-              {/* Module Filter */}
-              {renderModuleFilter()}
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom row: stats on the left, context lines pinned to the right under Module */}
-        <div className="flex items-center gap-4 mt-2">
-          <div className="flex-1 min-w-0">{renderStats()}</div>
-          {renderContextLines()}
-        </div>
-      </div>
-
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1fr) 350px' },
+          gap: 1.25,
+        }}
+      >
+        <Stack spacing={1} sx={{ minWidth: 0 }}>
+          <QueryField
+            label="Filter"
+            value={filters.searchText}
+            placeholder="Filter logs: error || warning, #gap=5, #row :: #date"
+            inputRef={filterInputRef}
+            mode={filterMode}
+            caseSensitive={filterCaseSensitive}
+            onChange={(searchText) => onFiltersChange({ searchText })}
+            onModeChange={(mode) => onFiltersChange({ filterMode: mode })}
+            onCaseChange={() => onFiltersChange({ filterCaseSensitive: !filterCaseSensitive })}
+            onRemember={() => rememberQuery('searchText')}
+            history={filterHistory}
+            onHistorySelect={(phrase) => addHistoryPhrase('searchText', phrase)}
+            onHistoryClear={() => setFilterHistory([])}
+          />
+          <QueryField
+            label="Search"
+            value={filters.searchQuery}
+            placeholder="Search in record logs…"
+            mode={searchMode}
+            caseSensitive={searchCaseSensitive}
+            onChange={(searchQuery) => onFiltersChange({ searchQuery })}
+            onModeChange={(mode) => onFiltersChange({ searchMode: mode })}
+            onCaseChange={() => onFiltersChange({ searchCaseSensitive: !searchCaseSensitive })}
+            onRemember={() => rememberQuery('searchQuery')}
+            history={searchHistory}
+            onHistorySelect={(phrase) => addHistoryPhrase('searchQuery', phrase)}
+            onHistoryClear={() => setSearchHistory([])}
+            matchPosition={searchMatchPos}
+            matchCount={searchMatchCount}
+            onPreviousMatch={() => window.dispatchEvent(new Event('prevSearchMatch'))}
+            onNextMatch={() => window.dispatchEvent(new Event('nextSearchMatch'))}
+          />
+        </Stack>
+        <Stack spacing={1} sx={{ minWidth: 0 }}>
+          {renderPresetRow()}
+          {renderExtraControls()}
+        </Stack>
+      </Box>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{ mt: 1, minHeight: 20, alignItems: 'center', justifyContent: 'space-between' }}
+      >
+        <Box sx={{ minWidth: 0, '& > div': { flexWrap: 'wrap', rowGap: 0.5 } }}>
+          {renderStats()}
+        </Box>
+        <Button
+          size="small"
+          onClick={(event) => setHelpAnchor(event.currentTarget)}
+          startIcon={<ToolbarIcon name="help" />}
+          sx={{ flexShrink: 0, fontSize: 11, py: 0, minWidth: 0 }}
+        >
+          Filter syntax
+        </Button>
+      </Stack>
+      <Menu
+        anchorEl={levelMenuAnchor}
+        open={Boolean(levelMenuAnchor)}
+        onClose={() => setLevelMenuAnchor(null)}
+        slotProps={{ list: { 'aria-label': 'Log levels' } }}
+      >
+        {['all', 'error', 'warning', 'info', 'debug', 'verbose'].map((level) => (
+          <MenuItem
+            key={level}
+            onClick={() => handleLogLevelToggle(level)}
+            sx={{ fontSize: 13, pr: 3 }}
+          >
+            <Checkbox
+              size="small"
+              checked={filters.logLevel.includes(level)}
+              tabIndex={-1}
+              readOnly
+            />
+            {level === 'all' ? 'All Levels' : level[0].toUpperCase() + level.slice(1)}
+          </MenuItem>
+        ))}
+      </Menu>
+      <Popover
+        open={Boolean(helpAnchor)}
+        anchorEl={helpAnchor}
+        onClose={() => setHelpAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Typography
+          component="div"
+          sx={{
+            p: 2,
+            whiteSpace: 'pre-line',
+            fontSize: 12,
+            width: 420,
+            maxWidth: 'calc(100vw - 32px)',
+            maxHeight: '65vh',
+            overflow: 'auto',
+          }}
+        >
+          {FILTER_TOOLTIP}
+        </Typography>
+      </Popover>
       {/* Hidden file input — fallback for browsers without File System Access API */}
       <input
         ref={loadFileInputRef}
@@ -1246,154 +875,108 @@ const LogViewerFilters = ({
         onChange={handleLoadFileChange}
       />
 
-      {/* Save As Fallback Dialog — shown when showSaveFilePicker is unavailable */}
-      {presetDialog === 'save' && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-          onClick={() => setPresetDialog(null)}
-        >
-          <div
-            className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 p-4 w-80"
-            onClick={(e) => e.stopPropagation()}
+      <ViewerDialog
+        open={presetDialog === 'save'}
+        onClose={() => setPresetDialog(null)}
+        label="Save filter preset"
+      >
+        <DialogTitle>Add Filter to File</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {fileFilters.length
+              ? 'Enter a name for this filter. It will be added to the open file.'
+              : "Enter a name. You'll be asked where to save the file."}
+          </Typography>
+          <TextField
+            inputRef={saveInputRef}
+            autoFocus
+            fullWidth
+            label="Preset name"
+            placeholder="Filter preset name…"
+            value={saveInputName}
+            onChange={(event) => setSaveInputName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') handleSaveCurrentFilter();
+            }}
+          />
+          {isOverwrite && (
+            <Alert severity="warning" sx={{ mt: 1.5 }}>
+              This will overwrite the existing "{saveInputName.trim()}" preset.
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button color="inherit" onClick={() => setPresetDialog(null)}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            disabled={!saveInputName.trim()}
+            onClick={handleSaveCurrentFilter}
           >
-            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">
-              Add Filter to File
-            </h3>
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-3">
-              {fileFilters.length > 0
-                ? 'Enter a name for this filter. It will be added to the open file.'
-                : "Enter a name. You'll be asked where to save the file."}
-            </p>
-            <input
-              ref={saveInputRef}
-              autoFocus
-              type="text"
-              value={saveInputName}
-              onChange={(e) => setSaveInputName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleSaveCurrentFilter();
-                if (e.key === 'Escape') setPresetDialog(null);
-              }}
-              placeholder="Filter preset name…"
-              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            {isOverwrite && (
-              <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1.5">
-                This will overwrite the existing "{saveInputName.trim()}" preset.
-              </p>
-            )}
-            <div className="flex justify-end gap-2 mt-3">
-              <button
-                onClick={() => setPresetDialog(null)}
-                className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveCurrentFilter}
-                disabled={!saveInputName.trim()}
-                className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                {isOverwrite ? 'Update' : 'Save'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Load Filters Dialog */}
-      {presetDialog === 'load' && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-          onClick={() => setPresetDialog(null)}
-        >
-          <div
-            className="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 w-96 max-h-[70vh] flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-600">
-              <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
-                Load Filters
-              </h3>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    setPresetDialog(null);
-                    loadFileInputRef.current?.click();
-                  }}
-                  className="px-2 py-1 text-[10px] rounded bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
-                  title="Load from a .json file"
-                >
-                  Browse file…
-                </button>
-                <button
-                  onClick={() => setPresetDialog(null)}
-                  className="w-6 h-6 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <div className="overflow-y-auto flex-1 py-1">
-              {savedFilters.length === 0 ? (
-                <p className="px-4 py-6 text-sm text-center text-gray-400 dark:text-gray-500">
-                  No saved filters yet
-                </p>
-              ) : (
-                savedFilters.map((entry) => (
-                  <button
-                    key={entry.id}
-                    onClick={() => handleApplySavedFilter(entry)}
-                    className="w-full flex items-start gap-3 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left group"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
-                        {entry.name}
-                      </p>
-                      <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
-                        {formatSavedDate(entry.timestamp)}
-                      </p>
-                      {entry.data.searchText && (
-                        <p className="text-[10px] text-blue-600 dark:text-blue-400 truncate mt-0.5 font-mono">
-                          "{entry.data.searchText}"
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      onClick={(e) => handleDeleteSavedFilter(entry.id, e)}
+            {isOverwrite ? 'Update' : 'Save'}
+          </Button>
+        </DialogActions>
+      </ViewerDialog>
+      <ViewerDialog
+        open={presetDialog === 'load'}
+        onClose={() => setPresetDialog(null)}
+        label="Load filters"
+      >
+        <DialogTitle>Load Filters</DialogTitle>
+        <DialogContent sx={{ px: 1 }}>
+          {savedFilters.length === 0 ? (
+            <Typography color="text.secondary" sx={{ p: 2 }}>
+              No saved filters yet
+            </Typography>
+          ) : (
+            <List disablePadding>
+              {savedFilters.map((entry) => (
+                <ListItem
+                  key={entry.id}
+                  disablePadding
+                  secondaryAction={
+                    <IconButton
+                      edge="end"
+                      aria-label={`Delete ${entry.name}`}
                       title="Delete this saved filter"
-                      className="opacity-0 group-hover:opacity-100 w-5 h-5 flex-shrink-0 mt-0.5 flex items-center justify-center rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
+                      onClick={(event) => handleDeleteSavedFilter(entry.id, event)}
                     >
-                      <svg
-                        className="w-3 h-3"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M6 18L18 6M6 6l12 12"
-                        />
-                      </svg>
-                    </button>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+                      <ToolbarIcon name="clear" />
+                    </IconButton>
+                  }
+                >
+                  <ListItemButton onClick={() => handleApplySavedFilter(entry)}>
+                    <ListItemText
+                      primary={entry.name}
+                      secondary={[formatSavedDate(entry.timestamp), entry.data.searchText]
+                        .filter(Boolean)
+                        .join(' · ')}
+                      slotProps={{ secondary: { noWrap: true } }}
+                    />
+                  </ListItemButton>
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button color="inherit" onClick={() => setPresetDialog(null)}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              setPresetDialog(null);
+              loadFileInputRef.current?.click();
+            }}
+          >
+            Browse file…
+          </Button>
+        </DialogActions>
+      </ViewerDialog>
+    </Box>
   );
 };
 
-export default LogViewerFilters;
+export default memo(LogViewerFilters);

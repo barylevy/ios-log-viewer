@@ -85,30 +85,25 @@ it('uses the clicked record for menu actions even when line numbers repeat', asy
   render(<App />);
   const second = await screen.findByText('second-record');
   fireEvent.contextMenu(second);
-  expect(screen.getByRole('button', { name: 'Clear Pivot Time' })).toBeDisabled();
+  expect(screen.getByRole('menuitem', { name: 'Clear Pivot Time' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
 
-  const menu = screen.getByLabelText('Log actions');
-  const measure = vi
-    .spyOn(menu, 'getBoundingClientRect')
-    .mockReturnValue(new DOMRect(0, 0, 220, 240));
-  fireEvent.contextMenu(second, { clientX: window.innerWidth, clientY: window.innerHeight });
-  expect(menu).toHaveStyle({
-    left: `${window.innerWidth - 230}px`,
-    top: `${window.innerHeight - 240}px`,
-  });
-  measure.mockRestore();
-
-  fireEvent.click(screen.getByRole('button', { name: 'Set Pivot Time' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Set Pivot Time' }));
   expect(second.closest('[data-log-id]')?.firstElementChild).toHaveClass('ring-orange-400');
   expect(
     screen.getByText('first-record').closest('[data-log-id]')?.firstElementChild,
   ).not.toHaveClass('ring-orange-400');
-  expect(screen.queryByLabelText('Log actions')).not.toBeInTheDocument();
+  await waitFor(() => expect(screen.queryByLabelText('Log actions')).not.toBeInTheDocument());
 
   fireEvent.contextMenu(second);
-  fireEvent.click(screen.getByText('first-record'));
-  expect(screen.queryByLabelText('Log actions')).not.toBeInTheDocument();
+  fireEvent.keyDown(screen.getByRole('menu', { name: 'Log actions' }), { key: 'Escape' });
+  await waitFor(() => expect(screen.queryByLabelText('Log actions')).not.toBeInTheDocument());
   expect(screen.queryByRole('dialog', { name: 'Log details' })).not.toBeInTheDocument();
+  fireEvent.contextMenu(second);
+  fireEvent.click(document.querySelector('.MuiMenu-root .MuiBackdrop-root')!);
+  await waitFor(() => expect(screen.queryByLabelText('Log actions')).not.toBeInTheDocument());
 });
 
 it('persists collapsed columns across remounts and restores their default width', async () => {
@@ -193,7 +188,7 @@ it('updates header metadata and time range with the active tab and clears them o
   expect(
     screen.getByText('31-Oct-2026 12:00:00.000 → 31-Oct-2026 12:00:00.000'),
   ).toBeInTheDocument();
-  fireEvent.click(screen.getByTitle('b.log'));
+  fireEvent.click(screen.getByRole('tab', { name: 'b.log' }));
   expect(screen.queryByText('source-user')).not.toBeInTheDocument();
   expect(
     screen.getByText('31-Oct-2026 15:00:00.000 → 31-Oct-2026 15:00:00.000'),
@@ -215,12 +210,12 @@ it('applies column visibility changes and resets to the shared defaults', async 
   await screen.findByText('settings-record');
   expect(container.querySelector('[data-col-id="module"]')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Settings menu' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Column Settings' }));
-  fireEvent.click(screen.getByRole('checkbox', { name: 'Module' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Column Settings' }));
+  fireEvent.click(await screen.findByRole('checkbox', { name: 'Module' }));
   fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
   expect(container.querySelector('[data-col-id="module"]')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Settings menu' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Column Settings' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Column Settings' }));
   fireEvent.click(screen.getByRole('button', { name: 'Reset to Default' }));
   fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
   expect(container.querySelector('[data-col-id="module"]')).toBeNull();
@@ -284,4 +279,24 @@ it('validates source line numbers, navigates to the nearest visible record, and 
   expect(reopened).toHaveAttribute('aria-invalid', 'false');
   fireEvent.keyDown(reopened, { key: 'Escape' });
   expect(screen.queryByRole('dialog', { name: 'Go to Line' })).not.toBeInTheDocument();
+});
+
+it('keeps Space on a focused tab from opening a hovered record', async () => {
+  await saveSession({
+    files: [{ id: 'keyboard.log', name: 'keyboard.log' }],
+    activeFileIndex: 0,
+    showingCombinedView: false,
+    allFileLogs: {
+      'keyboard.log': parseLogContent(
+        '2026-10-31 12:00:00:000 [Main:1] [D] [t:1] [p:2] keyboard-record',
+      ),
+    },
+  });
+  render(<App />);
+  const record = await screen.findByText('keyboard-record');
+  fireEvent.mouseEnter(record.closest('[data-log-id]')!.firstElementChild!);
+  const tab = screen.getByRole('tab', { name: 'keyboard.log' });
+  tab.focus();
+  fireEvent.keyDown(tab, { key: ' ' });
+  expect(screen.queryByRole('dialog', { name: 'Log details' })).not.toBeInTheDocument();
 });

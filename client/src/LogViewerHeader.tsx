@@ -1,3 +1,15 @@
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import ButtonGroup from '@mui/material/ButtonGroup';
+import CircularProgress from '@mui/material/CircularProgress';
+import Divider from '@mui/material/Divider';
+import IconButton from '@mui/material/IconButton';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
+import Stack from '@mui/material/Stack';
+import Typography from '@mui/material/Typography';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import ToolbarIcon from './components/ToolbarIcon';
 import type { ChangeEvent } from 'react';
 import type { LogHeaders } from './domain/logRecord';
 import { errorMessage, type ViewerFile, type ColumnVisibility } from './domain/viewerTypes';
@@ -66,32 +78,16 @@ const LogViewerHeader = ({
   const [rememberSessions, setRememberSessions] = useState(isSessionPersistenceEnabled);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const directoryInputRef = useRef<HTMLInputElement | null>(null);
-  const [showFileDropdown, setShowFileDropdown] = useState(false);
+  const [fileMenuAnchor, setFileMenuAnchor] = useState<HTMLElement | null>(null);
   const [showAbout, setShowAbout] = useState(false);
   const [showColumnSettings, setShowColumnSettings] = useState(false);
-  const [showDropdown, setShowDropdown] = useState(false);
+  const [settingsAnchor, setSettingsAnchor] = useState<HTMLElement | null>(null);
   const [pendingFolderItems, setPendingFolderItems] = useState<ViewerFile[] | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(
     () =>
       localStorage.getItem('theme') === 'dark' ||
       (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches),
   );
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (!(event.target instanceof Element)) return;
-      if (showDropdown && !event.target.closest('.settings-dropdown')) {
-        setShowDropdown(false);
-      }
-      if (showFileDropdown && !event.target.closest('.file-dropdown')) {
-        setShowFileDropdown(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showDropdown, showFileDropdown]);
 
   // Apply theme on mount and when theme changes
   useEffect(() => {
@@ -106,12 +102,12 @@ const LogViewerHeader = ({
 
   const handleChooseFiles = () => {
     fileInputRef.current?.click();
-    setShowFileDropdown(false);
+    setFileMenuAnchor(null);
   };
 
   const handleChooseDirectory = () => {
     directoryInputRef.current?.click();
-    setShowFileDropdown(false);
+    setFileMenuAnchor(null);
   };
 
   const handleFilesSelected = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -236,27 +232,19 @@ const LogViewerHeader = ({
     setPendingFolderItems(null);
   };
 
-  const handleFileDropdownToggle = () => {
-    setShowFileDropdown(!showFileDropdown);
-  };
-
-  const handleDropdownToggle = () => {
-    setShowDropdown(!showDropdown);
-  };
-
   const handleAboutClick = () => {
     setShowAbout(true);
-    setShowDropdown(false);
+    setSettingsAnchor(null);
   };
 
   const handleColumnSettingsClick = () => {
     setShowColumnSettings(true);
-    setShowDropdown(false);
+    setSettingsAnchor(null);
   };
 
   const handleThemeToggle = () => {
     setIsDarkMode(!isDarkMode);
-    setShowDropdown(false);
+    setSettingsAnchor(null);
   };
 
   const handleClearCache = () => {
@@ -269,7 +257,7 @@ const LogViewerHeader = ({
     // Restore theme preference
     localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
 
-    setShowDropdown(false);
+    setSettingsAnchor(null);
 
     // Show confirmation
     alert('Cache cleared successfully! The page will reload.');
@@ -279,7 +267,10 @@ const LogViewerHeader = ({
   };
 
   return (
-    <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-600 p-2">
+    <Box
+      component="header"
+      sx={{ bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider', px: 2, py: 1.5 }}
+    >
       {/* Folder-file selection dialog — shown after the user picks a directory */}
       {pendingFolderItems && (
         <SelectionFilesDialog
@@ -293,361 +284,170 @@ const LogViewerHeader = ({
           getDefaultChecked={getFolderDefaultChecked}
         />
       )}
-      <div className="flex items-center justify-between flex-nowrap gap-4">
-        <div className="flex items-center space-x-3 min-w-0 flex-1">
-          <img src="/cato-logo.svg" alt="Cato Networks" className="h-8 w-auto flex-shrink-0" />
-          <div className="flex flex-col gap-1">
-            <div className="flex items-baseline space-x-3">
-              <h1 className="text-xl font-semibold text-gray-900 dark:text-white whitespace-nowrap">
-                Cato Client Log Viewer
-              </h1>
-              {/* User Details */}
-              {currentFileHeaders && Object.keys(currentFileHeaders).length > 0 && (
-                <div className="flex items-baseline gap-3 text-sm text-gray-600 dark:text-gray-400">
-                  {currentFileHeaders.user && (
-                    <>
-                      <span className="flex items-baseline gap-1">
-                        <span className="text-gray-500 dark:text-gray-500">User:</span>
-                        <span className="font-medium">{currentFileHeaders.user}</span>
-                      </span>
-                      {(currentFileHeaders.account ||
-                        currentFileHeaders.clientVersion ||
-                        currentFileHeaders.osVersion) && <span className="text-gray-400">•</span>}
-                    </>
-                  )}
-                  {currentFileHeaders.account && (
-                    <>
-                      <span className="flex items-baseline gap-1">
-                        <span className="text-gray-500 dark:text-gray-500">Account:</span>
-                        <span className="font-medium">{currentFileHeaders.account}</span>
-                      </span>
-                      {(currentFileHeaders.clientVersion || currentFileHeaders.osVersion) && (
-                        <span className="text-gray-400">•</span>
-                      )}
-                    </>
-                  )}
-                  {currentFileHeaders.clientVersion && (
-                    <>
-                      <span className="flex items-baseline gap-1">
-                        <span className="text-gray-500 dark:text-gray-500">Client:</span>
-                        <span className="font-medium">{currentFileHeaders.clientVersion}</span>
-                      </span>
-                      {currentFileHeaders.osVersion && <span className="text-gray-400">•</span>}
-                    </>
-                  )}
-                  {currentFileHeaders.osVersion && (
-                    <span className="flex items-baseline gap-1">
-                      <span className="text-gray-500 dark:text-gray-500">OS:</span>
-                      <span className="font-medium">{currentFileHeaders.osVersion}</span>
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
-            {/* Log Time Range and Folder Name */}
-            <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 ml-1">
-              {logDuration && <span className="font-medium">{logDuration}</span>}
-              {folderName && logDuration && <span className="text-gray-400">•</span>}
-              {folderName && (
-                <span className="flex items-baseline gap-1">
-                  <span className="text-gray-500 dark:text-gray-500">Folder:</span>
-                  <span className="font-medium text-blue-600 dark:text-blue-400">{folderName}</span>
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {/* Online / Live button */}
-          {onLiveToggle && (
-            <button
-              onClick={onLiveToggle}
-              disabled={isLiveChecking}
-              title={isLiveConnected ? 'Disconnect live logs' : 'Connect to live logs'}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                isLiveConnected
-                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                  : isLiveChecking
-                    ? 'bg-blue-500 text-white cursor-wait'
-                    : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300'
-              }`}
+      <Stack
+        direction="row"
+        spacing={2}
+        sx={{
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          rowGap: 1.5,
+        }}
+      >
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', minWidth: 0 }}>
+          <Box component="img" src="/cato-logo.svg" alt="Cato Networks" sx={{ height: 30 }} />
+          <Box sx={{ minWidth: 0 }}>
+            <Typography component="h1" variant="h6" sx={{ fontSize: 18, fontWeight: 650 }}>
+              Cato Client Log Viewer
+            </Typography>
+            <Stack
+              direction="row"
+              spacing={1.5}
+              sx={{ flexWrap: 'wrap', color: 'text.secondary', fontSize: 12 }}
             >
-              {isLiveChecking ? (
-                <>
-                  <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                      className="opacity-25"
-                    />
-                    <path
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                      className="opacity-75"
-                    />
-                  </svg>
-                  Connecting…
-                </>
+              {currentFileHeaders &&
+                [
+                  ['User', currentFileHeaders.user],
+                  ['Account', currentFileHeaders.account],
+                  ['Client', currentFileHeaders.clientVersion],
+                  ['OS', currentFileHeaders.osVersion],
+                ].map(
+                  ([label, value]) =>
+                    value && (
+                      <Box key={label} sx={{ overflowWrap: 'anywhere' }}>
+                        {label}: <span>{value}</span>
+                      </Box>
+                    ),
+                )}
+              {logDuration && <span>{logDuration}</span>}
+              {folderName && <Box sx={{ overflowWrap: 'anywhere' }}>Folder: {folderName}</Box>}
+            </Stack>
+          </Box>
+        </Stack>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}
+        >
+          <Button
+            variant={isLiveConnected ? 'contained' : 'outlined'}
+            color="primary"
+            onClick={onLiveToggle}
+            disabled={isLiveChecking}
+            title={isLiveConnected ? 'Disconnect live logs' : 'Connect to live logs'}
+            startIcon={
+              isLiveChecking ? (
+                <CircularProgress size={14} color="inherit" />
               ) : (
-                <>
-                  <span
-                    className={`inline-block w-2 h-2 rounded-full ${isLiveConnected ? 'bg-white animate-pulse' : 'bg-gray-400 dark:bg-gray-500'}`}
-                  />
-                  {isLiveConnected ? 'Stop Live' : 'Live Logs'}
-                </>
-              )}
-            </button>
-          )}
-          {onDownloadMerged && (
-            <button
-              onClick={onDownloadMerged}
-              disabled={!hasLogs || isDownloadingMerged}
-              title="Run mergeLogs.py on the loaded folder and download the merged output"
-              className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
-            >
-              {isDownloadingMerged ? (
-                <>
-                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                      className="opacity-25"
-                    />
-                    <path
-                      d="M4 12a8 8 0 018-8"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                      className="opacity-75"
-                    />
-                  </svg>
-                  Merging…
-                </>
+                <Box
+                  component="span"
+                  sx={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: '50%',
+                    bgcolor: isLiveConnected ? 'currentColor' : 'text.disabled',
+                  }}
+                />
+              )
+            }
+          >
+            {isLiveChecking ? 'Connecting…' : isLiveConnected ? 'Stop Live' : 'Live Logs'}
+          </Button>
+          <Button
+            variant="outlined"
+            onClick={onDownloadMerged}
+            disabled={!hasLogs || isDownloadingMerged}
+            startIcon={
+              isDownloadingMerged ? (
+                <CircularProgress size={14} color="inherit" />
               ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4"
-                    />
-                  </svg>
-                  Download Merged
-                </>
-              )}
-            </button>
-          )}
-          <div className="relative file-dropdown">
-            <div className="flex">
-              {/* Main Button */}
-              <button
-                onClick={handleChooseFiles}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-l-md text-sm font-medium transition-colors"
-              >
-                Open Files
-              </button>
-
-              {/* Dropdown Arrow Button */}
-              <button
-                onClick={handleFileDropdownToggle}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-2 rounded-r-md text-sm font-medium transition-colors border-l border-blue-700"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 9l-7 7-7-7"
-                  />
-                </svg>
-              </button>
-            </div>
-
-            {/* Dropdown Menu */}
-            {showFileDropdown && (
-              <div className="absolute left-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-600 z-50">
-                <div className="py-1">
-                  <button
-                    onClick={handleChooseFiles}
-                    className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                  >
-                    <svg
-                      className="w-4 h-4 mr-2"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                      />
-                    </svg>
-                    Choose Files
-                  </button>
-                  <button
-                    onClick={handleChooseDirectory}
-                    className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                  >
-                    <svg
-                      className="w-4 h-4 mr-2"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-                      />
-                    </svg>
-                    Choose Folder
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Settings Dropdown */}
-          <div className="relative settings-dropdown">
-            <button
-              onClick={handleDropdownToggle}
-              className="p-2 rounded-md text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              aria-label="Settings menu"
+                <ToolbarIcon name="download" />
+              )
+            }
+          >
+            {isDownloadingMerged ? 'Merging…' : 'Download Merged'}
+          </Button>
+          <ButtonGroup variant="contained" disableElevation>
+            <Button onClick={handleChooseFiles}>Open Files</Button>
+            <Button
+              aria-label="Open options"
+              aria-haspopup="menu"
+              aria-expanded={!!fileMenuAnchor}
+              onClick={(event) => setFileMenuAnchor(event.currentTarget)}
+              sx={{ minWidth: '32px !important', px: 0.5 }}
             >
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                />
-              </svg>
-            </button>
-
-            {/* Dropdown Menu */}
-            {showDropdown && (
-              <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-600 z-50">
-                <div className="py-1">
-                  <button
-                    onClick={handleThemeToggle}
-                    className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                  >
-                    {isDarkMode ? 'Light Mode' : 'Dark Mode'}
-                  </button>
-                  <button
-                    onClick={handleColumnSettingsClick}
-                    className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                  >
-                    <svg
-                      className="w-4 h-4 mr-2"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"
-                      />
-                    </svg>
-                    Column Settings
-                  </button>
-                  {onOpenLiveSettings && (
-                    <button
-                      onClick={() => {
-                        onOpenLiveSettings();
-                        setShowDropdown(false);
-                      }}
-                      className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                    >
-                      <svg
-                        className="w-4 h-4 mr-2"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-                        />
-                      </svg>
-                      Live Logs Settings
-                    </button>
-                  )}
-                  <label className="flex items-center justify-between px-4 py-2 text-sm text-gray-700 dark:text-gray-300">
-                    Remember logs for 24 hours
-                    <Switch
-                      size="small"
-                      checked={rememberSessions}
-                      onChange={async (_, enabled) => {
-                        await setSessionPersistenceEnabled(enabled);
-                        setRememberSessions(enabled);
-                      }}
-                      slotProps={{ input: { 'aria-label': 'Remember logs for 24 hours' } }}
-                    />
-                  </label>
-                  {onClearFilters && (
-                    <button
-                      onClick={() => {
-                        onClearFilters();
-                        setShowDropdown(false);
-                      }}
-                      className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                    >
-                      <svg
-                        className="w-4 h-4 mr-2"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M6 18L18 6M6 6l12 12"
-                        />
-                      </svg>
-                      Clear Filters
-                    </button>
-                  )}
-                  <button
-                    onClick={handleClearCache}
-                    className="block w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                  >
-                    Clear Cache
-                  </button>
-                  <div className="border-t border-gray-200 dark:border-gray-600 my-1"></div>
-                  <button
-                    onClick={handleAboutClick}
-                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                  >
-                    About
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+              <ToolbarIcon name="expand" />
+            </Button>
+          </ButtonGroup>
+          <Menu
+            anchorEl={fileMenuAnchor}
+            open={!!fileMenuAnchor}
+            onClose={() => setFileMenuAnchor(null)}
+          >
+            <MenuItem onClick={handleChooseFiles}>Choose Files</MenuItem>
+            <MenuItem onClick={handleChooseDirectory}>Choose Folder</MenuItem>
+          </Menu>
+          <IconButton
+            aria-label="Settings menu"
+            title="Settings"
+            aria-haspopup="menu"
+            aria-expanded={!!settingsAnchor}
+            onClick={(event) => setSettingsAnchor(event.currentTarget)}
+          >
+            <ToolbarIcon name="settings" />
+          </IconButton>
+          <Menu
+            anchorEl={settingsAnchor}
+            open={!!settingsAnchor}
+            onClose={() => setSettingsAnchor(null)}
+          >
+            <MenuItem onClick={handleThemeToggle}>
+              {isDarkMode ? 'Light Mode' : 'Dark Mode'}
+            </MenuItem>
+            <MenuItem onClick={handleColumnSettingsClick}>Column Settings</MenuItem>
+            <MenuItem
+              onClick={() => {
+                onOpenLiveSettings();
+                setSettingsAnchor(null);
+              }}
+            >
+              Live Logs Settings
+            </MenuItem>
+            <Divider />
+            <Box sx={{ px: 2 }}>
+              <FormControlLabel
+                label="Remember logs for 24 hours"
+                labelPlacement="start"
+                sx={{ ml: 0, gap: 1 }}
+                control={
+                  <Switch
+                    size="small"
+                    checked={rememberSessions}
+                    onChange={async (_, enabled) => {
+                      await setSessionPersistenceEnabled(enabled);
+                      setRememberSessions(enabled);
+                    }}
+                    slotProps={{ input: { 'aria-label': 'Remember logs for 24 hours' } }}
+                  />
+                }
+              />
+            </Box>
+            <MenuItem
+              onClick={() => {
+                onClearFilters();
+                setSettingsAnchor(null);
+              }}
+            >
+              Clear Filters
+            </MenuItem>
+            <MenuItem onClick={handleClearCache} sx={{ color: 'error.main' }}>
+              Clear Cache
+            </MenuItem>
+            <Divider />
+            <MenuItem onClick={handleAboutClick}>About</MenuItem>
+          </Menu>
+        </Stack>
+      </Stack>
 
       {/* Hidden file inputs */}
       <input
@@ -677,7 +477,7 @@ const LogViewerHeader = ({
         onColumnsChange={onColumnsChange}
         onResetDefaults={onResetColumnDefaults}
       />
-    </header>
+    </Box>
   );
 };
 

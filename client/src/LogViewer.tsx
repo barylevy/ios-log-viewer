@@ -1,3 +1,17 @@
+import Alert from '@mui/material/Alert';
+import Backdrop from '@mui/material/Backdrop';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import CircularProgress from '@mui/material/CircularProgress';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Paper from '@mui/material/Paper';
+import Snackbar from '@mui/material/Snackbar';
+import Stack from '@mui/material/Stack';
+import Typography from '@mui/material/Typography';
+import ViewerDialog from './components/ViewerDialog';
+import ToolbarIcon from './components/ToolbarIcon';
 import type { DragEvent } from 'react';
 import type { LogRecord, LogHeaders } from './domain/logRecord';
 import {
@@ -1082,40 +1096,34 @@ const LogViewer = () => {
   const memoizedContent = useMemo(() => {
     if (!hasUserInteracted) {
       return (
-        <div className="flex items-center justify-center h-full">
-          <div
-            style={{ width: '50vw', height: '50vh' }}
-            className={`flex flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-colors
-              ${
-                isFileDropActive
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
-                  : 'border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400'
-              }`}
-          >
-            {/* Cloud / upload icon */}
-            <svg
-              className="w-16 h-16 mb-4 opacity-40"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-              />
-            </svg>
-            <p className="text-2xl font-semibold mb-2">Drop log files here</p>
-            <p className="text-sm mb-1">
-              or click <span className="font-medium">"Open Files"</span> in the toolbar to get
-              started
-            </p>
-            <p className="text-xs mt-3 opacity-60">
-              Supports .log, .txt, .ips — single files, folders, or archives
-            </p>
-          </div>
-        </div>
+        <Paper
+          variant="outlined"
+          sx={{
+            width: 'min(640px, 90vw)',
+            p: { xs: 3, sm: 6 },
+            textAlign: 'center',
+            borderStyle: 'dashed',
+            borderWidth: 2,
+            borderColor: isFileDropActive ? 'primary.main' : 'divider',
+            bgcolor: 'background.paper',
+          }}
+        >
+          <Box sx={{ color: 'primary.main', mb: 2, '& svg': { fontSize: 44 } }}>
+            <ToolbarIcon name="folder" />
+          </Box>
+          <Typography variant="h5" component="h2" sx={{ mb: 1, fontWeight: 600 }}>
+            Drop log files here
+          </Typography>
+          <Typography color="text.secondary" variant="body2">
+            Choose Open Files in the toolbar, or drag files and folders into this window.
+          </Typography>
+          <Typography color="text.secondary" variant="caption" component="p" sx={{ mt: 2 }}>
+            Windows · Apple · Linux · Android
+          </Typography>
+          <Typography color="text.secondary" variant="caption">
+            .log, .txt, .ips, .zip, .xz, .txz
+          </Typography>
+        </Paper>
       );
     }
 
@@ -1188,7 +1196,7 @@ const LogViewer = () => {
 
   return (
     <div
-      className={`h-screen flex flex-col bg-gray-50 dark:bg-gray-900 ${isFileDropActive ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
+      className={`h-screen viewer-shell flex flex-col bg-gray-50 dark:bg-gray-900 ${isFileDropActive ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -1199,11 +1207,7 @@ const LogViewer = () => {
         files={files}
         onConfirm={handleConfirmMerge}
       />
-      {loadError && (
-        <p role="alert" className="p-2 text-sm text-red-600">
-          {loadError}
-        </p>
-      )}
+      {loadError && <Alert severity="error">{loadError}</Alert>}
       <LogViewerHeader
         onClearTabs={handleClearTabs}
         onFileLoad={handleFileLoad}
@@ -1269,7 +1273,7 @@ const LogViewer = () => {
 
           {/* Log viewing container with filters and content */}
           {hasUserInteracted && logs.length > 0 ? (
-            <div className="flex-1 mt-2 mb-2 ml-2 mr-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex flex-col pb-0">
+            <div className="flex-1 min-h-0 m-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col">
               <LogViewerFilters
                 filters={filters}
                 onFiltersChange={updateFilters}
@@ -1309,120 +1313,46 @@ const LogViewer = () => {
         />
       )}
 
-      {/* Loading overlay shown while any file is being parsed or prepared */}
-      {(isAnyFileLoading || prepareFilesCount > 0) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/60">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl px-6 py-5 flex items-center gap-3 border border-gray-200 dark:border-gray-700">
-            <svg
-              className="animate-spin h-6 w-6 text-blue-500"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              ></circle>
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-              ></path>
-            </svg>
-            <div className="text-sm text-gray-800 dark:text-gray-100">Loading log files…</div>
-          </div>
-        </div>
-      )}
-
-      {/* Sticky Log Notification */}
-      {notification && (
-        <div className="fixed top-4 right-4 z-50 animate-fade-in">
-          <div className="bg-yellow-100 dark:bg-yellow-900 border border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-200 px-4 py-3 rounded-lg shadow-lg max-w-sm">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path
-                    fillRule="evenodd"
-                    d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium">{notification.message}</p>
-              </div>
-              <div className="ml-auto pl-3">
-                <button
-                  onClick={() => setNotification(null)}
-                  className="inline-flex text-yellow-400 hover:text-yellow-600 focus:outline-none focus:text-yellow-600"
-                >
-                  <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                    <path
-                      fillRule="evenodd"
-                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isFileDropActive && (
-        <div className="fixed inset-0 bg-blue-500 bg-opacity-20 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-lg">
-            <p className="text-xl text-blue-600 dark:text-blue-400">Drop your log files here</p>
-          </div>
-        </div>
-      )}
+      <Backdrop
+        open={isAnyFileLoading || prepareFilesCount > 0}
+        sx={{ zIndex: (theme) => theme.zIndex.modal + 1 }}
+      >
+        <Paper sx={{ p: 3 }}>
+          <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+            <CircularProgress size={24} />
+            <Typography role="status">Loading log files…</Typography>
+          </Stack>
+        </Paper>
+      </Backdrop>
+      <Snackbar open={!!notification} anchorOrigin={{ vertical: 'top', horizontal: 'right' }}>
+        <Alert severity="warning" variant="filled" onClose={() => setNotification(null)}>
+          {notification?.message}
+        </Alert>
+      </Snackbar>
+      <Backdrop
+        open={isFileDropActive}
+        sx={{ zIndex: (theme) => theme.zIndex.modal + 2, pointerEvents: 'none' }}
+      >
+        <Paper sx={{ p: 4 }}>
+          <Typography variant="h6" color="primary">
+            Drop your log files here
+          </Typography>
+        </Paper>
+      </Backdrop>
 
       {/* Live logs folder configuration */}
       <LiveLogsSettings isOpen={showLiveSettings} onClose={() => setShowLiveSettings(false)} />
 
       {/* Live server not running dialog */}
       {showServerDialog && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70"
-          onClick={() => setShowServerDialog(false)}
-        >
-          <div
-            className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 max-w-lg w-full mx-4 border border-gray-200 dark:border-gray-700"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start gap-3 mb-4">
-              <div className="flex-shrink-0 w-9 h-9 rounded-full bg-yellow-100 dark:bg-yellow-900 flex items-center justify-center">
-                <svg
-                  className="w-5 h-5 text-yellow-600 dark:text-yellow-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
-                  />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
-                  Set Up Live Logs
-                </h3>
-                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                  {setupOnWindows
-                    ? 'A small local server must run on your machine to stream logs. Paste this into PowerShell:'
-                    : 'Mirror the Cato logs into a folder the viewer can read — nothing to install.'}
-                </p>
-              </div>
-            </div>
-
+        <ViewerDialog open onClose={() => setShowServerDialog(false)} label="Set Up Live Logs">
+          <DialogTitle>Set Up Live Logs</DialogTitle>
+          <DialogContent dividers>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              {setupOnWindows
+                ? 'A small local server must run on your machine to stream logs. Paste this into PowerShell:'
+                : 'Mirror the Cato logs into a folder the viewer can read — nothing to install.'}
+            </Typography>
             {/* macOS: mirror the logs, then read the folder */}
             {!setupOnWindows &&
               isFsAccessSupported() &&
@@ -1445,19 +1375,16 @@ const LogViewer = () => {
                       {mirrorCmd}
                     </div>
                     <div className="flex items-center gap-2">
-                      <button
+                      <Button
+                        variant="outlined"
                         onClick={() => navigator.clipboard.writeText(mirrorCmd)}
-                        className="px-3 py-1.5 rounded text-xs bg-gray-700 hover:bg-gray-600 text-white font-medium transition-colors"
                       >
                         Copy command
-                      </button>
+                      </Button>
                       <span className="text-xs text-gray-600 dark:text-gray-400">2.</span>
-                      <button
-                        onClick={handleChooseMirrorFolder}
-                        className="px-3 py-1.5 rounded text-xs bg-green-600 hover:bg-green-700 text-white font-medium transition-colors"
-                      >
+                      <Button variant="outlined" onClick={handleChooseMirrorFolder}>
                         Choose {MIRROR_DIR_NAME} folder
-                      </button>
+                      </Button>
                     </div>
                     <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
                       In the folder picker, press Cmd+Shift+G and enter ~/.cato_live_logs to open
@@ -1507,10 +1434,7 @@ const LogViewer = () => {
                       {cmd}
                     </div>
                     <div className="flex justify-end">
-                      <button
-                        onClick={() => navigator.clipboard.writeText(cmd)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors font-medium"
-                      >
+                      <Button variant="outlined" onClick={() => navigator.clipboard.writeText(cmd)}>
                         <svg
                           className="w-3.5 h-3.5"
                           fill="none"
@@ -1525,7 +1449,7 @@ const LogViewer = () => {
                           />
                         </svg>
                         Copy command
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 );
@@ -1541,17 +1465,13 @@ const LogViewer = () => {
                 <span className="font-medium">Settings ▸ Live Logs Settings</span>.
               </p>
             )}
-
-            <div className="flex justify-end">
-              <button
-                onClick={() => setShowServerDialog(false)}
-                className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
-              >
-                Got it
-              </button>
-            </div>
-          </div>
-        </div>
+          </DialogContent>
+          <DialogActions>
+            <Button variant="contained" onClick={() => setShowServerDialog(false)}>
+              Got it
+            </Button>
+          </DialogActions>
+        </ViewerDialog>
       )}
     </div>
   );

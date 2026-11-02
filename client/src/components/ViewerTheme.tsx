@@ -13,9 +13,23 @@ export default function ViewerTheme({ children }: { children: ReactNode }) {
   const theme = useMemo(
     () =>
       createTheme({
-        palette: { mode: dark ? 'dark' : 'light', primary: { main: '#008C73' } },
+        palette: {
+          mode: dark ? 'dark' : 'light',
+          primary: { main: dark ? '#5ED6BE' : '#007D66' },
+          background: {
+            default: dark ? '#111827' : '#F8FAFC',
+            paper: dark ? '#1F2937' : '#FFFFFF',
+          },
+          divider: dark ? '#374151' : '#E2E8F0',
+        },
+        shape: { borderRadius: 8 },
         typography: { fontFamily: 'system-ui, -apple-system, sans-serif', fontSize: 13 },
         components: {
+          MuiTextField: { defaultProps: { size: 'small' } },
+          MuiIconButton: { defaultProps: { size: 'small' } },
+          MuiMenuItem: { defaultProps: { dense: true } },
+          MuiDialogTitle: { styleOverrides: { root: { fontSize: '1.1rem', fontWeight: 600 } } },
+          MuiDialogActions: { styleOverrides: { root: { padding: '16px 24px', gap: 8 } } },
           MuiButton: {
             defaultProps: { size: 'small' },
             styleOverrides: { root: { textTransform: 'none' } },

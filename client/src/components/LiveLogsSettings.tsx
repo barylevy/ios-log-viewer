@@ -1,3 +1,10 @@
+import Alert from '@mui/material/Alert';
+import Button from '@mui/material/Button';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import TextField from '@mui/material/TextField';
+import LinearProgress from '@mui/material/LinearProgress';
 import type { LiveServerConfig } from '../domain/viewerTypes';
 import ViewerDialog from './ViewerDialog';
 import { useState, useEffect, useCallback } from 'react';
@@ -89,249 +96,199 @@ const LiveLogsSettings = ({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
 
   return (
     <ViewerDialog open={true} onClose={onClose} label="Live log settings">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-xl w-full max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Live Logs Settings
-          </h2>
-          <button
-            onClick={onClose}
-            aria-label="Close dialog"
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
+      <DialogTitle>Live Logs Settings</DialogTitle>
+      <DialogContent dividers className="space-y-4">
+        {isWindows() && (
+          <div className="space-y-2">
+            <TextField
+              fullWidth
+              id="pairing-token"
+              label="Live server pairing token"
+              type="password"
+              autoComplete="off"
+              value={pairingToken}
+              onChange={(event) => setToken(event.target.value)}
+              helperText="For a manually started server, paste the token printed in its terminal."
+            />
+            <Button
+              type="button"
+              onClick={() => {
+                setPairingToken(pairingToken);
+                load();
+              }}
+            >
+              Pair and refresh
+            </Button>
+          </div>
+        )}
 
-        {/* Content */}
-        <div className="p-4 space-y-4 flex-1 overflow-y-auto">
-          {isWindows() && (
-            <div className="space-y-2">
-              <label htmlFor="pairing-token" className="block text-sm font-medium">
-                Live server pairing token
-              </label>
-              <input
-                id="pairing-token"
-                type="password"
-                autoComplete="off"
-                value={pairingToken}
-                onChange={(event) => setToken(event.target.value)}
-                className="w-full border rounded px-3 py-2 dark:bg-gray-900"
-              />
-              <p className="text-xs text-gray-500">
-                For a manually started server, paste the token printed in its terminal.
-              </p>
-              <button
-                type="button"
-                className="text-sm text-blue-600"
-                onClick={() => {
-                  setPairingToken(pairingToken);
-                  load();
-                }}
-              >
-                Pair and refresh
-              </button>
-            </div>
-          )}
+        {isLoading && <LinearProgress aria-label="Loading live configuration" />}
 
-          {isLoading && <p className="text-sm text-gray-500 dark:text-gray-400">Loading…</p>}
+        {!isLoading && serverDown && (
+          <Alert severity="warning">
+            {showFolderConfig
+              ? "The live-logs server isn't running — you can still set the folder now. It's applied automatically once the server starts."
+              : "The live-logs server isn't running. Click Live Logs in the header for the command to start it."}
+          </Alert>
+        )}
 
-          {!isLoading && serverDown && (
-            <div className="rounded-md bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-3">
-              <p className="text-sm text-yellow-800 dark:text-yellow-300">
-                {showFolderConfig
-                  ? "The live-logs server isn't running — you can still set the folder now. It's applied automatically once the server starts."
-                  : "The live-logs server isn't running. Click Live Logs in the header for the command to start it."}
-              </p>
-            </div>
-          )}
+        {!isLoading && serverOutdated && (
+          <Alert severity="warning">
+            The live-logs server is running an older build that can't report its configuration.
+            Restart it to pick up the current one.
+          </Alert>
+        )}
 
-          {!isLoading && serverOutdated && (
-            <div className="rounded-md bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-3">
-              <p className="text-sm text-yellow-800 dark:text-yellow-300">
-                The live-logs server is running an older build that can't report its configuration.
-                Restart it to pick up the current one.
-              </p>
-            </div>
-          )}
+        {!isLoading && config && !showFolderConfig && (
+          <>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              The server is running on <span className="font-medium">{config.platform}</span> and
+              reads the standard Cato log directories, which are fixed. There's nothing to configure
+              here.
+            </p>
 
-          {!isLoading && config && !showFolderConfig && (
-            <>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                The server is running on <span className="font-medium">{config.platform}</span> and
-                reads the standard Cato log directories, which are fixed. There's nothing to
-                configure here.
-              </p>
-
-              {config.antiTamper && (
-                <dl className="rounded-md bg-gray-50 dark:bg-gray-900 p-3 space-y-2 text-xs">
+            {config.antiTamper && (
+              <dl className="rounded-md bg-gray-50 dark:bg-gray-900 p-3 space-y-2 text-xs">
+                <div>
+                  <dt className="text-gray-500 dark:text-gray-400">
+                    AntiTamper folder{config.antiTamper.exists ? '' : ' — not found'}
+                  </dt>
+                  <dd className="font-mono text-gray-800 dark:text-gray-200 break-all">
+                    {config.antiTamper.dir || '—'}
+                  </dd>
+                </div>
+                {config.antiTamper.exists && (
                   <div>
                     <dt className="text-gray-500 dark:text-gray-400">
-                      AntiTamper folder{config.antiTamper.exists ? '' : ' — not found'}
+                      Files ({config.antiTamper.matchCount})
                     </dt>
                     <dd className="font-mono text-gray-800 dark:text-gray-200 break-all">
-                      {config.antiTamper.dir || '—'}
+                      {config.antiTamper.currentFile || 'none'}
                     </dd>
                   </div>
-                  {config.antiTamper.exists && (
-                    <div>
-                      <dt className="text-gray-500 dark:text-gray-400">
-                        Files ({config.antiTamper.matchCount})
-                      </dt>
-                      <dd className="font-mono text-gray-800 dark:text-gray-200 break-all">
-                        {config.antiTamper.currentFile || 'none'}
-                      </dd>
-                    </div>
-                  )}
-                </dl>
-              )}
-            </>
-          )}
+                )}
+              </dl>
+            )}
+          </>
+        )}
 
-          {!isLoading && showFolderConfig && (
-            <>
+        {!isLoading && showFolderConfig && (
+          <>
+            <div>
+              <TextField
+                fullWidth
+                id="live-logs-dir"
+                label="Log folder"
+                value={logDir}
+                onChange={(event) => {
+                  setLogDir(event.target.value);
+                  setSaved(false);
+                  setError('');
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !isSaving && logDir.trim()) handleSave();
+                }}
+                placeholder="C:\Program Files (x86)\Cato Networks\Cato Client"
+                slotProps={{ htmlInput: { spellCheck: false } }}
+              />
+              <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                The full path to the directory holding the logs — used exactly as entered. The
+                server tails the most recently modified{' '}
+                <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded font-mono">
+                  cato_vpn_*.log
+                </code>{' '}
+                inside it, plus the newest log in its{' '}
+                <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded font-mono">
+                  AntiTamper
+                </code>{' '}
+                subfolder.
+              </p>
+            </div>
+
+            {error && <Alert severity="error">{error}</Alert>}
+
+            {saved && (
+              <Alert severity="success">
+                {config
+                  ? 'Saved. Live tabs now follow the new folder.'
+                  : 'Saved. It will be applied when the server starts.'}
+              </Alert>
+            )}
+
+            {!config && (
               <div>
-                <label
-                  htmlFor="live-logs-dir"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-                >
-                  Log folder
-                </label>
-                <input
-                  id="live-logs-dir"
-                  type="text"
-                  value={logDir}
-                  onChange={(e) => {
-                    setLogDir(e.target.value);
-                    setSaved(false);
-                    setError('');
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !isSaving) handleSave();
-                  }}
-                  placeholder="C:\Program Files (x86)\Cato Networks\Cato Client"
-                  spellCheck={false}
-                  className="w-full px-3 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-gray-100 font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-                <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                  The full path to the directory holding the logs — used exactly as entered. The
-                  server tails the most recently modified{' '}
-                  <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded font-mono">
-                    cato_vpn_*.log
-                  </code>{' '}
-                  inside it, plus the newest log in its{' '}
-                  <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded font-mono">
-                    AntiTamper
-                  </code>{' '}
-                  subfolder.
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1.5">
+                  Start the server with this folder (PowerShell):
                 </p>
+                <div className="bg-gray-900 dark:bg-gray-950 rounded-lg px-3 py-2.5">
+                  <div className="font-mono text-xs text-green-400 break-all mb-2 select-all leading-relaxed">
+                    {startCommand}
+                  </div>
+                  <div className="flex justify-end">
+                    <Button
+                      onClick={() => navigator.clipboard.writeText(startCommand)}
+                      variant="outlined"
+                    >
+                      Copy command
+                    </Button>
+                  </div>
+                </div>
               </div>
+            )}
 
-              {error && (
-                <div className="rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-3">
-                  <p className="text-sm text-red-700 dark:text-red-300 break-all">{error}</p>
-                </div>
-              )}
-
-              {saved && (
-                <div className="rounded-md bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-3">
-                  <p className="text-sm text-green-700 dark:text-green-300">
-                    {config
-                      ? 'Saved. Live tabs now follow the new folder.'
-                      : 'Saved. It will be applied when the server starts.'}
-                  </p>
-                </div>
-              )}
-
-              {!config && (
+            {config && (
+              <dl className="rounded-md bg-gray-50 dark:bg-gray-900 p-3 space-y-2 text-xs">
                 <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1.5">
-                    Start the server with this folder (PowerShell):
-                  </p>
-                  <div className="bg-gray-900 dark:bg-gray-950 rounded-lg px-3 py-2.5">
-                    <div className="font-mono text-xs text-green-400 break-all mb-2 select-all leading-relaxed">
-                      {startCommand}
-                    </div>
-                    <div className="flex justify-end">
-                      <button
-                        onClick={() => navigator.clipboard.writeText(startCommand)}
-                        className="px-2.5 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors font-medium"
-                      >
-                        Copy command
-                      </button>
-                    </div>
-                  </div>
+                  <dt className="text-gray-500 dark:text-gray-400">Watching</dt>
+                  <dd className="font-mono text-gray-800 dark:text-gray-200 break-all">
+                    {config.resolvedDir || '— not configured —'}
+                  </dd>
                 </div>
-              )}
-
-              {config && (
-                <dl className="rounded-md bg-gray-50 dark:bg-gray-900 p-3 space-y-2 text-xs">
-                  <div>
-                    <dt className="text-gray-500 dark:text-gray-400">Watching</dt>
+                <div>
+                  <dt className="text-gray-500 dark:text-gray-400">Current file</dt>
+                  <dd className="font-mono text-gray-800 dark:text-gray-200 break-all">
+                    {config.currentFile || (config.dirExists ? 'no cato_vpn_*.log found' : '—')}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-gray-500 dark:text-gray-400">Matching files</dt>
+                  <dd className="font-mono text-gray-800 dark:text-gray-200">
+                    {config.matchCount}
+                  </dd>
+                </div>
+                {config.antiTamper && (
+                  <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                    <dt className="text-gray-500 dark:text-gray-400">
+                      AntiTamper ({config.antiTamper.matchCount} file
+                      {config.antiTamper.matchCount === 1 ? '' : 's'})
+                    </dt>
                     <dd className="font-mono text-gray-800 dark:text-gray-200 break-all">
-                      {config.resolvedDir || '— not configured —'}
+                      {config.antiTamper.currentFile ||
+                        'subfolder not found \u2014 tab will stay empty'}
                     </dd>
                   </div>
-                  <div>
-                    <dt className="text-gray-500 dark:text-gray-400">Current file</dt>
-                    <dd className="font-mono text-gray-800 dark:text-gray-200 break-all">
-                      {config.currentFile || (config.dirExists ? 'no cato_vpn_*.log found' : '—')}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-gray-500 dark:text-gray-400">Matching files</dt>
-                    <dd className="font-mono text-gray-800 dark:text-gray-200">
-                      {config.matchCount}
-                    </dd>
-                  </div>
-                  {config.antiTamper && (
-                    <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
-                      <dt className="text-gray-500 dark:text-gray-400">
-                        AntiTamper ({config.antiTamper.matchCount} file
-                        {config.antiTamper.matchCount === 1 ? '' : 's'})
-                      </dt>
-                      <dd className="font-mono text-gray-800 dark:text-gray-200 break-all">
-                        {config.antiTamper.currentFile ||
-                          'subfolder not found \u2014 tab will stay empty'}
-                      </dd>
-                    </div>
-                  )}
-                </dl>
-              )}
-            </>
-          )}
-        </div>
+                )}
+              </dl>
+            )}
+          </>
+        )}
+      </DialogContent>
 
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-2 p-4 border-t border-gray-200 dark:border-gray-700">
-          <button
-            onClick={onClose}
-            aria-label="Close dialog"
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+      <DialogActions>
+        <Button onClick={onClose} aria-label="Close dialog" color="inherit">
+          Close
+        </Button>
+        {showFolderConfig && (
+          <Button
+            onClick={handleSave}
+            disabled={isLoading || isSaving || !logDir.trim()}
+            variant="contained"
           >
-            Close
-          </button>
-          {showFolderConfig && (
-            <button
-              onClick={handleSave}
-              disabled={isSaving || !logDir.trim()}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed rounded-md transition-colors"
-            >
-              {isSaving ? 'Saving…' : 'Save'}
-            </button>
-          )}
-        </div>
-      </div>
+            {isSaving ? 'Saving…' : 'Save'}
+          </Button>
+        )}
+      </DialogActions>
     </ViewerDialog>
   );
 };
-
 export default LiveLogsSettings;

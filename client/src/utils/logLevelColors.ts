@@ -64,24 +64,6 @@ export const getLevelBackgroundColor = (level: string | null | undefined): strin
   }
 };
 
-// Get button background colors for modal/interactive elements (darker colors)
-export const getLevelButtonColor = (level: string | null | undefined): string => {
-  switch (level) {
-    case 'error':
-      return 'bg-red-500 hover:bg-red-600 text-white';
-    case 'warning':
-      return 'bg-yellow-500 hover:bg-yellow-600 text-white';
-    case 'info':
-      return 'bg-blue-500 hover:bg-blue-600 text-white';
-    case 'debug':
-      return 'bg-green-500 hover:bg-green-600 text-white';
-    case 'trace':
-      return 'bg-gray-500 hover:bg-gray-600 text-white';
-    default:
-      return 'bg-orange-500 hover:bg-orange-600 text-white'; // Default orange for unknown levels
-  }
-};
-
 // Get text colors for log level indicators
 export const getLevelTextColor = (level: string | null | undefined): string => {
   switch (level) {

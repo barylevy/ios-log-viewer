@@ -28,3 +28,63 @@ body {
   font-size: calc(0.75rem * var(--record-scale, 1));
   line-height: calc(1rem * var(--record-scale, 1));
 }
+
+/* Shared surfaces around the virtualized records stay lightweight. */
+:root {
+  color-scheme: light;
+  --viewer-border: #e2e8f0;
+  --viewer-surface: #f8fafc;
+}
+.dark {
+  color-scheme: dark;
+  --viewer-border: #374151;
+  --viewer-surface: #111827;
+}
+body {
+  margin: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+}
+.viewer-shell {
+  height: 100dvh;
+}
+.log-column-headers {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+.dark .log-column-headers {
+  color: #94a3b8;
+}
+.log-detail-text {
+  margin-top: 4px;
+  padding: 16px;
+  border: 1px solid var(--viewer-border);
+  border-radius: 8px;
+  background: var(--viewer-surface);
+  font:
+    13px/1.6 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.log-table button:focus-visible,
+.log-table select:focus-visible {
+  outline: 2px solid #008c73;
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .transition-colors,
+  .transition-transform {
+    animation: none;
+    transition: none;
+  }
+}

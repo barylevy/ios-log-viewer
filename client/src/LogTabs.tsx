@@ -1,6 +1,14 @@
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import ButtonBase from '@mui/material/ButtonBase';
+import CircularProgress from '@mui/material/CircularProgress';
+import IconButton from '@mui/material/IconButton';
+import Stack from '@mui/material/Stack';
+import type { KeyboardEvent } from 'react';
 import type { ViewerFile } from './domain/viewerTypes';
 import { useMemo } from 'react';
 import { getFileDisplayName, getFileFullName } from './utils/fileLoader';
+import ToolbarIcon from './components/ToolbarIcon';
 
 interface Props {
   files: ViewerFile[];
@@ -16,7 +24,8 @@ interface Props {
   isLiveMode?: boolean;
   onFromNow?: () => void;
 }
-const LogTabs = ({
+
+export default function LogTabs({
   files,
   activeFileIndex,
   onFileSelect,
@@ -29,193 +38,196 @@ const LogTabs = ({
   onExportFile,
   isLiveMode = false,
   onFromNow,
-}: Props) => {
-  const renderExportButton = (label: string) => (
-    <button
-      onClick={(e) => {
-        e.stopPropagation();
-        onExportActive?.();
-      }}
-      className="ml-1 text-gray-400 hover:text-blue-600 dark:text-gray-500 dark:hover:text-blue-400"
-      title={`Export visible records of "${label}" to file`}
-    >
-      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"
-        />
-      </svg>
-    </button>
+}: Props) {
+  const sortedTabs = useMemo(
+    () =>
+      files
+        .map((file, index) => ({
+          file,
+          index,
+          label: file.isLive && file.name ? file.name : getFileDisplayName(file.id),
+        }))
+        .sort((a, b) =>
+          a.label.localeCompare(b.label, undefined, { sensitivity: 'base', numeric: true }),
+        ),
+    [files],
   );
-
-  const renderLiveDownloadButton = (fileId: string, label: string) => (
-    <button
-      onClick={(e) => {
-        e.stopPropagation();
-        onExportFile?.(fileId, label);
-      }}
-      className="ml-1 text-emerald-500 hover:text-emerald-700 dark:text-emerald-500 dark:hover:text-emerald-300"
-      title={`Download "${label}" logs`}
-    >
-      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"
-        />
-      </svg>
-    </button>
-  );
-
-  // Render tabs sorted alphabetically by display title (case-insensitive),
-  // while preserving the original index so click/close handlers still
-  // address the correct entry in `files`.
-  const sortedTabs = useMemo(() => {
-    return files
-      .map((file, originalIndex) => ({
-        file,
-        originalIndex,
-        // Live tabs carry the server's own source label (AppLogs,
-        // DNSRelay, AntiTamper…), which is already properly cased.
-        // Deriving from the id would give the bare lowercase key.
-        label: file.isLive && file.name ? file.name : getFileDisplayName(file.id),
-      }))
-      .sort((a, b) =>
-        a.label.localeCompare(b.label, undefined, { sensitivity: 'base', numeric: true }),
-      );
-  }, [files]);
-
+  const navigateTabs = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!(event.target instanceof HTMLElement) || event.target.getAttribute('role') !== 'tab')
+      return;
+    const tabs = Array.from(
+      event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+    );
+    const index = tabs.indexOf(event.target as HTMLButtonElement);
+    let next: number;
+    switch (event.key) {
+      case 'ArrowRight':
+        next = (index + 1) % tabs.length;
+        break;
+      case 'ArrowLeft':
+        next = (index + tabs.length - 1) % tabs.length;
+        break;
+      case 'Home':
+        next = 0;
+        break;
+      case 'End':
+        next = tabs.length - 1;
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+    tabs[next]?.focus();
+    tabs[next]?.click();
+  };
+  const tabStyle = (active: boolean) => ({
+    display: 'flex',
+    alignItems: 'center',
+    flexShrink: 0,
+    borderBottom: 2,
+    borderColor: active ? 'primary.main' : 'transparent',
+    bgcolor: active ? 'action.selected' : 'transparent',
+    borderRadius: '6px 6px 0 0',
+    '&:hover': { bgcolor: 'action.hover' },
+  });
   return (
-    <div className="bg-white dark:bg-gray-900">
-      <div className="flex items-center overflow-x-auto p-2 pb-0">
-        {/* File Tabs */}
-        <div className="flex overflow-x-auto flex-1">
-          {sortedTabs.map(({ file, originalIndex, label }) => {
-            const loading = isFileLoading ? isFileLoading(file.id) : false;
-            const isActive = activeFileIndex === originalIndex && !showingCombinedView;
-            const tabLabel = label;
-            return (
-              <div
-                key={file.id || originalIndex}
-                className={`flex items-center gap-2 px-4 py-1 mx-1 rounded-t-lg border-b-0 cursor-pointer whitespace-nowrap transition-all duration-200 ${
-                  isActive
-                    ? 'bg-white dark:bg-gray-800 border-2 border-blue-400 dark:border-blue-400 shadow-sm'
-                    : 'border hover:bg-gray-100 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
-                }`}
-                onClick={() => {
-                  onFileSelect(originalIndex);
+    <Stack
+      direction="row"
+      sx={{
+        bgcolor: 'background.paper',
+        borderBottom: 1,
+        borderColor: 'divider',
+        alignItems: 'center',
+        px: 1,
+        gap: 1,
+      }}
+    >
+      <Box
+        role="tablist"
+        aria-label="Log files"
+        onKeyDown={navigateTabs}
+        sx={{ display: 'flex', overflowX: 'auto', flex: 1, minWidth: 0, gap: 0.5, pt: 0.5 }}
+      >
+        {sortedTabs.map(({ file, index, label }) => {
+          const active = activeFileIndex === index && !showingCombinedView;
+          const loading = isFileLoading?.(file.id) ?? false;
+          const canExport = !loading && (file.isLive ? !!onExportFile : active && !!onExportActive);
+          return (
+            <Box
+              key={file.id}
+              title={getFileFullName(file.id)}
+              role="presentation"
+              sx={tabStyle(active)}
+            >
+              <ButtonBase
+                role="tab"
+                aria-selected={active}
+                tabIndex={active ? 0 : -1}
+                onClick={() => onFileSelect(index)}
+                sx={{
+                  py: 1.25,
+                  px: 1.5,
+                  gap: 1,
+                  fontSize: 12,
+                  whiteSpace: 'nowrap',
+                  color: active || file.isLive ? 'primary.main' : 'text.secondary',
+                  fontWeight: active ? 600 : 400,
+                  '&.Mui-focusVisible': {
+                    outline: '2px solid',
+                    outlineColor: 'primary.main',
+                    outlineOffset: -2,
+                  },
                 }}
-                title={getFileFullName(file.id)}
               >
-                <span
-                  className={`text-xs flex items-center ${file.isLive ? 'text-emerald-600 dark:text-emerald-400 font-medium' : ''}`}
+                {file.isLive && (
+                  <Box
+                    component="span"
+                    aria-label="Live"
+                    sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'primary.main' }}
+                  />
+                )}
+                {label}
+                {loading && <CircularProgress size={12} />}
+              </ButtonBase>
+              {canExport && (
+                <IconButton
+                  aria-label={
+                    file.isLive
+                      ? `Download "${label}" logs`
+                      : `Export visible records of "${label}" to file`
+                  }
+                  title={
+                    file.isLive
+                      ? `Download "${label}" logs`
+                      : `Export visible records of "${label}" to file`
+                  }
+                  onClick={() =>
+                    file.isLive ? onExportFile?.(file.id, label) : onExportActive?.()
+                  }
                 >
-                  {tabLabel}
-                  {loading && (
-                    <svg
-                      className="ml-2 animate-spin h-4 w-4 text-blue-400"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                      ></path>
-                    </svg>
-                  )}
-                </span>
-                {file.isLive && !loading && renderLiveDownloadButton(file.id, tabLabel)}
-                {!file.isLive && isActive && !loading && renderExportButton(tabLabel)}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onFileClose(originalIndex);
-                  }}
-                  className="ml-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-lg"
-                  title="Close file"
-                >
-                  ×
-                </button>
-              </div>
-            );
-          })}
-
-          {/* Combined View Tab - only show when multiple files */}
-          {files.length > 1 && (
-            <div
-              className={`flex items-center gap-2 px-4 py-1 mx-1 rounded-t-lg border border-b-0 cursor-pointer whitespace-nowrap transition-all duration-200 ${
-                showingCombinedView
-                  ? 'bg-green-50 dark:bg-green-800 border-2 border-green-500 dark:border-green-500 shadow-sm'
-                  : 'hover:bg-green-50 dark:hover:bg-green-800 border-gray-200 dark:border-gray-600 hover:border-green-300 dark:hover:border-green-600'
-              }`}
-              onClick={() => {
-                onCombinedViewSelect();
+                  <ToolbarIcon name="download" />
+                </IconButton>
+              )}
+              <IconButton
+                title="Close file"
+                aria-label={`Close ${label}`}
+                onClick={() => onFileClose(index)}
+                sx={{ mr: 0.5 }}
+              >
+                <ToolbarIcon name="clear" />
+              </IconButton>
+            </Box>
+          );
+        })}
+        {files.length > 1 && (
+          <Box role="presentation" sx={tabStyle(showingCombinedView)}>
+            <ButtonBase
+              role="tab"
+              aria-selected={showingCombinedView}
+              tabIndex={showingCombinedView ? 0 : -1}
+              onClick={onCombinedViewSelect}
+              sx={{
+                py: 1.25,
+                px: 1.5,
+                fontSize: 12,
+                whiteSpace: 'nowrap',
+                fontWeight: 600,
+                color: showingCombinedView ? 'primary.main' : 'text.secondary',
+                '&.Mui-focusVisible': {
+                  outline: '2px solid',
+                  outlineColor: 'primary.main',
+                  outlineOffset: -2,
+                },
               }}
             >
-              <span className="text-xs">All Files</span>
-              {showingCombinedView && renderExportButton('All Files')}
-            </div>
-          )}
-        </div>
-
-        {/* From Now button — only in live mode */}
-        {isLiveMode && onFromNow && (
-          <button
-            onClick={onFromNow}
-            className="flex-shrink-0 ml-1 inline-flex items-center gap-1 px-2 h-5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors border border-blue-200 dark:border-blue-700 text-xs font-medium"
-            title="Filter all tabs to show only log records from now onwards"
-          >
-            <svg
-              className="w-3 h-3 flex-shrink-0"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            From Now
-          </button>
+              All Files
+            </ButtonBase>
+            {showingCombinedView && onExportActive && (
+              <IconButton
+                title='Export visible records of "All Files" to file'
+                aria-label="Export all files"
+                onClick={onExportActive}
+              >
+                <ToolbarIcon name="download" />
+              </IconButton>
+            )}
+          </Box>
         )}
-        {/* Close All Button */}
-        {files.length > 0 && (
-          <button
-            onClick={onCloseAll}
-            className="flex-shrink-0 ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors border border-gray-300 dark:border-gray-600"
-            title="Close all files"
-          >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2.5}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        )}
-      </div>
-      {/* Bottom border that connects to content */}
-      <div className="border-b border-gray-200 dark:border-gray-700"></div>
-    </div>
+      </Box>
+      {isLiveMode && onFromNow && (
+        <Button
+          onClick={onFromNow}
+          title="Filter all tabs to show only log records from now onwards"
+          sx={{ whiteSpace: 'nowrap' }}
+        >
+          From Now
+        </Button>
+      )}
+      {files.length > 0 && (
+        <IconButton onClick={onCloseAll} title="Close all files" aria-label="Close all files">
+          <ToolbarIcon name="clear" />
+        </IconButton>
+      )}
+    </Stack>
   );
-};
-
-export default LogTabs;
+}

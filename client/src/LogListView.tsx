@@ -1,3 +1,9 @@
+import Box from '@mui/material/Box';
+import IconButton from '@mui/material/IconButton';
+import Stack from '@mui/material/Stack';
+import TextField from '@mui/material/TextField';
+import Typography from '@mui/material/Typography';
+import ToolbarIcon from './components/ToolbarIcon';
 import type { ReactNode, RefObject, CSSProperties, DragEvent } from 'react';
 import type { VirtuosoHandle, ListRange } from 'react-virtuoso';
 import type { ColumnSizingState } from '@tanstack/react-table';
@@ -1041,6 +1047,7 @@ const LogListView = ({
         activeElement &&
         (activeElement.tagName === 'INPUT' ||
           activeElement.tagName === 'TEXTAREA' ||
+          activeElement.closest('button, select, [role="dialog"], [role="menu"]') ||
           activeElement.contentEditable === 'true' ||
           activeElement.isContentEditable)
       ) {
@@ -1327,94 +1334,82 @@ const LogListView = ({
   }
 
   return (
-    <div ref={containerRef} className="h-full flex flex-col bg-white dark:bg-gray-900">
+    <Box
+      ref={containerRef}
+      className="log-table h-full flex flex-col"
+      sx={{ bgcolor: 'background.default' }}
+    >
       {/* Fixed Date Header with Navigation - Outside of scroll container */}
       {currentStickyDate && (
-        <div className="flex-shrink-0 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-[5px]">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {/* Previous Date Button */}
-              <button
-                onClick={goToPreviousDate}
-                disabled={currentDateIndex <= 0}
-                className={`p-1 rounded-md transition-colors ${
-                  currentDateIndex <= 0
-                    ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200'
-                }`}
-                title={
-                  currentDateIndex > 0
-                    ? `Go to ${allDates[currentDateIndex - 1]}`
-                    : 'No previous date'
+        <Stack
+          direction="row"
+          sx={{
+            flexShrink: 0,
+            bgcolor: 'background.paper',
+            borderBottom: 1,
+            borderColor: 'divider',
+            px: 1.5,
+            py: 0.5,
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <IconButton
+              onClick={goToPreviousDate}
+              disabled={currentDateIndex <= 0}
+              aria-label="Previous date"
+              title={
+                currentDateIndex > 0
+                  ? `Go to ${allDates[currentDateIndex - 1]}`
+                  : 'No previous date'
+              }
+            >
+              <ToolbarIcon name="previous" />
+            </IconButton>
+            <TextField
+              select
+              label="Date"
+              value={targetNavigationDate || currentStickyDate || ''}
+              slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
+              onChange={(event) => {
+                const date = event.target.value;
+                if (date) {
+                  setTargetNavigationDate(date);
+                  scrollToDate(date);
                 }
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15 19l-7-7 7-7"
-                  />
-                </svg>
-              </button>
-
-              {/* Current Date - Dropdown showing all available dates */}
-              <select
-                value={targetNavigationDate || currentStickyDate || ''}
-                onChange={(e) => {
-                  const date = e.target.value;
-                  if (date) {
-                    setTargetNavigationDate(date);
-                    scrollToDate(date);
-                  }
-                }}
-                className="text-xs text-gray-700 dark:text-gray-300 bg-transparent border border-gray-300 dark:border-gray-600 rounded px-1.5 py-0.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-400 dark:bg-gray-800"
-              >
-                {allDates.map((date) => (
-                  <option key={date} value={date}>
-                    {date}
-                  </option>
-                ))}
-              </select>
-
-              {/* Next Date Button */}
-              <button
-                onClick={goToNextDate}
-                disabled={currentDateIndex >= allDates.length - 1}
-                className={`p-1 rounded-md transition-colors ${
-                  currentDateIndex >= allDates.length - 1
-                    ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200'
-                }`}
-                title={
-                  currentDateIndex < allDates.length - 1
-                    ? `Go to ${allDates[currentDateIndex + 1]}`
-                    : 'No next date'
-                }
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 5l7 7-7 7"
-                  />
-                </svg>
-              </button>
-            </div>
-
-            {/* Date Counter */}
-            {allDates.length > 1 && (
-              <div className="text-xs text-gray-500 dark:text-gray-400">
-                {currentDateIndex + 1} of {allDates.length}
-              </div>
-            )}
-          </div>
-        </div>
+              }}
+              sx={{ minWidth: 150, '& .MuiInputBase-input': { py: 0.75, fontSize: 12 } }}
+            >
+              {allDates.map((date) => (
+                <option key={date} value={date}>
+                  {date}
+                </option>
+              ))}
+            </TextField>
+            <IconButton
+              onClick={goToNextDate}
+              disabled={currentDateIndex >= allDates.length - 1}
+              aria-label="Next date"
+              title={
+                currentDateIndex < allDates.length - 1
+                  ? `Go to ${allDates[currentDateIndex + 1]}`
+                  : 'No next date'
+              }
+            >
+              <ToolbarIcon name="next" />
+            </IconButton>
+          </Stack>
+          {allDates.length > 1 && (
+            <Typography variant="caption" color="text.secondary">
+              {currentDateIndex + 1} of {allDates.length}
+            </Typography>
+          )}
+        </Stack>
       )}
 
       {/* Column Headers - Fixed */}
-      <div className="px-3 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
+      <div className="log-column-headers px-3 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
         <div style={{ display: 'flex', alignItems: 'stretch' }}>
           {headers.map((header) => {
             const id = header.column.id;
@@ -1565,7 +1560,7 @@ const LogListView = ({
           onClose={() => setShowGoToLineDialog(false)}
         />
       )}
-    </div>
+    </Box>
   );
 };
 

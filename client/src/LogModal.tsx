@@ -1,7 +1,18 @@
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import IconButton from '@mui/material/IconButton';
+import Stack from '@mui/material/Stack';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
+import Typography from '@mui/material/Typography';
+import ToolbarIcon from './components/ToolbarIcon';
 import type { LogRecord } from './domain/logRecord';
 import ViewerDialog from './components/ViewerDialog';
 import { useEffect, useState } from 'react';
-import { getLevelButtonColor, getLevelTextColor, cleanMessage } from './utils/logLevelColors';
+import { getLevelTextColor, cleanMessage } from './utils/logLevelColors';
 import JsonTreeViewer from './components/JsonTreeViewer';
 
 interface Props {
@@ -20,6 +31,11 @@ const LogModal = ({ log, onClose, onAddStickyLog, onNext, onPrev, hasNext, hasPr
   // Close modal when Escape key is pressed
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof Element &&
+        e.target.closest('input, textarea, select, [contenteditable="true"]')
+      )
+        return;
       if (e.key === 'ArrowLeft' && hasPrev && onPrev) {
         e.preventDefault();
         onPrev();
@@ -122,259 +138,146 @@ const LogModal = ({ log, onClose, onAddStickyLog, onNext, onPrev, hasNext, hasPr
   const hasJsonContent = jsonDataResult !== null;
   const jsonData = jsonDataResult?.json;
 
+  const metadata = [
+    [
+      'Timestamp',
+      log.displayDate && log.displayTime ? `${log.displayDate} ${log.displayTime}` : log.timestamp,
+    ],
+    [
+      log.processName && log.processName !== log.process ? 'Process' : 'ProcessId',
+      log.processName || log.process,
+    ],
+    ['Log Line', log.lineNumber],
+    ['Module', log.module],
+    ['ThreadId', log.thread],
+    ['Source', log.sourceFile],
+  ].filter(([, value]) => value !== undefined && value !== null && value !== '');
   return (
-    <ViewerDialog open={true} onClose={onClose} label="Log details" wide>
-      <div
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-h-[80vh] w-full flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Log Details</h2>
-            {log.level && (
-              <span
-                className={`px-2 py-1 rounded text-xs font-medium ${getLevelTextColor(log.level)}`}
-              >
-                {log.level.toUpperCase()}
-              </span>
-            )}
-          </div>
-
-          {/* Navigation and Close buttons */}
-          <div className="flex items-center gap-2">
-            {/* Previous button */}
-            <button
-              onClick={onPrev}
-              disabled={!hasPrev}
-              className={`p-1 rounded-md transition-colors ${
-                !hasPrev
-                  ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-              title="Previous log (←)"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 19l-7-7 7-7"
-                />
-              </svg>
-            </button>
-
-            {/* Next button */}
-            <button
-              onClick={onNext}
-              disabled={!hasNext}
-              className={`p-1 rounded-md transition-colors ${
-                !hasNext
-                  ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-              title="Next log (→)"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
-            </button>
-
-            {/* Close button */}
-            <button
-              onClick={onClose}
-              aria-label="Close dialog"
-              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-xl ml-2"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-
-        {/* Metadata */}
-        {(log.timestamp ||
-          log.module ||
-          log.thread ||
-          log.process ||
-          log.sourceFile ||
-          log.lineNumber) && (
-          <div className="p-4 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-            <div className="grid grid-cols-[auto_auto_auto] gap-x-8 gap-y-2 text-sm">
-              {/* First Row - Left: Timestamp (auto-sized) */}
-              {(log.displayDate || log.displayTime || log.timestamp) && (
-                <div className="whitespace-nowrap">
-                  <span className="font-medium text-gray-600 dark:text-gray-400">Timestamp:</span>
-                  <span className="ml-2 font-mono text-gray-900 dark:text-white">
-                    {log.displayDate && log.displayTime
-                      ? `${log.displayDate} ${log.displayTime}`
-                      : log.timestamp}
-                  </span>
-                </div>
-              )}
-
-              {/* First Row - Center: ProcessId (auto-sized) */}
-              {log.process && (
-                <div className="whitespace-nowrap">
-                  <span className="font-medium text-gray-600 dark:text-gray-400">
-                    {log.processName && log.processName !== log.process ? 'Process:' : 'ProcessId:'}
-                  </span>
-                  <span
-                    className="ml-2 font-mono text-gray-900 dark:text-white"
-                    title={
-                      log.processName && log.processName !== log.process
-                        ? `Type: ${log.processName} | ID: ${log.process} | Module: ${log.module}`
-                        : `Process ID: ${log.process}`
-                    }
-                  >
-                    {log.processName || log.process}
-                  </span>
-                </div>
-              )}
-
-              {/* First Row - Right: Log Line (auto-sized) */}
-              {log.lineNumber && (
-                <div className="whitespace-nowrap">
-                  <span className="font-medium text-gray-600 dark:text-gray-400">Log Line:</span>
-                  <span className="ml-2 font-mono text-gray-900 dark:text-white">
-                    {log.lineNumber}
-                  </span>
-                </div>
-              )}
-
-              {/* Second Row - Left: Module (auto-sized) */}
-              {log.module && (
-                <div className="whitespace-nowrap">
-                  <span className="font-medium text-gray-600 dark:text-gray-400">Module:</span>
-                  <span className="ml-2 text-gray-900 dark:text-white">{log.module}</span>
-                </div>
-              )}
-
-              {/* Second Row - Center: ThreadId (auto-sized) */}
-              {log.thread && (
-                <div className="whitespace-nowrap">
-                  <span className="font-medium text-gray-600 dark:text-gray-400">ThreadId:</span>
-                  <span className="ml-2 font-mono text-gray-900 dark:text-white">{log.thread}</span>
-                </div>
-              )}
-
-              {/* Second Row - Right: Empty space for now */}
-              <div></div>
-
-              {/* Source file if present */}
-              {log.sourceFile && (
-                <div className="col-span-3">
-                  <span className="font-medium text-gray-600 dark:text-gray-400">Source:</span>
-                  <span className="ml-2 text-gray-900 dark:text-white">{log.sourceFile}</span>
-                </div>
-              )}
-            </div>
-          </div>
+    <ViewerDialog open onClose={onClose} label="Log details" wide>
+      <DialogTitle component="div" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Typography component="h2" sx={{ fontWeight: 600, fontSize: 18, flex: 1 }}>
+          Log Details
+        </Typography>
+        {log.level && (
+          <span className={`px-2 py-1 rounded text-xs font-medium ${getLevelTextColor(log.level)}`}>
+            {log.level.toUpperCase()}
+          </span>
         )}
-
-        {/* Content */}
-        <div className="flex-1 overflow-auto p-4">
-          {/* View Mode Toggle */}
-          {hasJsonContent && (
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-sm text-gray-600 dark:text-gray-400">View:</span>
-              <div className="flex border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden">
-                <button
-                  onClick={() => setViewMode('text')}
-                  className={`px-3 py-1 text-sm transition-colors ${
-                    viewMode === 'text'
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  Text
-                </button>
-                <button
-                  onClick={() => setViewMode('json')}
-                  className={`px-3 py-1 text-sm transition-colors border-l border-gray-300 dark:border-gray-600 ${
-                    viewMode === 'json'
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  JSON
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Content Display */}
-          {viewMode === 'json' && hasJsonContent ? (
-            <div>
-              {/* Show prefix text if exists */}
-              {jsonDataResult?.prefix && (
-                <div className="mb-3">
-                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                    Message prefix:
-                  </div>
-                  <pre className="whitespace-pre-wrap break-words font-mono text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-900 p-3 rounded border">
-                    {jsonDataResult.prefix}
-                  </pre>
-                </div>
-              )}
-              {/* JSON Tree */}
-              <div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">JSON content:</div>
-                <JsonTreeViewer data={jsonData} />
-              </div>
-              {/* Show suffix text if exists */}
-              {jsonDataResult?.suffix && jsonDataResult.suffix.trim() && (
-                <div className="mt-3">
-                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                    Message suffix:
-                  </div>
-                  <pre className="whitespace-pre-wrap break-words font-mono text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-900 p-3 rounded border">
-                    {jsonDataResult.suffix}
-                  </pre>
-                </div>
-              )}
-            </div>
-          ) : (
-            <pre className="whitespace-pre-wrap break-words font-mono text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-900 p-4 rounded border overflow-x-auto">
-              {log.raw}
-            </pre>
-          )}
-        </div>
-
-        {/* Actions */}
-        <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
-          <div className="flex gap-2">
-            <button
-              onClick={handleCopy}
-              className="px-3 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors text-sm"
-              title={
-                viewMode === 'json' && hasJsonContent
-                  ? 'Copy JSON data only'
-                  : 'Copy full log content'
-              }
-            >
-              {viewMode === 'json' && hasJsonContent ? 'Copy JSON' : 'Copy'}
-            </button>
-            <button
-              onClick={handleAddStickyLog}
-              className={`px-3 py-2 rounded transition-colors text-sm ${getLevelButtonColor(log.level)}`}
-            >
-              Sticky Log Line
-            </button>
-          </div>
-          <button
-            onClick={onClose}
-            aria-label="Close dialog"
-            className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors"
+        <IconButton
+          onClick={onPrev}
+          disabled={!hasPrev}
+          aria-label="Previous log (←)"
+          title="Previous log (←)"
+        >
+          <ToolbarIcon name="previous" />
+        </IconButton>
+        <IconButton
+          onClick={onNext}
+          disabled={!hasNext}
+          aria-label="Next log (→)"
+          title="Next log (→)"
+        >
+          <ToolbarIcon name="next" />
+        </IconButton>
+        <IconButton onClick={onClose} aria-label="Close dialog">
+          <ToolbarIcon name="clear" />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent dividers>
+        <Box
+          component="dl"
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              sm: 'repeat(2, minmax(0, 1fr))',
+              md: 'repeat(3, minmax(0, 1fr))',
+            },
+            gap: 1.5,
+            mb: 2,
+          }}
+        >
+          {metadata.map(([label, value]) => (
+            <Box key={label} sx={{ minWidth: 0 }}>
+              <Typography component="dt" variant="caption" color="text.secondary">
+                {label}
+              </Typography>
+              <Typography
+                component="dd"
+                variant="body2"
+                sx={{ m: 0, fontFamily: 'monospace', overflowWrap: 'anywhere' }}
+              >
+                {value}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+        {hasJsonContent && (
+          <ToggleButtonGroup
+            exclusive
+            value={viewMode}
+            onChange={(_, mode: 'text' | 'json' | null) => {
+              if (mode) setViewMode(mode);
+            }}
+            size="small"
+            aria-label="Log detail format"
+            sx={{ mb: 2 }}
           >
-            Close
-          </button>
-        </div>
-      </div>
+            <ToggleButton value="text">Text</ToggleButton>
+            <ToggleButton value="json">JSON</ToggleButton>
+          </ToggleButtonGroup>
+        )}
+        {viewMode === 'json' && hasJsonContent ? (
+          <Stack spacing={2}>
+            {jsonDataResult?.prefix && (
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Message prefix:
+                </Typography>
+                <pre className="log-detail-text">{jsonDataResult.prefix}</pre>
+              </Box>
+            )}
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                JSON content:
+              </Typography>
+              <JsonTreeViewer data={jsonData} />
+            </Box>
+            {jsonDataResult?.suffix?.trim() && (
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Message suffix:
+                </Typography>
+                <pre className="log-detail-text">{jsonDataResult.suffix}</pre>
+              </Box>
+            )}
+          </Stack>
+        ) : (
+          <pre className="log-detail-text">{log.raw}</pre>
+        )}
+      </DialogContent>
+      <DialogActions sx={{ flexWrap: 'wrap' }}>
+        <Button
+          onClick={handleCopy}
+          variant="outlined"
+          title={
+            viewMode === 'json' && hasJsonContent ? 'Copy JSON data only' : 'Copy full log content'
+          }
+        >
+          {viewMode === 'json' && hasJsonContent ? 'Copy JSON' : 'Copy'}
+        </Button>
+        <Button onClick={handleAddStickyLog} variant="contained">
+          Sticky Log Line
+        </Button>
+        <Button
+          onClick={onClose}
+          aria-label="Close dialog"
+          color="inherit"
+          sx={{ ml: 'auto !important' }}
+        >
+          Close
+        </Button>
+      </DialogActions>
     </ViewerDialog>
   );
 };

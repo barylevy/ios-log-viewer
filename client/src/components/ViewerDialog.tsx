@@ -1,5 +1,5 @@
 import Dialog from '@mui/material/Dialog';
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 
 interface Props {
   open: boolean;
@@ -11,11 +11,12 @@ interface Props {
 
 /** MUI owns focus trapping, focus restoration, Escape, and backdrop handling. */
 export default function ViewerDialog({ open, onClose, label, children, wide = false }: Props) {
+  const labelId = useId();
   return (
     <Dialog
       open={open}
       onClose={onClose}
-      aria-labelledby={undefined}
+      aria-labelledby={labelId}
       fullWidth
       maxWidth={wide ? 'lg' : 'sm'}
       slotProps={{
@@ -25,6 +26,9 @@ export default function ViewerDialog({ open, onClose, label, children, wide = fa
         },
       }}
     >
+      <span id={labelId} className="sr-only">
+        {label}
+      </span>
       {children}
     </Dialog>
   );
