@@ -43,6 +43,7 @@ import { exportLogsToFile } from './utils/exportLogs';
 import { DEFAULT_COLUMN_ORDER, DEFAULT_VISIBLE_COLUMNS } from './constants';
 import useLiveLogs from './utils/useLiveLogs';
 import useLiveLogsFs from './utils/useLiveLogsFs';
+import useClientLiveLogs, { hasClientLiveLogs } from './utils/useClientLiveLogs';
 import {
   isFsAccessSupported,
   loadSavedHandle,
@@ -499,7 +500,18 @@ const LogViewer = () => {
       }
     },
   });
-  const isLiveConnected = isWsConnected || isFsConnected;
+  const [nativeError, setNativeError] = useState(false);
+  const {
+    isConnected: isNativeConnected,
+    connect: nativeConnect,
+    disconnect: nativeDisconnect,
+  } = useClientLiveLogs({
+    onSourceUpdate: handleLiveSourceUpdate,
+    onConnected: handleLiveConnected,
+    onDisconnected: () => setIsLiveMode(false),
+    onError: () => setNativeError(true),
+  });
+  const isLiveConnected = isWsConnected || isFsConnected || isNativeConnected;
 
   const [isLiveChecking, setIsLiveChecking] = useState(false);
   const [showLiveSettings, setShowLiveSettings] = useState(false);
@@ -508,11 +520,17 @@ const LogViewer = () => {
     if (isLiveConnected) {
       liveDisconnect();
       fsDisconnect();
+      nativeDisconnect();
       setIsLiveMode(false);
       return;
     }
     setIsLiveChecking(true);
     try {
+      if (hasClientLiveLogs()) {
+        setNativeError(false);
+        await nativeConnect();
+        return;
+      }
       // A folder chosen earlier needs no install, so try it before the server.
       setFsProblem(null);
       if (isFsAccessSupported()) {
@@ -544,7 +562,15 @@ const LogViewer = () => {
     } finally {
       setIsLiveChecking(false);
     }
-  }, [isLiveConnected, liveConnect, liveDisconnect, fsConnect, fsDisconnect]);
+  }, [
+    isLiveConnected,
+    liveConnect,
+    liveDisconnect,
+    fsConnect,
+    fsDisconnect,
+    nativeConnect,
+    nativeDisconnect,
+  ]);
 
   // "Choose folder" in the setup dialog — a click, so the picker and the
   // permission prompt are both allowed.
@@ -778,6 +804,7 @@ const LogViewer = () => {
   const handleCloseAll = useCallback(() => {
     liveDisconnect();
     fsDisconnect();
+    nativeDisconnect();
     setIsLiveMode(false);
     liveTabIdsRef.current.clear();
     // Wipe the entire model (logs, sticky notes, headers, current file, etc.)
@@ -794,7 +821,7 @@ const LogViewer = () => {
 
     // Clear session storage
     clearSession();
-  }, [resetModel, liveDisconnect, fsDisconnect]);
+  }, [resetModel, liveDisconnect, fsDisconnect, nativeDisconnect]);
 
   // Export visible records of the active tab. Uses filteredLogs which already
   // reflects all active filters (text/regex search, level, module, date range,
@@ -1208,6 +1235,11 @@ const LogViewer = () => {
         onConfirm={handleConfirmMerge}
       />
       {loadError && <Alert severity="error">{loadError}</Alert>}
+      {nativeError && (
+        <Alert severity="error" onClose={() => setNativeError(false)}>
+          Unable to read live logs. Check that the matching Cato helper is installed.
+        </Alert>
+      )}
       <LogViewerHeader
         onClearTabs={handleClearTabs}
         onFileLoad={handleFileLoad}
@@ -1420,7 +1452,9 @@ const LogViewer = () => {
 
             {!setupOnWindows && !isFsAccessSupported() && (
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">
-                Reading the logs folder needs Chrome or Edge. Open the viewer in one of them.
+                {window.isSecureContext === false
+                  ? 'The browser blocks folder access at this address. Open the viewer over HTTPS, or use http://localhost on the machine running the viewer, in Chrome or Edge.'
+                  : 'This browser or embedded window does not support live folder access. Open this same viewer address directly in Chrome or Edge on the Mac containing the logs.'}
               </p>
             )}
 

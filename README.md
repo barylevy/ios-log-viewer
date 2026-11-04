@@ -70,6 +70,14 @@ Dates without a year use the current year. Ambiguous numeric dates are inferred 
 
 ## Live logs
 
+Inside the macOS Cato Client, enable Developer mode, choose **Window → Open Log Viewer**, then click **Live Log**. A compatible client exposes `window.webkit.messageHandlers.clientLiveLogs`; the viewer automatically uses that native transport instead of asking for a mirror folder or shell script. The client and its installed privileged helper must both include the native live-log API, and this frontend version must be deployed to the hosted viewer.
+
+The promise-based bridge accepts `{ action: 'start' | 'read' | 'stop' }`. Reads return updates shaped as `{ sourceKey, label, type: 'reset' | 'append', content }`. Swift owns the file cursors and accepts no paths from JavaScript. Sources are fixed to the client, user agent, tunnel, DNS, anti-tamper, helper, and installation logs. Each read is bounded to 256 KiB per source; initial reads and rotations return the recent tail of the newest log file, and subsequent reads return complete appended lines. The UI retains its existing live buffer limits.
+
+The native wrapper accepts bridge messages only from the main frame of `https://cato-client-log-viewer.vercel.app`, with Developer mode active. Reads stop on disconnect, navigation, window teardown, or leaving Developer mode. Log contents are made available to that hosted page; do not add arbitrary filesystem or command execution operations to the bridge. A missing or outdated helper surfaces an error in the viewer.
+
+Standalone browsers keep the existing setup below.
+
 On macOS, follow the in-app mirror setup and choose `~/.cato_live_logs` in Chrome or Edge. The script needs sudo to read root-owned logs. Stop it in the terminal when finished.
 
 On Windows, the in-app setup command configures both the viewer origin and pairing token. A manually started server requires those explicitly when using a hosted viewer:
