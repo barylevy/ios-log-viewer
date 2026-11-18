@@ -5,8 +5,8 @@
  * then polls for new content every second and streams it to browser clients
  * over WebSocket.
  *
- * Windows only. macOS no longer uses this server — scripts/sync-cato-logs.sh
- * mirrors the logs into a folder the viewer reads directly.
+ * Windows only. macOS uses scripts/cato-live-logs-mac-server.pl, a LaunchDaemon
+ * installed once by scripts/cato-live-logs-mac-install.sh.
  *
  * Tails the most recently modified cato_vpn_*.log inside the log directory.
  * Give the full path; nothing is appended to it:

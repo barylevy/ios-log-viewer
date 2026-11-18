@@ -30,6 +30,7 @@ import {
   naturalSort,
 } from './utils/fileGrouping';
 import { isArchiveFile, expandArchivesInList } from './utils/archiveExtractor';
+import { isWindows } from './utils/liveLogsServer';
 
 // localStorage key for persisting which group names the user selected last time
 const FOLDER_SELECTION_KEY = 'logViewer_folderGroupNames';
@@ -411,7 +412,7 @@ const LogViewerHeader = ({
                 setSettingsAnchor(null);
               }}
             >
-              Live Logs Settings
+              {isWindows() ? 'Live Logs Settings' : 'Live Logs Service'}
             </MenuItem>
             <Divider />
             <Box sx={{ px: 2 }}>

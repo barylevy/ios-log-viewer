@@ -15,10 +15,101 @@ import {
   getSavedLogDir,
   setSavedLogDir,
   buildSetupCommand,
+  MAC_UNINSTALL_COMMAND,
+  buildMacInstallCommand,
   isWindows,
   getPairingToken,
   setPairingToken,
 } from '../utils/liveLogsServer';
+
+const CommandBox = ({ command }: { command: string }) => (
+  <div className="bg-gray-900 dark:bg-gray-950 rounded-lg px-3 py-2.5">
+    <div className="font-mono text-xs text-green-400 break-all mb-2 select-all leading-relaxed">
+      {command}
+    </div>
+    <div className="flex justify-end">
+      <Button onClick={() => navigator.clipboard.writeText(command)} variant="outlined">
+        Copy command
+      </Button>
+    </div>
+  </div>
+);
+
+/**
+ * macOS: the background server reads fixed locations, so the settings are
+ * reinstalling (to update it, or pair this browser) and removing it. Both need
+ * sudo, which a web page can't run — hand over the commands instead.
+ */
+const MacLiveLogsService = ({
+  onClose,
+  isRunning,
+  isLoading,
+}: {
+  onClose: () => void;
+  isRunning: boolean;
+  isLoading: boolean;
+}) => {
+  const [showReinstall, setShowReinstall] = useState(false);
+  const installCommand = buildMacInstallCommand(window.location.origin);
+  return (
+    <ViewerDialog open={true} onClose={onClose} label="Live logs service">
+      <DialogTitle>Live Logs Service</DialogTitle>
+      <DialogContent dividers className="space-y-4">
+        {isLoading ? (
+          <LinearProgress aria-label="Checking the live-logs service" />
+        ) : (
+          <Alert severity={isRunning ? 'info' : 'warning'}>
+            {isRunning
+              ? 'The live-logs service is installed and running on this Mac.'
+              : 'The live-logs service is not answering this browser. It may be removed, or installed from another browser.'}
+          </Alert>
+        )}
+
+        <section className="space-y-2">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+            Reinstall / Update
+          </h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Installs the current version of the service and pairs this browser. Browsers paired
+            earlier stay paired.
+          </p>
+          {showReinstall ? (
+            <CommandBox command={installCommand} />
+          ) : (
+            <Button
+              variant="contained"
+              onClick={() => {
+                setShowReinstall(true);
+                void navigator.clipboard.writeText(installCommand).catch(() => {});
+              }}
+            >
+              Reinstall / Update
+            </Button>
+          )}
+          {showReinstall && (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Copied. Paste it in Terminal and enter your Mac password.
+            </p>
+          )}
+        </section>
+
+        <section className="space-y-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Uninstall</h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Run this in Terminal and enter your Mac password. It stops the service and deletes its
+            files.
+          </p>
+          <CommandBox command={MAC_UNINSTALL_COMMAND} />
+        </section>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} aria-label="Close dialog" color="inherit">
+          Close
+        </Button>
+      </DialogActions>
+    </ViewerDialog>
+  );
+};
 
 /**
  * Live Logs Settings — lets the user point the local live-logs server at the
@@ -62,6 +153,8 @@ const LiveLogsSettings = ({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
   }, [isOpen, load]);
 
   if (!isOpen) return null;
+  if (!isWindows())
+    return <MacLiveLogsService onClose={onClose} isRunning={!serverDown} isLoading={isLoading} />;
 
   const handleSave = async () => {
     const trimmed = logDir.trim();

@@ -1,6 +1,6 @@
 # Cato Client Log Viewer
 
-A local-first viewer for Apple, Windows, Linux, Android, and socket logs. File contents are processed in the browser. Windows live logs use an optional loopback server; macOS live logs use a mirrored folder.
+A local-first viewer for Apple, Windows, Linux, Android, and socket logs. File contents are processed in the browser. Windows live logs use an optional loopback server; macOS live logs use a one-time installed loopback service.
 
 ## Run
 
@@ -70,15 +70,15 @@ Dates without a year use the current year. Ambiguous numeric dates are inferred 
 
 ## Live logs
 
-Inside the macOS Cato Client, enable Developer mode, choose **Window → Open Log Viewer**, then click **Live Log**. A compatible client exposes `window.webkit.messageHandlers.clientLiveLogs`; the viewer automatically uses that native transport instead of asking for a mirror folder or shell script. The client and its installed privileged helper must both include the native live-log API, and this frontend version must be deployed to the hosted viewer.
+Inside the macOS Cato Client, enable Developer mode, choose **Window → Open Log Viewer**, then click **Live Log**. A compatible client exposes `window.webkit.messageHandlers.clientLiveLogs`; the viewer automatically uses that native transport instead of the local service. The client and its installed privileged helper must both include the native live-log API, and this frontend version must be deployed to the hosted viewer.
 
 The promise-based bridge accepts `{ action: 'start' | 'read' | 'stop' }`. Reads return updates shaped as `{ sourceKey, label, type: 'reset' | 'append', content }`. Swift owns the file cursors and accepts no paths from JavaScript. Sources are fixed to the client, user agent, tunnel, DNS, anti-tamper, helper, and installation logs. Each read is bounded to 256 KiB per source; initial reads and rotations return the recent tail of the newest log file, and subsequent reads return complete appended lines. The UI retains its existing live buffer limits.
 
 The native wrapper accepts bridge messages only from the main frame of `https://cato-client-log-viewer.vercel.app`, with Developer mode active. Reads stop on disconnect, navigation, window teardown, or leaving Developer mode. Log contents are made available to that hosted page; do not add arbitrary filesystem or command execution operations to the bridge. A missing or outdated helper surfaces an error in the viewer.
 
-Standalone browsers keep the existing setup below.
+In a standalone browser, the viewer uses the local service below.
 
-On macOS, follow the in-app mirror setup and choose `~/.cato_live_logs` in Chrome or Edge. The script needs sudo to read root-owned logs. Stop it in the terminal when finished.
+On macOS, live logs need a one-time install from the in-app **Set Up Live Logs** dialog. It downloads `cato-live-logs-mac-install.sh` and `cato-live-logs-mac-server.pl` into `~/.cato-live-logs-setup` and runs the installer with sudo. The installer registers a root LaunchDaemon (`local.cato-log-viewer.live-logs`) that runs the server with the system `/usr/bin/perl` (core modules only, nothing else installed). The server reads the Cato logs in place and streams them over the same WebSocket protocol as the Windows server, on `127.0.0.1:4000` only. It accepts only the hosted viewer origin (`https://cato-client-log-viewer.vercel.app`, always allowed), the origin the install ran from, and the pairing token(s) stored in `/Library/Application Support/CatoLogViewerLiveLogs/config` (root-only). Logs under the user's home are read with the user's identity, and no path or command is taken from clients. After installing, **Live Log** connects with no folder or terminal. Running the command from another browser adds that browser's token. **Settings ▸ Live Logs Service** has a **Reinstall / Update** button (copies the install command, to update the service or pair the current browser) and the uninstall command `sudo bash '/Library/Application Support/CatoLogViewerLiveLogs/install.sh' uninstall` (the installer keeps that root-owned copy of itself). The server's own log is `/Library/Logs/cato-log-viewer-live-logs.log`.
 
 On Windows, the in-app setup command configures both the viewer origin and pairing token. A manually started server requires those explicitly when using a hosted viewer:
 

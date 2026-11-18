@@ -18,7 +18,6 @@ import {
   errorMessage,
   type ViewerFile,
   type LiveSourceUpdate,
-  type LiveFolderError,
   type ColumnVisibility,
 } from './domain/viewerTypes';
 import { collectDroppedFiles } from './services/dropFiles';
@@ -42,21 +41,14 @@ import { isArchiveFile, expandArchivesInList } from './utils/archiveExtractor';
 import { exportLogsToFile } from './utils/exportLogs';
 import { DEFAULT_COLUMN_ORDER, DEFAULT_VISIBLE_COLUMNS } from './constants';
 import useLiveLogs from './utils/useLiveLogs';
-import useLiveLogsFs from './utils/useLiveLogsFs';
 import useClientLiveLogs, { hasClientLiveLogs } from './utils/useClientLiveLogs';
-import {
-  isFsAccessSupported,
-  loadSavedHandle,
-  pickMirrorFolder,
-  MIRROR_DIR_NAME,
-} from './utils/liveLogsFsHandle';
 import LiveLogsSettings from './components/LiveLogsSettings';
 import {
   checkLiveHealth,
   fetchLiveConfig,
   applySavedLogDir,
   buildSetupCommand,
-  buildMirrorCommand,
+  buildMacInstallCommand,
   getSavedLogDir,
   isWindows,
 } from './utils/liveLogsServer';
@@ -462,7 +454,7 @@ const LogViewer = () => {
   );
 
   const [showServerDialog, setShowServerDialog] = useState(false);
-  // Windows streams through the local server; everywhere else uses folder mode.
+  // Both platforms stream from a local server; only its setup differs.
   const setupOnWindows = isWindows();
 
   const handleLiveConnected = useCallback(() => {
@@ -481,25 +473,6 @@ const LogViewer = () => {
     onError: () => setShowServerDialog(true),
   });
 
-  // Folder mode: reads the folder the sync script mirrors the logs into, so no
-  // server (and no Node) is needed. Failures are surfaced by the toggle, which
-  // can still fall back to the server, so only a mid-session loss reports here.
-  const [fsProblem, setFsProblem] = useState<LiveFolderError | null>(null);
-  const {
-    isConnected: isFsConnected,
-    connect: fsConnect,
-    disconnect: fsDisconnect,
-  } = useLiveLogsFs({
-    onSourceUpdate: handleLiveSourceUpdate,
-    onConnected: handleLiveConnected,
-    onError: (reason) => {
-      setFsProblem(reason);
-      if (reason === 'lost') {
-        setIsLiveMode(false);
-        setShowServerDialog(true);
-      }
-    },
-  });
   const [nativeError, setNativeError] = useState(false);
   const {
     isConnected: isNativeConnected,
@@ -511,7 +484,7 @@ const LogViewer = () => {
     onDisconnected: () => setIsLiveMode(false),
     onError: () => setNativeError(true),
   });
-  const isLiveConnected = isWsConnected || isFsConnected || isNativeConnected;
+  const isLiveConnected = isWsConnected || isNativeConnected;
 
   const [isLiveChecking, setIsLiveChecking] = useState(false);
   const [showLiveSettings, setShowLiveSettings] = useState(false);
@@ -519,7 +492,6 @@ const LogViewer = () => {
   const handleLiveToggle = useCallback(async () => {
     if (isLiveConnected) {
       liveDisconnect();
-      fsDisconnect();
       nativeDisconnect();
       setIsLiveMode(false);
       return;
@@ -531,16 +503,14 @@ const LogViewer = () => {
         await nativeConnect();
         return;
       }
-      // A folder chosen earlier needs no install, so try it before the server.
-      setFsProblem(null);
-      if (isFsAccessSupported()) {
-        const saved = await loadSavedHandle();
-        if (saved && (await fsConnect(saved))) return;
-      }
-
-      // macOS has no server: without a usable folder, show the folder setup.
-      if (!isWindows() || !(await checkLiveHealth())) {
+      // Not installed, not running, or not paired with this browser: show setup.
+      if (!(await checkLiveHealth())) {
         setShowServerDialog(true);
+        return;
+      }
+      // macOS: the background server reads fixed locations — nothing to configure.
+      if (!isWindows()) {
+        liveConnect();
         return;
       }
       // A Windows server with no (or an empty) log folder would connect and
@@ -562,29 +532,7 @@ const LogViewer = () => {
     } finally {
       setIsLiveChecking(false);
     }
-  }, [
-    isLiveConnected,
-    liveConnect,
-    liveDisconnect,
-    fsConnect,
-    fsDisconnect,
-    nativeConnect,
-    nativeDisconnect,
-  ]);
-
-  // "Choose folder" in the setup dialog — a click, so the picker and the
-  // permission prompt are both allowed.
-  const handleChooseMirrorFolder = useCallback(async () => {
-    try {
-      const handle = await pickMirrorFolder();
-      if (!handle) return;
-      setFsProblem(null);
-      if (await fsConnect(handle)) setShowServerDialog(false);
-    } catch (e) {
-      console.error('[live-logs] Could not open folder:', e);
-      setFsProblem('denied');
-    }
-  }, [fsConnect]);
+  }, [isLiveConnected, liveConnect, liveDisconnect, nativeConnect, nativeDisconnect]);
 
   const handleFileLoad = useCallback(
     (fileOrFiles: File | File[], clearTabsFirst = false, groupPrefix: string | null = null) => {
@@ -803,7 +751,6 @@ const LogViewer = () => {
 
   const handleCloseAll = useCallback(() => {
     liveDisconnect();
-    fsDisconnect();
     nativeDisconnect();
     setIsLiveMode(false);
     liveTabIdsRef.current.clear();
@@ -821,7 +768,7 @@ const LogViewer = () => {
 
     // Clear session storage
     clearSession();
-  }, [resetModel, liveDisconnect, fsDisconnect, nativeDisconnect]);
+  }, [resetModel, liveDisconnect, nativeDisconnect]);
 
   // Export visible records of the active tab. Uses filteredLogs which already
   // reflects all active filters (text/regex search, level, module, date range,
@@ -1383,80 +1330,38 @@ const LogViewer = () => {
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               {setupOnWindows
                 ? 'A small local server must run on your machine to stream logs. Paste this into PowerShell:'
-                : 'Mirror the Cato logs into a folder the viewer can read — nothing to install.'}
+                : 'Run this once in Terminal. It installs a small background service that streams the Cato logs to the viewer, using only tools built into macOS.'}
             </Typography>
-            {/* macOS: mirror the logs, then read the folder */}
+            {/* macOS: one-time background service (preferred) */}
             {!setupOnWindows &&
-              isFsAccessSupported() &&
               (() => {
-                const mirrorCmd = buildMirrorCommand(window.location.origin);
+                const installCmd = buildMacInstallCommand(window.location.origin);
                 return (
-                  <div className="mb-4 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30 px-4 py-3">
+                  <div className="mb-4 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 px-4 py-3">
                     <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">
-                      Two steps
+                      One-time install
                     </div>
                     <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
-                      1. Run this in a terminal and leave it running. It copies every Cato log,
-                      including the root-only ones, into{' '}
-                      <code className="bg-white dark:bg-gray-700 px-1 rounded">
-                        ~/{MIRROR_DIR_NAME}
-                      </code>
-                      :
+                      Asks for your Mac password once. The service starts with your Mac, so
+                      afterwards just click Live Log — no folder and no terminal.
                     </p>
                     <div className="font-mono text-xs text-green-400 bg-gray-900 dark:bg-gray-950 rounded px-3 py-2 break-all select-all mb-2">
-                      {mirrorCmd}
+                      {installCmd}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outlined"
-                        onClick={() => navigator.clipboard.writeText(mirrorCmd)}
-                      >
-                        Copy command
-                      </Button>
-                      <span className="text-xs text-gray-600 dark:text-gray-400">2.</span>
-                      <Button variant="outlined" onClick={handleChooseMirrorFolder}>
-                        Choose {MIRROR_DIR_NAME} folder
-                      </Button>
-                    </div>
+                    <Button
+                      variant="outlined"
+                      onClick={() => navigator.clipboard.writeText(installCmd)}
+                    >
+                      Copy command
+                    </Button>
                     <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
-                      In the folder picker, press Cmd+Shift+G and enter ~/.cato_live_logs to open
-                      the hidden folder. Starting Live Logs clears the previous mirror and waits for
-                      a fresh copy.
+                      It listens on this Mac only (127.0.0.1:4000) and answers only this viewer.
+                      Using another browser? Run the command from that browser too. To remove it
+                      later, open <span className="font-medium">Settings ▸ Live Logs Service</span>.
                     </p>
-                    {fsProblem === 'empty' && (
-                      <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
-                        That folder has no logs yet. Is the command above still running?
-                      </p>
-                    )}
-                    {fsProblem === 'denied' && (
-                      <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
-                        Access to the folder wasn't granted. Choose it again and allow read and
-                        write access.
-                      </p>
-                    )}
-                    {fsProblem === 'sync' && (
-                      <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
-                        The sync script did not respond or the mirror could not be cleared. Run the
-                        updated command above and choose ~/.cato_live_logs with read and write
-                        access.
-                      </p>
-                    )}
-                    {fsProblem === 'lost' && (
-                      <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
-                        Access to the folder was lost. Choose it again.
-                      </p>
-                    )}
                   </div>
                 );
               })()}
-
-            {!setupOnWindows && !isFsAccessSupported() && (
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">
-                {window.isSecureContext === false
-                  ? 'The browser blocks folder access at this address. Open the viewer over HTTPS, or use http://localhost on the machine running the viewer, in Chrome or Edge.'
-                  : 'This browser or embedded window does not support live folder access. Open this same viewer address directly in Chrome or Edge on the Mac containing the logs.'}
-              </p>
-            )}
 
             {/* Windows: single combined server command */}
             {setupOnWindows &&

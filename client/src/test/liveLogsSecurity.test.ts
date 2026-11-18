@@ -1,6 +1,11 @@
 import { createRequire } from 'node:module';
 import { describe, expect, it, vi } from 'vitest';
-import { buildMirrorCommand, buildSetupCommand, getPairingToken } from '../utils/liveLogsServer';
+import {
+  buildMacInstallCommand,
+  buildSetupCommand,
+  getPairingToken,
+  setPairingToken,
+} from '../utils/liveLogsServer';
 
 const require = createRequire(import.meta.url);
 const {
@@ -59,8 +64,15 @@ describe('local server access control', () => {
     expect(command).toContain("--dir='C:\\logs\\$profile''s files'");
     expect(command).toContain("--origin='https://viewer.example'");
     expect(command).toContain(getPairingToken());
-    expect(buildMirrorCommand('https://viewer.example')).toContain(
-      "'https://viewer.example/sync-cato-logs.sh'",
-    );
+  });
+  it('binds the macOS install command to this viewer and quotes the token', () => {
+    setPairingToken("abc'; rm -rf ~; echo '");
+    const command = buildMacInstallCommand('https://viewer.example/some/page');
+    expect(command).toContain("'https://viewer.example/cato-live-logs-mac-install.sh'");
+    expect(command).toContain("'https://viewer.example/cato-live-logs-mac-server.pl'");
+    expect(command).toContain("--origin='https://viewer.example'");
+    expect(command).toContain("--token='abc'\\''; rm -rf ~; echo '\\'''");
+    expect(command).not.toContain('| bash');
+    setPairingToken(crypto.randomUUID());
   });
 });

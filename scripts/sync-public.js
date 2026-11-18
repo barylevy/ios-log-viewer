@@ -10,7 +10,8 @@ const path = require('path');
 
 const FILES = [
   ['live-logs-server.js', 'live-logs-server.js'],
-  ['sync-cato-logs.sh', 'sync-cato-logs.sh'],
+  ['cato-live-logs-mac-install.sh', 'cato-live-logs-mac-install.sh'],
+  ['cato-live-logs-mac-server.pl', 'cato-live-logs-mac-server.pl'],
   ['package.json', 'live-logs-server-package.json'],
 ];
 

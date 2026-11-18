@@ -18,8 +18,6 @@ export interface LiveSourceUpdate {
   isInitial: boolean;
 }
 
-export type LiveFolderError = 'empty' | 'denied' | 'lost' | 'sync';
-
 export interface LiveCallbacks {
   onSourceUpdate?: (update: LiveSourceUpdate) => void;
   onConnected?: () => void;

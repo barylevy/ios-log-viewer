@@ -138,7 +138,7 @@ export async function applySavedLogDir() {
 
 /**
  * The copy-paste PowerShell command that downloads and starts the server
- * (Windows only — macOS uses folder mode, see buildMirrorCommand).
+ * (Windows only — macOS uses buildMacInstallCommand).
  * @param {string} origin - window.location.origin
  * @param {string} [logDir] - bake this folder into the command
  */
@@ -158,16 +158,28 @@ export function buildSetupCommand(origin: string, logDir = '') {
   return `${ensureNode}; irm ${quote(new URL('/live-logs-server.js', origin).href)} -OutFile $HOME\\live-logs-server.js; cd $HOME; npm install ws; node $HOME\\live-logs-server.js${dirArg}${pairingArgs}`;
 }
 
+const MAC_SETUP_DIR = '~/.cato-live-logs-setup';
+
 /**
- * macOS command for the no-install option: downloads the mirror script (plain
- * bash, ships with macOS) and runs it as root so it can reach the root-owned
- * logs. The viewer then reads the folder it fills.
+ * macOS one-time install: downloads the installer and the Perl server (both
+ * plain text, run with tools that ship with macOS) and registers the server as
+ * a LaunchDaemon paired with this viewer's origin and token. After that the
+ * Live Log button connects with no folder or terminal.
  */
-export function buildMirrorCommand(origin: string) {
-  const url = new URL('/sync-cato-logs.sh', origin).href;
-  const quotedUrl = "'" + url.replace(/'/g, "'\\''") + "'";
-  return `curl --fail --show-error --location -o ~/sync-cato-logs.sh ${quotedUrl} && sudo bash ~/sync-cato-logs.sh`;
+export function buildMacInstallCommand(origin: string) {
+  const quote = (value: string) => "'" + value.replace(/'/g, "'\\''") + "'";
+  const installer = new URL('/cato-live-logs-mac-install.sh', origin).href;
+  const server = new URL('/cato-live-logs-mac-server.pl', origin).href;
+  return (
+    `mkdir -p ${MAC_SETUP_DIR} && curl --fail --show-error --location ` +
+    `-o ${MAC_SETUP_DIR}/install.sh ${quote(installer)} -o ${MAC_SETUP_DIR}/server.pl ${quote(server)} && ` +
+    `sudo bash ${MAC_SETUP_DIR}/install.sh install --origin=${quote(new URL(origin).origin)} ` +
+    `--token=${quote(getPairingToken())}`
+  );
 }
+
+/** The installer keeps a copy of itself here, so removal doesn't need the setup folder. */
+export const MAC_UNINSTALL_COMMAND = `sudo bash '/Library/Application Support/CatoLogViewerLiveLogs/install.sh' uninstall`;
 
 function readServerConfig(value: unknown): LiveServerConfig | null {
   if (!value || typeof value !== 'object') return null;
