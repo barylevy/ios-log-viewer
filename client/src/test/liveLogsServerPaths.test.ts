@@ -23,6 +23,7 @@ const {
   listMatchingFiles,
   pickLatestFile,
   dirFromArgv,
+  defaultLogDir,
 } = require('../../../scripts/live-logs-server.js');
 
 // The installed client's log folder — note the spaces and parentheses.
@@ -269,5 +270,31 @@ describe('firstExistingDir', () => {
     } finally {
       fs.rmSync(other, { recursive: true, force: true });
     }
+  });
+});
+
+describe('defaultLogDir', () => {
+  let base: string;
+  beforeAll(() => {
+    base = fs.mkdtempSync(path.join(os.tmpdir(), 'program-files-'));
+    fs.mkdirSync(path.join(base, 'x64', 'Cato Networks', 'Cato Client'), { recursive: true });
+  });
+  afterAll(() => fs.rmSync(base, { recursive: true, force: true }));
+
+  it('finds the installed client under Program Files (x86) first, then Program Files', () => {
+    const x86 = path.join(base, 'x86');
+    const x64 = path.join(base, 'x64');
+    expect(defaultLogDir({ 'ProgramFiles(x86)': x86, ProgramFiles: x64 })).toBe(
+      path.join(x64, 'Cato Networks', 'Cato Client'),
+    );
+    fs.mkdirSync(path.join(x86, 'Cato Networks', 'Cato Client'), { recursive: true });
+    expect(defaultLogDir({ 'ProgramFiles(x86)': x86, ProgramFiles: x64 })).toBe(
+      path.join(x86, 'Cato Networks', 'Cato Client'),
+    );
+  });
+
+  it('is null when the client is not installed', () => {
+    expect(defaultLogDir({ ProgramFiles: path.join(base, 'missing') })).toBeNull();
+    expect(defaultLogDir({})).toBeNull();
   });
 });

@@ -16,6 +16,7 @@ import {
   setSavedLogDir,
   buildSetupCommand,
   MAC_UNINSTALL_COMMAND,
+  WIN_UNINSTALL_COMMAND,
   buildMacInstallCommand,
   isWindows,
   getPairingToken,
@@ -36,10 +37,59 @@ const CommandBox = ({ command }: { command: string }) => (
 );
 
 /**
- * macOS: the background server reads fixed locations, so the settings are
- * reinstalling (to update it, or pair this browser) and removing it. Both need
- * sudo, which a web page can't run — hand over the commands instead.
+ * Reinstall / Update and Uninstall. Both need a terminal (sudo on macOS), which
+ * a web page can't run, so they hand over the commands.
  */
+const ServiceSections = ({
+  installCommand,
+  uninstallCommand,
+  terminalHint,
+}: {
+  installCommand: string;
+  uninstallCommand: string;
+  terminalHint: string;
+}) => {
+  const [showReinstall, setShowReinstall] = useState(false);
+  return (
+    <>
+      <section className="space-y-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+          Reinstall / Update
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          Installs the current version of the service and pairs this browser. Browsers paired
+          earlier stay paired.
+        </p>
+        {showReinstall ? (
+          <CommandBox command={installCommand} />
+        ) : (
+          <Button
+            variant="contained"
+            onClick={() => {
+              setShowReinstall(true);
+              void navigator.clipboard.writeText(installCommand).catch(() => {});
+            }}
+          >
+            Reinstall / Update
+          </Button>
+        )}
+        {showReinstall && (
+          <p className="text-xs text-gray-500 dark:text-gray-400">Copied. {terminalHint}</p>
+        )}
+      </section>
+
+      <section className="space-y-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Uninstall</h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          {terminalHint} It stops the service and deletes its files.
+        </p>
+        <CommandBox command={uninstallCommand} />
+      </section>
+    </>
+  );
+};
+
+/** macOS: the server reads fixed locations, so only install and removal remain. */
 const MacLiveLogsService = ({
   onClose,
   isRunning,
@@ -48,68 +98,32 @@ const MacLiveLogsService = ({
   onClose: () => void;
   isRunning: boolean;
   isLoading: boolean;
-}) => {
-  const [showReinstall, setShowReinstall] = useState(false);
-  const installCommand = buildMacInstallCommand(window.location.origin);
-  return (
-    <ViewerDialog open={true} onClose={onClose} label="Live logs service">
-      <DialogTitle>Live Logs Service</DialogTitle>
-      <DialogContent dividers className="space-y-4">
-        {isLoading ? (
-          <LinearProgress aria-label="Checking the live-logs service" />
-        ) : (
-          <Alert severity={isRunning ? 'info' : 'warning'}>
-            {isRunning
-              ? 'The live-logs service is installed and running on this Mac.'
-              : 'The live-logs service is not answering this browser. It may be removed, or installed from another browser.'}
-          </Alert>
-        )}
-
-        <section className="space-y-2">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-            Reinstall / Update
-          </h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Installs the current version of the service and pairs this browser. Browsers paired
-            earlier stay paired.
-          </p>
-          {showReinstall ? (
-            <CommandBox command={installCommand} />
-          ) : (
-            <Button
-              variant="contained"
-              onClick={() => {
-                setShowReinstall(true);
-                void navigator.clipboard.writeText(installCommand).catch(() => {});
-              }}
-            >
-              Reinstall / Update
-            </Button>
-          )}
-          {showReinstall && (
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              Copied. Paste it in Terminal and enter your Mac password.
-            </p>
-          )}
-        </section>
-
-        <section className="space-y-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Uninstall</h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Run this in Terminal and enter your Mac password. It stops the service and deletes its
-            files.
-          </p>
-          <CommandBox command={MAC_UNINSTALL_COMMAND} />
-        </section>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} aria-label="Close dialog" color="inherit">
-          Close
-        </Button>
-      </DialogActions>
-    </ViewerDialog>
-  );
-};
+}) => (
+  <ViewerDialog open={true} onClose={onClose} label="Live logs service">
+    <DialogTitle>Live Logs Service</DialogTitle>
+    <DialogContent dividers className="space-y-4">
+      {isLoading ? (
+        <LinearProgress aria-label="Checking the live-logs service" />
+      ) : (
+        <Alert severity={isRunning ? 'info' : 'warning'}>
+          {isRunning
+            ? 'The live-logs service is installed and running on this Mac.'
+            : 'The live-logs service is not answering this browser. It may be removed, or installed from another browser.'}
+        </Alert>
+      )}
+      <ServiceSections
+        installCommand={buildMacInstallCommand(window.location.origin)}
+        uninstallCommand={MAC_UNINSTALL_COMMAND}
+        terminalHint="Paste it in Terminal and enter your Mac password."
+      />
+    </DialogContent>
+    <DialogActions>
+      <Button onClick={onClose} aria-label="Close dialog" color="inherit">
+        Close
+      </Button>
+    </DialogActions>
+  </ViewerDialog>
+);
 
 /**
  * Live Logs Settings — lets the user point the local live-logs server at the
@@ -163,7 +177,7 @@ const LiveLogsSettings = ({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
 
     // No server to ask (down, or too old to have /config): remember it locally.
     // It gets applied automatically once a server that needs configuring comes
-    // up, and it's baked into the start command below.
+    // up, and it's baked into the install command below.
     if (!config) {
       setSavedLogDir(trimmed);
       setSaved(true);
@@ -185,7 +199,7 @@ const LiveLogsSettings = ({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
   // The server is Windows-only. When it can't tell us (down, or too old for
   // /config), fall back to the platform this viewer is running on.
   const showFolderConfig = config ? !!config.configurable : isWindows();
-  const startCommand = buildSetupCommand(window.location.origin, logDir.trim());
+  const installCommand = buildSetupCommand(window.location.origin, logDir.trim());
 
   return (
     <ViewerDialog open={true} onClose={onClose} label="Live log settings">
@@ -220,7 +234,7 @@ const LiveLogsSettings = ({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
         {!isLoading && serverDown && (
           <Alert severity="warning">
             {showFolderConfig
-              ? "The live-logs server isn't running — you can still set the folder now. It's applied automatically once the server starts."
+              ? "The live-logs service isn't answering this browser. Set the folder now if needed, then use Reinstall / Update below — it installs the service with this folder and pairs this browser."
               : "The live-logs server isn't running. Click Live Logs in the header for the command to start it."}
           </Alert>
         )}
@@ -285,8 +299,8 @@ const LiveLogsSettings = ({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
                 slotProps={{ htmlInput: { spellCheck: false } }}
               />
               <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                The full path to the directory holding the logs — used exactly as entered. The
-                server tails the most recently modified{' '}
+                Leave it as the installed Cato Client folder, or enter another directory (a dev
+                build, say) — used exactly as entered. The server tails the most recently modified{' '}
                 <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded font-mono">
                   cato_vpn_*.log
                 </code>{' '}
@@ -306,27 +320,6 @@ const LiveLogsSettings = ({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
                   ? 'Saved. Live tabs now follow the new folder.'
                   : 'Saved. It will be applied when the server starts.'}
               </Alert>
-            )}
-
-            {!config && (
-              <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1.5">
-                  Start the server with this folder (PowerShell):
-                </p>
-                <div className="bg-gray-900 dark:bg-gray-950 rounded-lg px-3 py-2.5">
-                  <div className="font-mono text-xs text-green-400 break-all mb-2 select-all leading-relaxed">
-                    {startCommand}
-                  </div>
-                  <div className="flex justify-end">
-                    <Button
-                      onClick={() => navigator.clipboard.writeText(startCommand)}
-                      variant="outlined"
-                    >
-                      Copy command
-                    </Button>
-                  </div>
-                </div>
-              </div>
             )}
 
             {config && (
@@ -365,6 +358,11 @@ const LiveLogsSettings = ({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
             )}
           </>
         )}
+        <ServiceSections
+          installCommand={installCommand}
+          uninstallCommand={WIN_UNINSTALL_COMMAND}
+          terminalHint="Paste it in PowerShell. No administrator rights needed."
+        />
       </DialogContent>
 
       <DialogActions>

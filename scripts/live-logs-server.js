@@ -5,8 +5,10 @@
  * then polls for new content every second and streams it to browser clients
  * over WebSocket.
  *
- * Windows only. macOS uses scripts/cato-live-logs-mac-server.pl, a LaunchDaemon
- * installed once by scripts/cato-live-logs-mac-install.sh.
+ * Windows only — installed once as a per-user background process by
+ * scripts/cato-live-logs-win-install.ps1 (or started by hand). macOS uses
+ * scripts/cato-live-logs-mac-server.pl, a LaunchDaemon installed once by
+ * scripts/cato-live-logs-mac-install.sh.
  *
  * Tails the most recently modified cato_vpn_*.log inside the log directory.
  * Give the full path; nothing is appended to it:
@@ -32,36 +34,65 @@ const { randomBytes, timingSafeEqual } = require('crypto');
 const PORT = 4000;
 const POLL_MS = 1000; // how often to check for new bytes
 
-// Access is limited to an exact viewer origin and a per-install pairing token.
+// Access is limited to exact viewer origins and pairing tokens. The installer
+// (cato-live-logs-win-install.ps1) stores both in ~/.cato-live-logs.json, one
+// token per paired browser; --origin/--token add to them for a manual start.
 function optionValue(name, argv = process.argv.slice(2)) {
   const inline = argv.find(argument => argument.startsWith(`${name}=`));
   if (inline) return inline.slice(name.length + 1);
   const index = argv.indexOf(name);
   return index >= 0 ? argv[index + 1] : undefined;
 }
-const VIEWER_TOKEN = optionValue('--token') || process.env.CATO_VIEWER_TOKEN || randomBytes(24).toString('hex');
+const PROD_ORIGIN = 'https://cato-client-log-viewer.vercel.app';
+const ORIGIN_PATTERN = /^https?:\/\/[A-Za-z0-9.-]+(:\d{1,5})?$/;
+const TOKEN_PATTERN = /^[A-Za-z0-9-]{16,128}$/;
+
+/** Origins and tokens saved by the installer, ignoring anything malformed. */
+function storedPairing(file = path.join(os.homedir(), '.cato-live-logs.json')) {
+  let stored = {};
+  try { stored = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^﻿/, '')) || {}; } catch { /* none yet */ }
+  const list = (value, pattern) => (Array.isArray(value) ? value : [])
+    .filter(item => typeof item === 'string' && pattern.test(item));
+  return { origins: list(stored.origins, ORIGIN_PATTERN), tokens: list(stored.tokens, TOKEN_PATTERN) };
+}
+const PAIRING = storedPairing();
+const cliToken = optionValue('--token') || process.env.CATO_VIEWER_TOKEN;
+// Nothing paired yet: a random token, printed at startup for manual pairing.
+const VIEWER_TOKEN = cliToken || (PAIRING.tokens.length ? null : randomBytes(24).toString('hex'));
+const VIEWER_TOKENS = [...new Set([VIEWER_TOKEN, ...PAIRING.tokens].filter(Boolean))];
 const configuredOrigin = optionValue('--origin') || process.env.CATO_VIEWER_ORIGIN;
-const ALLOWED_ORIGINS = new Set(configuredOrigin ? [new URL(configuredOrigin).origin] : [
-  'http://localhost:3000', 'http://127.0.0.1:3000',
-  'http://localhost:5173', 'http://127.0.0.1:5173',
+const ALLOWED_ORIGINS = new Set([
+  PROD_ORIGIN,
+  ...(configuredOrigin ? [new URL(configuredOrigin).origin] : []),
+  ...PAIRING.origins,
+  ...(configuredOrigin || PAIRING.origins.length ? [] : [
+    'http://localhost:3000', 'http://127.0.0.1:3000',
+    'http://localhost:5173', 'http://127.0.0.1:5173',
+  ]),
 ]);
 const MAX_BUFFER_BYTES = 8 * 1024 * 1024;
 
 function isAllowedOrigin(origin, allowedOrigins = ALLOWED_ORIGINS) {
   return typeof origin === 'string' && allowedOrigins.has(origin);
 }
-function tokenMatches(value, token = VIEWER_TOKEN) {
-  if (typeof value !== 'string') return false;
+function tokenMatches(value, token) {
+  if (typeof value !== 'string' || typeof token !== 'string') return false;
   const provided = Buffer.from(value);
   const expected = Buffer.from(token);
   return provided.length === expected.length && timingSafeEqual(provided, expected);
+}
+/** Whether `value` is any paired token (each compared in constant time). */
+function tokenAllowed(value, tokens = VIEWER_TOKENS) {
+  let ok = false;
+  for (const token of tokens) ok = tokenMatches(value, token) || ok;
+  return ok;
 }
 function isLoopbackHost(host) {
   return host === `localhost:${PORT}` || host === `127.0.0.1:${PORT}`;
 }
 function websocketAuthorized(request) {
   const protocols = (request.headers['sec-websocket-protocol'] || '').split(',').map(value => value.trim());
-  return isLoopbackHost(request.headers.host) && isAllowedOrigin(request.headers.origin) && tokenMatches(protocols[1]);
+  return isLoopbackHost(request.headers.host) && isAllowedOrigin(request.headers.origin) && tokenAllowed(protocols[1]);
 }
 
 // ─── Source definitions ───────────────────────────────────────────────────────
@@ -148,7 +179,7 @@ function pickLatestFile(dir, pattern) {
 
 function readStoredConfig() {
   try {
-    const parsed = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+    const parsed = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8').replace(/^\uFEFF/, ''));
     return parsed && typeof parsed === 'object' ? parsed : {};
   } catch { return {}; }
 }
@@ -179,6 +210,26 @@ let winLogDir = dirFromArgv(process.argv)
   || readStoredConfig().logDir
   || null;
 
+/**
+ * The installed Cato Client's log folder, when it exists — used whenever no
+ * folder was chosen, so a normal install needs no configuration. A chosen
+ * folder (a dev build, say) always wins.
+ * @returns {string|null}
+ */
+function defaultLogDir(env = process.env) {
+  for (const base of [env['ProgramFiles(x86)'], env.ProgramFiles]) {
+    if (!base) continue;
+    const dir = path.join(base, 'Cato Networks', 'Cato Client');
+    try { if (fs.statSync(dir).isDirectory()) return dir; } catch { /* try next */ }
+  }
+  return null;
+}
+
+/** The folder in use: the chosen one, else the installed client's. */
+function effectiveLogDir() {
+  return normalizeLogDir(winLogDir) || defaultLogDir();
+}
+
 /** The Windows sources for a given log directory. */
 function winSourcesFor(dir) {
   if (!dir) return [];
@@ -195,7 +246,7 @@ function winSourcesFor(dir) {
 }
 
 function buildWindowsSources() {
-  return winSourcesFor(normalizeLogDir(winLogDir));
+  return winSourcesFor(effectiveLogDir());
 }
 
 let SOURCES = buildWindowsSources();
@@ -222,7 +273,7 @@ function describeDir(dir, pattern) {
 
 /** Snapshot of the current configuration, served at GET /config. */
 function configInfo() {
-  const resolvedDir = normalizeLogDir(winLogDir);
+  const resolvedDir = effectiveLogDir();
   let dirExists = false;
   try { dirExists = !!resolvedDir && fs.statSync(resolvedDir).isDirectory(); } catch { dirExists = false; }
 
@@ -359,7 +410,7 @@ const state = {}; // { [key]: string } — always the full current content
 function init() {
   if (SOURCES.length === 0) {
     const info = configInfo();
-    console.log(`  ✗ No log folder configured.`);
+    console.log(`  ✗ No log folder configured, and no installed Cato Client folder found.`);
     console.log(`    Set one with --dir="<full path to the log folder>", the CATO_LOG_DIR env var,`);
     console.log(`    or the viewer's Settings ▸ Live Logs Settings dialog.`);
     if (info.logDir) console.log(`    Configured folder "${info.logDir}" does not exist.`);
@@ -420,8 +471,10 @@ function handleRequest(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
   const route = (req.url || '').split('?')[0];
-  if (route !== '/health' && !tokenMatches(req.headers['x-viewer-token'])) {
-    return sendJson(res, 401, { error: 'Pair this viewer with the token printed by the live-logs server.' });
+  // Every route, /health included, needs a paired token: an unpaired browser is
+  // sent to the install command, which pairs it.
+  if (!tokenAllowed(req.headers['x-viewer-token'])) {
+    return sendJson(res, 401, { error: 'Pair this viewer: run the install command from its Live Logs setup.' });
   }
 
   if (route === '/sources') {
@@ -603,7 +656,8 @@ function start() {
         let body = '';
         res.on('data', chunk => { body += chunk; });
         res.on('end', () => {
-          if (body.trim() === 'ok') {
+          // Ours answers /health with ok, or 401 when this process has no token.
+          if (body.trim() === 'ok' || res.statusCode === 401) {
             console.log(`\n[live-logs] Server is already running on port ${PORT} — nothing to do.`);
             console.log('[live-logs] Connect the viewer and click Online.\n');
           } else {
@@ -622,7 +676,8 @@ function start() {
 
   server.listen(PORT, '127.0.0.1', () => {
     console.log(`\n[live-logs] Server ready at ws://localhost:${PORT}`);
-    console.log(`[live-logs] Pairing token: ${VIEWER_TOKEN}`);
+    if (VIEWER_TOKEN) console.log(`[live-logs] Pairing token: ${VIEWER_TOKEN}`);
+    console.log(`[live-logs] Paired viewers: ${VIEWER_TOKENS.length}`);
     console.log(`[live-logs] Allowed viewer origins: ${[...ALLOWED_ORIGINS].join(', ')}`);
     console.log('[live-logs] Press Ctrl-C to stop.\n');
   });
@@ -642,7 +697,7 @@ function printPortConflict() {
 if (require.main === module) start();
 
 module.exports = {
-  isAllowedOrigin, tokenMatches, isLoopbackHost, websocketAuthorized, handleRequest, boundLogText,
+  isAllowedOrigin, tokenMatches, tokenAllowed, storedPairing, isLoopbackHost, websocketAuthorized, handleRequest, boundLogText,
   WIN_LOG_PATTERN,
   WIN_ANTITAMPER_SUBDIRS,
   WIN_ANTITAMPER_PATTERN,
@@ -653,4 +708,5 @@ module.exports = {
   listMatchingFiles,
   pickLatestFile,
   dirFromArgv,
+  defaultLogDir,
 };

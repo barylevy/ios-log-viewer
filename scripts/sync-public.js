@@ -12,6 +12,8 @@ const FILES = [
   ['live-logs-server.js', 'live-logs-server.js'],
   ['cato-live-logs-mac-install.sh', 'cato-live-logs-mac-install.sh'],
   ['cato-live-logs-mac-server.pl', 'cato-live-logs-mac-server.pl'],
+  ['cato-live-logs-win-install.ps1', 'cato-live-logs-win-install.ps1'],
+  ['cato-live-logs-win-uninstall.ps1', 'cato-live-logs-win-uninstall.ps1'],
   ['package.json', 'live-logs-server-package.json'],
 ];
 

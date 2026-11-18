@@ -1,4 +1,7 @@
 import { createRequire } from 'node:module';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
   buildMacInstallCommand,
@@ -11,6 +14,8 @@ const require = createRequire(import.meta.url);
 const {
   isAllowedOrigin,
   tokenMatches,
+  tokenAllowed,
+  storedPairing,
   isLoopbackHost,
   handleRequest,
   boundLogText,
@@ -61,9 +66,41 @@ describe('local server access control', () => {
   });
   it('quotes paths as PowerShell literals and binds setup to this viewer', () => {
     const command = buildSetupCommand('https://viewer.example', "C:\\logs\\$profile's files");
-    expect(command).toContain("--dir='C:\\logs\\$profile''s files'");
-    expect(command).toContain("--origin='https://viewer.example'");
-    expect(command).toContain(getPairingToken());
+    expect(command).toContain("-LogDir 'C:\\logs\\$profile''s files'");
+    expect(command).toContain("'https://viewer.example/cato-live-logs-win-install.ps1'");
+    expect(command).toContain("-Origin 'https://viewer.example'");
+    expect(command).toContain(`-Token '${getPairingToken()}'`);
+    expect(command).not.toContain('iex');
+  });
+  it('requires a paired token on every route, health included', () => {
+    const response = { setHeader: vi.fn(), writeHead: vi.fn(), end: vi.fn() };
+    handleRequest({ method: 'GET', url: '/health', headers: { host: 'localhost:4000' } }, response);
+    expect(response.writeHead).toHaveBeenCalledWith(401, expect.anything());
+  });
+  it('accepts any paired token and nothing else', () => {
+    const tokens = ['first-token-0123456789', 'second-token-0123456789'];
+    expect(tokenAllowed('second-token-0123456789', tokens)).toBe(true);
+    expect(tokenAllowed('second-token', tokens)).toBe(false);
+    expect(tokenAllowed(undefined, tokens)).toBe(false);
+    expect(tokenAllowed('anything', [])).toBe(false);
+  });
+  it('reads only well-formed origins and tokens from the stored pairing', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pairing-'));
+    const file = join(dir, 'config.json');
+    writeFileSync(
+      file,
+      '\uFEFF' +
+        JSON.stringify({
+          logDir: 'C:\\logs',
+          origins: ['https://viewer.example', 'javascript:alert(1)', 'https://a.example/path'],
+          tokens: ['good-token-0123456789', 'short', 42],
+        }),
+    );
+    expect(storedPairing(file)).toEqual({
+      origins: ['https://viewer.example'],
+      tokens: ['good-token-0123456789'],
+    });
+    expect(storedPairing(join(dir, 'missing.json'))).toEqual({ origins: [], tokens: [] });
   });
   it('binds the macOS install command to this viewer and quotes the token', () => {
     setPairingToken("abc'; rm -rf ~; echo '");

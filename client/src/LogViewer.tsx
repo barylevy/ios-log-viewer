@@ -1329,7 +1329,7 @@ const LogViewer = () => {
           <DialogContent dividers>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               {setupOnWindows
-                ? 'A small local server must run on your machine to stream logs. Paste this into PowerShell:'
+                ? 'Run this once in PowerShell. It installs a small background service that streams the Cato logs to the viewer and starts when you sign in.'
                 : 'Run this once in Terminal. It installs a small background service that streams the Cato logs to the viewer, using only tools built into macOS.'}
             </Typography>
             {/* macOS: one-time background service (preferred) */}
@@ -1363,7 +1363,7 @@ const LogViewer = () => {
                 );
               })()}
 
-            {/* Windows: single combined server command */}
+            {/* Windows: one-time background service */}
             {setupOnWindows &&
               (() => {
                 const cmd = buildSetupCommand(window.location.origin, getSavedLogDir());
@@ -1396,11 +1396,10 @@ const LogViewer = () => {
 
             {setupOnWindows && (
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-5">
-                Downloads the script, installs the{' '}
-                <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">ws</code> dependency,
-                and starts the server. Installs Node.js first if it's missing (via winget — accept
-                the UAC prompt), then starts the server. Running it needs no administrator rights.
-                On first run, set your build folder from{' '}
+                Installs Node.js first if it's missing (via winget — accept the UAC prompt), then
+                sets the service up under your profile. No administrator rights needed. It reads the
+                installed Cato Client's logs automatically; to use another folder (a dev build,
+                say), or to update or uninstall the service, open{' '}
                 <span className="font-medium">Settings ▸ Live Logs Settings</span>.
               </p>
             )}

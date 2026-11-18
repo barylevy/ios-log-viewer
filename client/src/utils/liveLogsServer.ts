@@ -137,26 +137,27 @@ export async function applySavedLogDir() {
 }
 
 /**
- * The copy-paste PowerShell command that downloads and starts the server
- * (Windows only — macOS uses buildMacInstallCommand).
+ * Windows one-time install, pasted into PowerShell: downloads the installer,
+ * which installs Node.js if missing, sets the server up under
+ * %LOCALAPPDATA%\CatoLogViewerLiveLogs, pairs it with this viewer's origin and
+ * token, and starts it now and at every sign-in. No administrator rights.
  * @param {string} origin - window.location.origin
- * @param {string} [logDir] - bake this folder into the command
+ * @param {string} [logDir] - bake this folder into the install
  */
 export function buildSetupCommand(origin: string, logDir = '') {
-  // Install Node first if it's missing, then refresh PATH in this session —
-  // the installer only updates the stored environment, so without this the
-  // very next `npm` in the same window still fails with CommandNotFound.
-  const ensureNode =
-    `if (-not (Get-Command node -ErrorAction SilentlyContinue)) { ` +
-    `winget install -e --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements; ` +
-    `$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User') }`;
-
-  // No elevation to run: the build output folder lives under the user's own profile.
   const quote = (value: string) => "'" + value.replace(/'/g, "''") + "'";
-  const dirArg = logDir ? ` --dir=${quote(logDir)}` : '';
-  const pairingArgs = ` --origin=${quote(new URL(origin).origin)} --token=${quote(getPairingToken())}`;
-  return `${ensureNode}; irm ${quote(new URL('/live-logs-server.js', origin).href)} -OutFile $HOME\\live-logs-server.js; cd $HOME; npm install ws; node $HOME\\live-logs-server.js${dirArg}${pairingArgs}`;
+  const installer = new URL('/cato-live-logs-win-install.ps1', origin).href;
+  const dirArg = logDir ? ` -LogDir ${quote(logDir)}` : '';
+  return (
+    `irm ${quote(installer)} -OutFile "$env:TEMP\\cato-live-logs-install.ps1"; ` +
+    `powershell -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\\cato-live-logs-install.ps1" install ` +
+    `-Origin ${quote(new URL(origin).origin)} -Token ${quote(getPairingToken())}${dirArg}`
+  );
 }
+
+/** Runs the uninstall script the installer keeps in the install folder. */
+export const WIN_UNINSTALL_COMMAND =
+  'powershell -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\\CatoLogViewerLiveLogs\\uninstall.ps1"';
 
 const MAC_SETUP_DIR = '~/.cato-live-logs-setup';
 

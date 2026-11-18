@@ -1,6 +1,6 @@
 # Cato Client Log Viewer
 
-A local-first viewer for Apple, Windows, Linux, Android, and socket logs. File contents are processed in the browser. Windows live logs use an optional loopback server; macOS live logs use a one-time installed loopback service.
+A local-first viewer for Apple, Windows, Linux, Android, and socket logs. File contents are processed in the browser. Live logs on Windows and macOS use a loopback service installed once from the viewer.
 
 ## Run
 
@@ -80,14 +80,16 @@ In a standalone browser, the viewer uses the local service below.
 
 On macOS, live logs need a one-time install from the in-app **Set Up Live Logs** dialog. It downloads `cato-live-logs-mac-install.sh` and `cato-live-logs-mac-server.pl` into `~/.cato-live-logs-setup` and runs the installer with sudo. The installer registers a root LaunchDaemon (`local.cato-log-viewer.live-logs`) that runs the server with the system `/usr/bin/perl` (core modules only, nothing else installed). The server reads the Cato logs in place and streams them over the same WebSocket protocol as the Windows server, on `127.0.0.1:4000` only. It accepts only the hosted viewer origin (`https://cato-client-log-viewer.vercel.app`, always allowed), the origin the install ran from, and the pairing token(s) stored in `/Library/Application Support/CatoLogViewerLiveLogs/config` (root-only). Logs under the user's home are read with the user's identity, and no path or command is taken from clients. After installing, **Live Log** connects with no folder or terminal. Running the command from another browser adds that browser's token. **Settings ▸ Live Logs Service** has a **Reinstall / Update** button (copies the install command, to update the service or pair the current browser) and the uninstall command `sudo bash '/Library/Application Support/CatoLogViewerLiveLogs/install.sh' uninstall` (the installer keeps that root-owned copy of itself). The server's own log is `/Library/Logs/cato-log-viewer-live-logs.log`.
 
-On Windows, the in-app setup command configures both the viewer origin and pairing token. A manually started server requires those explicitly when using a hosted viewer:
+On Windows, live logs also need a one-time install from the **Set Up Live Logs** dialog, pasted into PowerShell. It downloads `cato-live-logs-win-install.ps1`, which installs Node.js with winget if it is missing, sets up `live-logs-server.js` and its `ws` dependency under `%LOCALAPPDATA%\CatoLogViewerLiveLogs`, and starts it hidden now and at every sign-in (an `HKCU\...\Run` entry). No administrator rights are needed. The pairing origin and token are merged into `~/.cato-live-logs.json`, so running the command from another browser adds that browser; the hosted viewer origin is always allowed. It reads the installed client's logs (`Cato Networks\Cato Client` under `Program Files (x86)` or `Program Files`) automatically; a different folder, such as a dev build, can be set in **Settings ▸ Live Logs Settings**, which also has **Reinstall / Update** and the uninstall command `powershell -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\CatoLogViewerLiveLogs\uninstall.ps1"`, which runs `cato-live-logs-win-uninstall.ps1` (the installer keeps it there; it stops the server, removes the Run entry, the folder and the pairing file; Node.js stays). The server's output is in `server.log` in that folder.
+
+To start the server by hand instead (development):
 
 ```sh
 npm --prefix scripts ci
 node scripts/live-logs-server.js --origin=https://your-viewer.example --dir="C:\\path\\to\\logs"
 ```
 
-Paste the token printed by the server into **Settings → Live Logs Settings → Live server pairing token**. For local development, the default allowed origins are localhost/127.0.0.1 on ports 3000 and 5173. The server listens only on `127.0.0.1:4000`, validates the Host and exact Origin, and requires pairing for configuration and WebSocket access. Its health check contains no log data.
+Paste the token printed by the server into **Settings → Live Logs Settings → Live server pairing token**. For local development, the default allowed origins are localhost/127.0.0.1 on ports 3000 and 5173. The server listens only on `127.0.0.1:4000`, validates the Host and exact Origin, and requires pairing for every request, health check included. The health check contains no log data.
 
 Edit the source scripts under `scripts/`. `predev` and `prebuild` regenerate their downloadable copies under `client/public`; synchronization failures fail the command.
 
