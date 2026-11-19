@@ -12,6 +12,7 @@ import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import ViewerDialog from './components/ViewerDialog';
 import ToolbarIcon from './components/ToolbarIcon';
+import AppIcon from './components/AppIcon';
 import type { DragEvent } from 'react';
 import type { LogRecord, LogHeaders } from './domain/logRecord';
 import {
@@ -1069,35 +1070,50 @@ const LogViewer = () => {
 
   const memoizedContent = useMemo(() => {
     if (!hasUserInteracted) {
+      // Drop zone stays centred; the app icon sits centred in the space below it.
       return (
-        <Paper
-          variant="outlined"
+        <Box
           sx={{
-            width: 'min(640px, 90vw)',
-            p: { xs: 3, sm: 6 },
-            textAlign: 'center',
-            borderStyle: 'dashed',
-            borderWidth: 2,
-            borderColor: isFileDropActive ? 'primary.main' : 'divider',
-            bgcolor: 'background.paper',
+            alignSelf: 'stretch',
+            width: '100%',
+            display: 'grid',
+            gridTemplateRows: '1fr auto 1fr',
+            justifyItems: 'center',
           }}
         >
-          <Box sx={{ color: 'primary.main', mb: 2, '& svg': { fontSize: 44 } }}>
-            <ToolbarIcon name="folder" />
+          <Box />
+          <Paper
+            variant="outlined"
+            sx={{
+              width: 'min(640px, 90vw)',
+              p: { xs: 3, sm: 6 },
+              textAlign: 'center',
+              borderStyle: 'dashed',
+              borderWidth: 2,
+              borderColor: isFileDropActive ? 'primary.main' : 'divider',
+              bgcolor: 'background.paper',
+            }}
+          >
+            <Box sx={{ color: 'primary.main', mb: 2, '& svg': { fontSize: 44 } }}>
+              <ToolbarIcon name="folder" />
+            </Box>
+            <Typography variant="h5" component="h2" sx={{ mb: 1, fontWeight: 600 }}>
+              Drop log files here
+            </Typography>
+            <Typography color="text.secondary" variant="body2">
+              Choose Open Files in the toolbar, or drag files and folders into this window.
+            </Typography>
+            <Typography color="text.secondary" variant="caption" component="p" sx={{ mt: 2 }}>
+              Windows · Apple · Linux · Android
+            </Typography>
+            <Typography color="text.secondary" variant="caption">
+              .log, .txt, .ips, .zip, .xz, .txz
+            </Typography>
+          </Paper>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <AppIcon size={120} />
           </Box>
-          <Typography variant="h5" component="h2" sx={{ mb: 1, fontWeight: 600 }}>
-            Drop log files here
-          </Typography>
-          <Typography color="text.secondary" variant="body2">
-            Choose Open Files in the toolbar, or drag files and folders into this window.
-          </Typography>
-          <Typography color="text.secondary" variant="caption" component="p" sx={{ mt: 2 }}>
-            Windows · Apple · Linux · Android
-          </Typography>
-          <Typography color="text.secondary" variant="caption">
-            .log, .txt, .ips, .zip, .xz, .txz
-          </Typography>
-        </Paper>
+        </Box>
       );
     }
 

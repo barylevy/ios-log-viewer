@@ -10,6 +10,7 @@ import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import ToolbarIcon from './components/ToolbarIcon';
+import AppIcon from './components/AppIcon';
 import type { ChangeEvent } from 'react';
 import type { LogHeaders } from './domain/logRecord';
 import { errorMessage, type ViewerFile, type ColumnVisibility } from './domain/viewerTypes';
@@ -98,6 +99,11 @@ const LogViewerHeader = ({
     } else {
       document.documentElement.classList.remove('dark');
       localStorage.setItem('theme', 'light');
+    }
+    // Keep the tab icon in sync with the app theme (not only the OS scheme).
+    const favicon = document.getElementById('app-favicon');
+    if (favicon instanceof HTMLLinkElement) {
+      favicon.href = isDarkMode ? '/app-icon-dark.svg' : '/app-icon-light.svg';
     }
   }, [isDarkMode]);
 
@@ -296,7 +302,7 @@ const LogViewerHeader = ({
         }}
       >
         <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', minWidth: 0 }}>
-          <Box component="img" src="/cato-logo.svg" alt="Cato Networks" sx={{ height: 30 }} />
+          <AppIcon size={36} />
           <Box sx={{ minWidth: 0 }}>
             <Typography component="h1" variant="h6" sx={{ fontSize: 18, fontWeight: 650 }}>
               Cato Client Log Viewer

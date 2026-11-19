@@ -8,6 +8,7 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 import Link from '@mui/material/Link';
 import ViewerDialog from './components/ViewerDialog';
+import AppIcon from './components/AppIcon';
 import { useState } from 'react';
 
 function ProfilePhoto() {
@@ -51,7 +52,10 @@ const AboutModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
   if (!isOpen) return null;
   return (
     <ViewerDialog open onClose={onClose} label="About the log viewer">
-      <DialogTitle>About — Cato Client Log Viewer</DialogTitle>
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <AppIcon size={32} alt="" />
+        About — Cato Client Log Viewer
+      </DialogTitle>
       <DialogContent dividers>
         <b>Cato Client Log Viewer</b> is a modern web application for viewing, searching, and
         analyzing log files from all Cato client types: <b>Windows, Apple, Linux, and Android</b>.
